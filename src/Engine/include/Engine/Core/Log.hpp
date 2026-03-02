@@ -20,14 +20,14 @@ namespace Antelope
     };
 }
 
-#define AE_CORE_TRACE(...)    ::Antelope::Log::GetCoreLogger()->trace(__VA_ARGS__)
-#define AE_CORE_INFO(...)     ::Antelope::Log::GetCoreLogger()->info(__VA_ARGS__)
-#define AE_CORE_WARN(...)     ::Antelope::Log::GetCoreLogger()->warn(__VA_ARGS__)
-#define AE_CORE_ERROR(...)    ::Antelope::Log::GetCoreLogger()->error(__VA_ARGS__)
-#define AE_CORE_CRITICAL(...) ::Antelope::Log::GetCoreLogger()->critical(__VA_ARGS__)
+#define AE_ENGINE_TRACE(...)    ::Antelope::Log::GetCoreLogger()->trace(__VA_ARGS__)
+#define AE_ENGINE_INFO(...)     ::Antelope::Log::GetCoreLogger()->info(__VA_ARGS__)
+#define AE_ENGINE_WARN(...)     ::Antelope::Log::GetCoreLogger()->warn(__VA_ARGS__)
+#define AE_ENGINE_ERROR(...)    ::Antelope::Log::GetCoreLogger()->error(__VA_ARGS__)
+#define AE_ENGINE_CRITICAL(...) ::Antelope::Log::GetCoreLogger()->critical(__VA_ARGS__)
 
-#define AE_APP_TRACE(...)     ::Antelope::Log::GetClientLogger()->trace(__VA_ARGS__)
-#define AE_APP_INFO(...)      ::Antelope::Log::GetClientLogger()->info(__VA_ARGS__)
-#define AE_APP_WARN(...)      ::Antelope::Log::GetClientLogger()->warn(__VA_ARGS__)
-#define AE_APP_ERROR(...)     ::Antelope::Log::GetClientLogger()->error(__VA_ARGS__)
-#define AE_APP_CRITICAL(...)  ::Antelope::Log::GetClientLogger()->critical(__VA_ARGS__)
+#define AE_CLIENT_TRACE(...)    ::Antelope::Log::GetClientLogger()->trace(__VA_ARGS__)
+#define AE_CLIENT_INFO(...)     ::Antelope::Log::GetClientLogger()->info(__VA_ARGS__)
+#define AE_CLIENT_WARN(...)     ::Antelope::Log::GetClientLogger()->warn(__VA_ARGS__)
+#define AE_CLIENT_ERROR(...)    ::Antelope::Log::GetClientLogger()->error(__VA_ARGS__)
+#define AE_CLIENT_CRITICAL(...) ::Antelope::Log::GetClientLogger()->critical(__VA_ARGS__)

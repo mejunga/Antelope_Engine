@@ -29,6 +29,7 @@ CMakeUserPresets.json
 *.a
 *.out
 *.asm
+*.d
 
 # --- Game Engine & Tooling Specific ---
 *.spv            
@@ -38,11 +39,11 @@ perf.data.old
 
 # --- VS Code / IDE Specific ---
 .vscode/*
+.vs/
 !.vscode/launch.json
-!.vscode/settings.json
 !.vscode/tasks.json
-!.vscode/c_cpp_properties.json
 !.vscode/extensions.json
+
 
 # --- Vcpkg ---
 /vcpkg_installed/

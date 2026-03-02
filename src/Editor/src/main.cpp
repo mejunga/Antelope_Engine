@@ -7,12 +7,12 @@ class EditorApp : public Antelope::Application
     public:
         EditorApp()
         {
-            AE_APP_TRACE("Editor is created");
+            AE_CLIENT_TRACE("Editor is created");
         }
 
         ~EditorApp()
         {
-            AE_APP_TRACE("Editor is destroyed");
+            AE_CLIENT_TRACE("Editor is destroyed");
         }
 };
 
