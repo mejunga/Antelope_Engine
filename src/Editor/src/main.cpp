@@ -1,7 +1,19 @@
-#include <Engine/Core/TestEngine.hpp>
+#include <Engine/Core/Application.hpp>
+#include <Engine/Core/EntryPoint.hpp>
+#include <Engine/Core/Log.hpp>
 
-int main() {
-    Engine::PrintTest();
-    
-    return 0;
-}
+class EditorApp : public Antelope::Application
+{
+    public:
+        EditorApp()
+        {
+            AE_APP_TRACE("Editor is created");
+        }
+
+        ~EditorApp()
+        {
+            AE_APP_TRACE("Editor is destroyed");
+        }
+};
+
+Antelope::Application* Antelope::CreateApplication(){return new EditorApp();} 

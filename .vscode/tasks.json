@@ -24,7 +24,7 @@
             "type": "shell",
             "dependsOn": "build-debug",
             "linux": {
-                "command": "echo '--- QUICK STATS ---' && /usr/bin/perf stat -e cache-misses,cycles,instructions,branches,branch-misses ./build/bin/GameEngine"
+                "command": "echo '--- QUICK STATS ---' && /usr/bin/perf stat -e cache-misses,cycles,instructions,branches,branch-misses ./build/bin/AntelopeEngine"
             },
             "presentation": { "reveal": "always", "panel": "new" }
         },
@@ -33,7 +33,7 @@
             "type": "shell",
             "dependsOn": "build-debug",
             "linux": {
-                "command": "echo '--- RECORDING DATA ---' && /usr/bin/perf record --call-graph dwarf -o perf.data ./build/bin/GameEngine && echo 'Kayıt tamamlandı. Terminale `perf report` yazarak inceleyebilirsin.'"
+                "command": "echo '--- RECORDING DATA ---' && /usr/bin/perf record --call-graph dwarf -o perf.data ./build/bin/AntelopeEngine && echo 'Kayıt tamamlandı. Terminale `perf report` yazarak inceleyebilirsin.'"
             },
             "presentation": { "reveal": "always", "panel": "new" }
         },
@@ -64,10 +64,10 @@
                         "args": [ "/d", "/c" ]
                     }
                 },
-                "command": "call \"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Auxiliary\\Build\\vcvars64.bat\" && dumpbin /DISASM build\\bin\\Debug\\GameEngine.exe > game_engine.asm"
+                "command": "call \"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Auxiliary\\Build\\vcvars64.bat\" && dumpbin /DISASM build\\bin\\Debug\\AntelopeEngine.exe > antelope_engine.asm"
             },
             "linux": {
-                "command": "objdump -d -M intel -S build/bin/GameEngine > game_engine.asm"
+                "command": "objdump -d -M intel -S build/bin/AntelopeEngine > antelope_engine.asm"
             },
             "presentation": { "reveal": "silent" }
         }

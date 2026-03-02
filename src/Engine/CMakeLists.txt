@@ -15,16 +15,16 @@ find_path(MINIAUDIO_INCLUDE_DIRS "miniaudio.h")
 file(GLOB_RECURSE ENGINE_SRC CONFIGURE_DEPENDS "src/*.cpp")
 file(GLOB_RECURSE ENGINE_HDR CONFIGURE_DEPENDS "include/*.hpp")
 
-add_library(Engine STATIC ${ENGINE_SRC} ${ENGINE_HDR})
+add_library(Antelope STATIC ${ENGINE_SRC} ${ENGINE_HDR})
 
-target_include_directories(Engine PUBLIC include)
-target_include_directories(Engine PRIVATE src)
-target_include_directories(Engine PRIVATE ${Stb_INCLUDE_DIR})
-target_include_directories(Engine PRIVATE ${MINIAUDIO_INCLUDE_DIRS})
+target_include_directories(Antelope PUBLIC include)
+target_include_directories(Antelope PRIVATE src)
+target_include_directories(Antelope PRIVATE ${Stb_INCLUDE_DIR})
+target_include_directories(Antelope PRIVATE ${MINIAUDIO_INCLUDE_DIRS})
 
-target_compile_definitions(Engine PUBLIC GLFW_INCLUDE_VULKAN)
+target_compile_definitions(Antelope PUBLIC GLFW_INCLUDE_VULKAN)
 
-target_link_libraries(Engine PUBLIC 
+target_link_libraries(Antelope PUBLIC 
     Vulkan::Vulkan
     glfw
     glm::glm
