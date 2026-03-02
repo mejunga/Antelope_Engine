@@ -1,0 +1,75 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build-debug",
+            "type": "shell",
+            "group": "build",
+            "windows": {
+                "options": {
+                    "shell": {
+                        "executable": "cmd.exe",
+                        "args": [ "/d", "/c" ]
+                    }
+                },
+                "command": "cmake --build --preset win-debug"
+            },
+            "linux": {
+                "command": "cmake --build --preset linux-debug"
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "profile-quick-stats",
+            "type": "shell",
+            "dependsOn": "build-debug",
+            "linux": {
+                "command": "echo '--- QUICK STATS ---' && /usr/bin/perf stat -e cache-misses,cycles,instructions,branches,branch-misses ./build/bin/GameEngine"
+            },
+            "presentation": { "reveal": "always", "panel": "new" }
+        },
+        {
+            "label": "profile-record-data",
+            "type": "shell",
+            "dependsOn": "build-debug",
+            "linux": {
+                "command": "echo '--- RECORDING DATA ---' && /usr/bin/perf record --call-graph dwarf -o perf.data ./build/bin/GameEngine && echo 'Kayıt tamamlandı. Terminale `perf report` yazarak inceleyebilirsin.'"
+            },
+            "presentation": { "reveal": "always", "panel": "new" }
+        },
+        {
+            "label": "vec-info",
+            "type": "shell",
+            "windows": {
+                "options": {
+                    "shell": {
+                        "executable": "cmd.exe",
+                        "args": [ "/d", "/c" ]
+                    }
+                },
+                "command": "cmake --build --preset win-vec-info"
+            },
+            "linux": {
+                "command": "cmake --build --preset linux-vec-info"
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "object-dump",
+            "type": "shell",
+            "windows": {
+                "options": {
+                    "shell": {
+                        "executable": "cmd.exe",
+                        "args": [ "/d", "/c" ]
+                    }
+                },
+                "command": "call \"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Auxiliary\\Build\\vcvars64.bat\" && dumpbin /DISASM build\\bin\\Debug\\GameEngine.exe > game_engine.asm"
+            },
+            "linux": {
+                "command": "objdump -d -M intel -S build/bin/GameEngine > game_engine.asm"
+            },
+            "presentation": { "reveal": "silent" }
+        }
+    ]
+}

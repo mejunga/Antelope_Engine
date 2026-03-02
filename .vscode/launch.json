@@ -1,0 +1,37 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch Vulkan (Win)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/bin/Debug/GameEngine.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/bin/Debug", 
+            "environment": [],
+            "preLaunchTask": "build-debug",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Launch Vulkan (Linux)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/bin/GameEngine",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/bin",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "preLaunchTask": "build-debug",
+            "setupCommands": [
+                {
+                    "text": "set print thread-events off",
+                    "ignoreFailures": true
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,5 @@
+{
+  "cmake.generator": "Ninja",
+  "cmake.configureOnOpen": true,
+  "cmake.ignoreCMakeListsMissing": true
+}

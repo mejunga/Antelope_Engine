@@ -1,0 +1,57 @@
+# --- Build and Compilation Artifacts ---
+/build/
+/bin/
+/lib/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+.ninja_deps
+.ninja_log
+build.ninja
+CMakeFiles/
+CTestTestfile.cmake
+Testing/
+
+# --- CMake User Settings ---
+CMakeUserPresets.json
+
+# --- MSVC/Compilation Output ---
+*.obj
+*.exe
+*.dll
+*.lib
+*.pdb
+*.ilk
+*.exp
+*.ipch
+*.o
+*.so
+*.a
+*.out
+*.asm
+
+# --- Game Engine & Tooling Specific ---
+*.spv            
+imgui.ini         
+perf.data         
+perf.data.old     
+
+# --- VS Code / IDE Specific ---
+.vscode/*
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/c_cpp_properties.json
+!.vscode/extensions.json
+
+# --- Vcpkg ---
+/vcpkg_installed/
+.vcpkg-root
+
+# --- Operating System Generated Files ---
+.DS_Store
+Thumbs.db
+*~
+*.log
+/core
+vgcore.*
