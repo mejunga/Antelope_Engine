@@ -1,16 +1,16 @@
 #pragma once
 
 #include <Engine/Core/Application.hpp>
-#include <Engine/Core/Log.hpp>
+#include <Engine/Debug/Log.hpp>
 
 extern Antelope::Application* Antelope::CreateApplication();
 
 int main(int argc, char** argv)
 {
     Antelope::Log::Init();
-    AE_ENGINE_WARN("Engine is working");
+    AE_ENGINE_INFO("Engine is working");
 
-    auto app = Antelope::CreateApplication();
+    auto app { Antelope::CreateApplication() };
     AE_ENGINE_INFO("Editor is working");
 
     app->Run();

@@ -1,4 +1,4 @@
-#include <Engine/Core/Log.hpp>
+#include <Engine/Debug/Log.hpp>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 namespace Antelope
@@ -8,12 +8,12 @@ namespace Antelope
 
     void Log::Init()
     {
-        spdlog::set_pattern("%^[%T] %n: %v%$");
-
         s_CoreLogger = spdlog::stdout_color_mt("ENGINE");
         s_CoreLogger->set_level(spdlog::level::trace);
+        s_CoreLogger->set_pattern("%^[%T]%$\033[1;33m[%n]\033[0m: %^%v%$");
 
         s_ClientLogger = spdlog::stdout_color_mt("CLIENT");
         s_ClientLogger->set_level(spdlog::level::trace);
+        s_ClientLogger->set_pattern("%^[%T]%$\033[1;34m[%n]\033[0m: %^%v%$");
     }
 }

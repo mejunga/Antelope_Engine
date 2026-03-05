@@ -1,7 +1,9 @@
 #pragma once
 
-#include <Engine/Core/Window.hpp>
+#include <Engine/Platform/Window.hpp>
+#include <Engine/Renderer/VulkanContext.hpp>
 #include <memory>
+
 
 namespace Antelope
 {
@@ -21,6 +23,7 @@ namespace Antelope
 
         private:
             std::unique_ptr<Window> m_Window;
+            std::unique_ptr<VulkanContext> m_VulkanContext;
             bool m_Running = true;
 
             static Application *s_Instance;

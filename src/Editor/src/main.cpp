@@ -1,6 +1,6 @@
 #include <Engine/Core/Application.hpp>
 #include <Engine/Core/EntryPoint.hpp>
-#include <Engine/Core/Log.hpp>
+#include <Engine/Debug/Log.hpp>
 
 class EditorApp : public Antelope::Application
 {
@@ -16,4 +16,4 @@ class EditorApp : public Antelope::Application
         }
 };
 
-Antelope::Application* Antelope::CreateApplication(){return new EditorApp();} 
+Antelope::Application* Antelope::CreateApplication() { return new EditorApp(); } 

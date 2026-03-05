@@ -1,10 +1,10 @@
-#include <Engine/Core/Window.hpp>
-#include <Engine/Core/Log.hpp>
+#include <Engine/Platform/Window.hpp>
+#include <Engine/Debug/Log.hpp>
 #include <GLFW/glfw3.h>
 
 namespace Antelope
 {
-    static bool s_GLFWInitialized {false};
+    static bool s_GLFWInitialized { false };
 
     Window::Window(const WindowProps& props)
     {
@@ -26,13 +26,14 @@ namespace Antelope
 
         if(!s_GLFWInitialized) 
         {
-            int succes {glfwInit()};
+            int succes { glfwInit() };
 
             if(!succes)
             {
-                AE_ENGINE_ERROR("Could not initialize GLFW");
+                AE_ENGINE_ERROR("Could not initialize GLFW!");
                 return;
             }
+            
             s_GLFWInitialized = true;
         }
 

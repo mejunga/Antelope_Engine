@@ -1,6 +1,6 @@
 #include <Engine/Core/Application.hpp>
-#include <Engine/Core/Log.hpp>
-#include <Engine/Core/Input.hpp>
+#include <Engine/Debug/Log.hpp>
+#include <Engine/Platform/Input.hpp>
 #include <GLFW/glfw3.h>
 
 namespace Antelope
@@ -11,18 +11,18 @@ namespace Antelope
     {
         if(s_Instance) 
         { 
-            AE_ENGINE_ERROR("Application already exists");
+            AE_ENGINE_ERROR("Application already exists!");
             return; 
         }
 
         s_Instance = this;
         m_Window = std::make_unique<Window>();
+
+        m_VulkanContext = std::make_unique<VulkanContext>();
+        m_VulkanContext->Init();
     }
 
-    Application::~Application() 
-    {
-
-    }
+    Application::~Application() {}
 
     void Application::Run()
     {
