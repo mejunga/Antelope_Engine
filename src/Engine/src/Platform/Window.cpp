@@ -58,6 +58,7 @@ namespace Antelope
             glfwDestroyWindow(m_Window);
             AE_ENGINE_INFO("Window destroyed");
         }
+        glfwTerminate();
     }
 
     void Window::OnUpdate()

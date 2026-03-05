@@ -19,7 +19,7 @@ namespace Antelope
         m_Window = std::make_unique<Window>();
 
         m_VulkanContext = std::make_unique<VulkanContext>();
-        m_VulkanContext->Init();
+        m_VulkanContext->Init(m_Window->GetNativeWindow());
     }
 
     Application::~Application() {}
