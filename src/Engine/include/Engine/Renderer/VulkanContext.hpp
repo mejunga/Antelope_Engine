@@ -30,6 +30,7 @@ namespace Antelope
             ~VulkanContext();
 
             void Init(GLFWwindow *windowHandle);
+            void DrawFrame();
 
         private:
             bool CheckValidationLayerSupport();
@@ -48,6 +49,9 @@ namespace Antelope
             VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
             VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
             VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* windowHandle);
+
+            static std::vector<char> ReadFile(const std::string& fileName);
+            VkShaderModule CreateShaderModule(const std::vector<char>& code);
             
             void CreateInstance();
             void SetupDebugMessenger();
@@ -57,9 +61,16 @@ namespace Antelope
             void CreateSwapchain();
             void CreateImageViews();
             void CreateRenderPass();
+            void CreateGraphicsPipeline();
+            void CreateFramebuffers();
+            void CreateCommandPool();
+            void CreateCommandBuffer();
+            void CreateSyncObjects();
             
-
         private:
+            const int MAX_FRAMES_IN_FLIGHT = 3;
+            uint32_t m_CurrentFrame = 0;
+
             VkInstance m_Instance { VK_NULL_HANDLE };
             VkDebugUtilsMessengerEXT m_DebugMessenger { VK_NULL_HANDLE };
             VkSurfaceKHR m_Surface { VK_NULL_HANDLE };
@@ -69,7 +80,10 @@ namespace Antelope
             VkQueue m_PresentQueue { VK_NULL_HANDLE };
             VkSwapchainKHR m_Swapchain { VK_NULL_HANDLE };
             VkRenderPass m_RenderPass { VK_NULL_HANDLE };
-
+            VkPipelineLayout m_PipelineLayout { VK_NULL_HANDLE };
+            VkPipeline m_GraphicsPipeline { VK_NULL_HANDLE };
+            VkCommandPool m_CommandPool { VK_NULL_HANDLE };
+            
             VkFormat m_SwapchainImageFormat;
             VkExtent2D m_SwapchainExtent;
             GLFWwindow *m_WindowHandle { nullptr };
@@ -78,6 +92,11 @@ namespace Antelope
             const std::vector<const char*> m_DeviceExtensions { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
             std::vector<VkImage> m_SwapchainImages;
             std::vector<VkImageView> m_SwapchainImageViews;
+            std::vector<VkFramebuffer> m_SwapchainFramebuffers;
+            std::vector<VkSemaphore> m_ImageAvailableSemaphores;
+            std::vector<VkSemaphore> m_RenderFinishedSemaphores;
+            std::vector<VkFence> m_InFlightFences;
+            std::vector<VkCommandBuffer> m_CommandBuffers;
 
         #ifdef NDEBUG
             const bool m_EnableValidationLayers { false };

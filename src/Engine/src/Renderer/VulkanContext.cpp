@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <limits>
 #include <set>
+#include <fstream>
 
 namespace Antelope
 {
@@ -44,22 +45,81 @@ namespace Antelope
     VulkanContext::VulkanContext() {}
     VulkanContext::~VulkanContext() 
     {
-        if (!m_SwapchainImageViews.empty()) 
+        if (m_Device != VK_NULL_HANDLE) {
+            vkDeviceWaitIdle(m_Device);
+        }
+
+        if (!m_InFlightFences.empty()) 
         {
-            for (auto imageView : m_SwapchainImageViews) 
+            for (size_t i = 0; i < m_InFlightFences.size(); i++) 
             {
-                vkDestroyImageView(m_Device, imageView, nullptr);
+                vkDestroyFence(m_Device, m_InFlightFences[i], nullptr);
             }
-            
-            m_SwapchainImageViews.clear(); 
-            
-            AE_ENGINE_TRACE("Vulkan Swapchain Image Views destroyed.");
+            m_InFlightFences.clear();
+            AE_ENGINE_TRACE("Vulkan In-Flight Fences destroyed.");
+        }
+
+        if (!m_RenderFinishedSemaphores.empty()) 
+        {
+            for (size_t i = 0; i < m_RenderFinishedSemaphores.size(); i++) 
+            {
+                vkDestroySemaphore(m_Device, m_RenderFinishedSemaphores[i], nullptr);
+            }
+            m_RenderFinishedSemaphores.clear();
+            AE_ENGINE_TRACE("Vulkan Render Finished Semaphores destroyed.");
+        }
+
+        if (!m_ImageAvailableSemaphores.empty()) 
+        {
+            for (size_t i = 0; i < m_ImageAvailableSemaphores.size(); i++) 
+            {
+                vkDestroySemaphore(m_Device, m_ImageAvailableSemaphores[i], nullptr);
+            }
+            m_ImageAvailableSemaphores.clear();
+            AE_ENGINE_TRACE("Vulkan Image Available Semaphores destroyed.");
+        }
+
+        if(m_CommandPool != VK_NULL_HANDLE)
+        {
+            vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
+            AE_ENGINE_TRACE("Vulkan Command Pool destroyed.");
+        }
+
+        if (!m_SwapchainFramebuffers.empty()) 
+        {
+            for (auto framebuffer : m_SwapchainFramebuffers) 
+            {
+                vkDestroyFramebuffer(m_Device, framebuffer, nullptr);
+            }
+            m_SwapchainFramebuffers.clear();
+            AE_ENGINE_TRACE("Vulkan Framebuffers destroyed.");
+        }
+
+        if(m_GraphicsPipeline != VK_NULL_HANDLE) 
+        {
+            vkDestroyPipeline(m_Device, m_GraphicsPipeline, nullptr);
+            AE_ENGINE_TRACE("Vulkan Graphics Pipeline destroyed.");
+        }
+        if(m_PipelineLayout != VK_NULL_HANDLE) 
+        {
+            vkDestroyPipelineLayout(m_Device, m_PipelineLayout, nullptr);
+            AE_ENGINE_TRACE("Vulkan Pipeline Layout destroyed.");
         }
 
         if(m_RenderPass != VK_NULL_HANDLE)
         {
             vkDestroyRenderPass(m_Device, m_RenderPass, nullptr);
             AE_ENGINE_TRACE("Vulkan Render Pass destroyed.");
+        }
+
+        if (!m_SwapchainImageViews.empty()) 
+        {
+            for (auto imageView : m_SwapchainImageViews) 
+            {
+                vkDestroyImageView(m_Device, imageView, nullptr);
+            }
+            m_SwapchainImageViews.clear(); 
+            AE_ENGINE_TRACE("Vulkan Swapchain Image Views destroyed.");
         }
 
         if(m_Swapchain != VK_NULL_HANDLE)
@@ -80,7 +140,7 @@ namespace Antelope
             AE_ENGINE_TRACE("Vulkan Surface destroyed.");
         }
 
-        if(m_EnableValidationLayers)
+        if(m_EnableValidationLayers && m_DebugMessenger != VK_NULL_HANDLE)
         {
             DestroyDebugUtilsMessengerEXT(m_Instance, m_DebugMessenger, nullptr);
             AE_ENGINE_TRACE("Vulkan Debug Messenger destroyed.");
@@ -91,6 +151,124 @@ namespace Antelope
             vkDestroyInstance(m_Instance, nullptr);
             AE_ENGINE_TRACE("Vulkan Instance destroyed.");
         }
+    }
+
+    void VulkanContext::Init(GLFWwindow* windowHandle)
+    {
+        m_WindowHandle = windowHandle;
+
+        CreateInstance();
+        SetupDebugMessenger();
+        CreateSurface();
+        PickPhysicalDevice();
+        CreateLogicalDevice();
+        CreateSwapchain();
+        CreateImageViews();
+        CreateRenderPass();
+        CreateGraphicsPipeline();
+        CreateFramebuffers();
+        CreateCommandPool();
+        CreateCommandBuffer();
+        CreateSyncObjects();
+    }
+
+    void VulkanContext::DrawFrame()
+    {
+        vkWaitForFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
+
+        uint32_t imageIndex;
+        VkResult result = vkAcquireNextImageKHR(m_Device, m_Swapchain, UINT64_MAX, 
+            m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
+
+        if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+            return; 
+        }
+
+        vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
+
+        vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
+
+        VkCommandBufferBeginInfo beginInfo {};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        
+        if (vkBeginCommandBuffer(m_CommandBuffers[m_CurrentFrame], &beginInfo) != VK_SUCCESS) {
+            AE_ENGINE_ERROR("Failed to begin recording command buffer!");
+            return;
+        }
+
+        VkRenderPassBeginInfo renderPassInfo {};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassInfo.renderPass = m_RenderPass;
+        renderPassInfo.framebuffer = m_SwapchainFramebuffers[imageIndex];
+        renderPassInfo.renderArea.offset = {0, 0};
+        renderPassInfo.renderArea.extent = m_SwapchainExtent;
+
+        VkClearValue clearColor = {{{0.01f, 0.01f, 0.03f, 1.0f}}}; 
+        renderPassInfo.clearValueCount = 1;
+        renderPassInfo.pClearValues = &clearColor;
+
+        vkCmdBeginRenderPass(m_CommandBuffers[m_CurrentFrame], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+        vkCmdBindPipeline(m_CommandBuffers[m_CurrentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicsPipeline);
+
+        VkViewport viewport {};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = static_cast<float>(m_SwapchainExtent.width);
+        viewport.height = static_cast<float>(m_SwapchainExtent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+        vkCmdSetViewport(m_CommandBuffers[m_CurrentFrame], 0, 1, &viewport);
+
+        VkRect2D scissor {};
+        scissor.offset = {0, 0};
+        scissor.extent = m_SwapchainExtent;
+        vkCmdSetScissor(m_CommandBuffers[m_CurrentFrame], 0, 1, &scissor);
+
+        vkCmdDraw(m_CommandBuffers[m_CurrentFrame], 3, 1, 0, 0);
+
+        vkCmdEndRenderPass(m_CommandBuffers[m_CurrentFrame]);
+
+        if (vkEndCommandBuffer(m_CommandBuffers[m_CurrentFrame]) != VK_SUCCESS) {
+            AE_ENGINE_ERROR("Failed to record command buffer!");
+            return;
+        }
+
+        VkSubmitInfo submitInfo {};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+        VkSemaphore waitSemaphores[] { m_ImageAvailableSemaphores[m_CurrentFrame] };
+        VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+        submitInfo.waitSemaphoreCount = 1;
+        submitInfo.pWaitSemaphores = waitSemaphores;
+        submitInfo.pWaitDstStageMask = waitStages;
+
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &m_CommandBuffers[m_CurrentFrame];
+
+        VkSemaphore signalSemaphores[] { m_RenderFinishedSemaphores[m_CurrentFrame] };
+        submitInfo.signalSemaphoreCount = 1;
+        submitInfo.pSignalSemaphores = signalSemaphores;
+
+        if (vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_InFlightFences[m_CurrentFrame]) != VK_SUCCESS) {
+            AE_ENGINE_ERROR("Failed to submit draw command buffer!");
+            return;
+        }
+
+        VkPresentInfoKHR presentInfo {};
+        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        presentInfo.waitSemaphoreCount = 1;
+        presentInfo.pWaitSemaphores = signalSemaphores; 
+
+        VkSwapchainKHR swapchains[] { m_Swapchain };
+        presentInfo.swapchainCount = 1;
+        presentInfo.pSwapchains = swapchains;
+        presentInfo.pImageIndices = &imageIndex;
+
+        vkQueuePresentKHR(m_PresentQueue, &presentInfo);
+        vkQueueWaitIdle(m_PresentQueue);
+
+        m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
     bool VulkanContext::CheckValidationLayerSupport()
@@ -305,6 +483,42 @@ namespace Antelope
 
         AE_ENGINE_TRACE("Swapchain Extent: {0}x{1}", actualExtent.width, actualExtent.height);
         return actualExtent;
+    }
+
+    std::vector<char> VulkanContext::ReadFile(const std::string& fileName)
+    {
+        std::ifstream file(fileName, std::ios::ate | std::ios::binary);
+        
+        if(!file.is_open())
+        {
+            AE_ENGINE_CRITICAL("Failed to open file: {0}", fileName);
+            throw std::runtime_error("Failed to open file!");
+        }
+
+        size_t fileSize { (size_t)file.tellg() };
+        std::vector<char> buffer(fileSize);
+
+        file.seekg(0);
+        file.read(buffer.data(), fileSize);
+        file.close();
+
+        return buffer;
+    }
+
+    VkShaderModule VulkanContext::CreateShaderModule(const std::vector<char>& code)
+    {
+        VkShaderModuleCreateInfo createInfo {};
+        createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        createInfo.codeSize = code.size();
+        createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+        VkShaderModule shaderModule;
+        
+        if(vkCreateShaderModule(m_Device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
+        {
+            AE_ENGINE_CRITICAL("Failed to create Shader Module!");
+        }
+        return shaderModule;
     }
 
     void VulkanContext::CreateInstance()
@@ -643,17 +857,201 @@ namespace Antelope
         AE_ENGINE_INFO("Vulkan Render Pass created successfully.");
     }
 
-    void VulkanContext::Init(GLFWwindow* windowHandle) 
+    void VulkanContext::CreateGraphicsPipeline()
     {
-        m_WindowHandle = windowHandle;
+        auto vertShaderCode {ReadFile("Shaders/base.vert.spv")};
+        auto fragShaderCode {ReadFile("Shaders/base.frag.spv")};
 
-        CreateInstance();
-        SetupDebugMessenger();
-        CreateSurface();
-        PickPhysicalDevice();
-        CreateLogicalDevice();
-        CreateSwapchain();
-        CreateImageViews();
-        CreateRenderPass();
+        AE_ENGINE_TRACE("Vertex Shader size: {0} bytes", vertShaderCode.size());
+        AE_ENGINE_TRACE("Fragment Shader size: {0} bytes", fragShaderCode.size());
+
+        VkShaderModule vertShaderModule { CreateShaderModule(vertShaderCode) }; 
+        VkShaderModule fragShaderModule { CreateShaderModule(fragShaderCode) };
+
+        VkPipelineShaderStageCreateInfo vertShaderStageInfo {};
+        vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+        vertShaderStageInfo.module = vertShaderModule;
+        vertShaderStageInfo.pName = "main";
+
+        VkPipelineShaderStageCreateInfo fragShaderStageInfo {};
+        fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        fragShaderStageInfo.module = fragShaderModule;
+        fragShaderStageInfo.pName = "main";
+
+        VkPipelineShaderStageCreateInfo shaderStages[] {vertShaderStageInfo, fragShaderStageInfo};
+
+        VkPipelineVertexInputStateCreateInfo vertexInputInfo {};
+        vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        vertexInputInfo.vertexBindingDescriptionCount = 0;
+        vertexInputInfo.vertexAttributeDescriptionCount = 0;
+
+        VkPipelineInputAssemblyStateCreateInfo inputAssembly {};
+        inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+        std::vector<VkDynamicState> dynamicStates {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+        VkPipelineDynamicStateCreateInfo dynamicState {};
+        dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+        dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+        dynamicState.pDynamicStates = dynamicStates.data();
+
+        VkPipelineViewportStateCreateInfo viewportState {};
+        viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        viewportState.viewportCount = 1;
+        viewportState.scissorCount = 1;
+
+        VkPipelineRasterizationStateCreateInfo rasterizer {};
+        rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        rasterizer.depthClampEnable = VK_FALSE;
+        rasterizer.rasterizerDiscardEnable = VK_FALSE;
+        rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+        rasterizer.lineWidth = 1.0f;
+        rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+        rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        rasterizer.depthBiasEnable = VK_FALSE;
+
+        VkPipelineMultisampleStateCreateInfo multisampling{};
+        multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+        multisampling.sampleShadingEnable = VK_FALSE;
+        multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+        VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+        colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT 
+                                            | VK_COLOR_COMPONENT_G_BIT 
+                                            | VK_COLOR_COMPONENT_B_BIT 
+                                            | VK_COLOR_COMPONENT_A_BIT;
+        colorBlendAttachment.blendEnable = VK_FALSE;
+
+        VkPipelineColorBlendStateCreateInfo colorBlending{};
+        colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        colorBlending.logicOpEnable = VK_FALSE;
+        colorBlending.attachmentCount = 1;
+        colorBlending.pAttachments = &colorBlendAttachment;
+
+        VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipelineLayoutInfo.setLayoutCount = 0;
+        pipelineLayoutInfo.pushConstantRangeCount = 0;
+
+        if (vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &m_PipelineLayout) != VK_SUCCESS) 
+        {
+            AE_ENGINE_CRITICAL("Failed to create Pipeline Layout!");
+            return;
+        }
+
+        VkGraphicsPipelineCreateInfo pipelineInfo{};
+        pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        pipelineInfo.stageCount = 2;
+        pipelineInfo.pStages = shaderStages;
+        pipelineInfo.pVertexInputState = &vertexInputInfo;
+        pipelineInfo.pInputAssemblyState = &inputAssembly;
+        pipelineInfo.pViewportState = &viewportState;
+        pipelineInfo.pRasterizationState = &rasterizer;
+        pipelineInfo.pMultisampleState = &multisampling;
+        pipelineInfo.pDepthStencilState = nullptr;
+        pipelineInfo.pColorBlendState = &colorBlending;
+        pipelineInfo.pDynamicState = &dynamicState;
+        pipelineInfo.layout = m_PipelineLayout;
+        pipelineInfo.renderPass = m_RenderPass;
+        pipelineInfo.subpass = 0;
+        pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+
+        if (vkCreateGraphicsPipelines(m_Device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_GraphicsPipeline) != VK_SUCCESS) 
+        {
+            AE_ENGINE_CRITICAL("Failed to create Graphics Pipeline!");
+            return;
+        }
+
+        vkDestroyShaderModule(m_Device, fragShaderModule, nullptr);
+        vkDestroyShaderModule(m_Device, vertShaderModule, nullptr);
+
+        AE_ENGINE_INFO("Vulkan Graphics Pipeline created successfully.");
+    }
+
+    void VulkanContext::CreateFramebuffers()
+    {
+        m_SwapchainFramebuffers.resize(m_SwapchainImageViews.size());
+
+        for (size_t i = 0; i < m_SwapchainImageViews.size(); i++) 
+        {
+            VkImageView attachments[] = { m_SwapchainImageViews[i] };
+
+            VkFramebufferCreateInfo framebufferInfo{};
+            framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            framebufferInfo.renderPass = m_RenderPass;
+            framebufferInfo.attachmentCount = 1;
+            framebufferInfo.pAttachments = attachments;
+            framebufferInfo.width = m_SwapchainExtent.width;
+            framebufferInfo.height = m_SwapchainExtent.height;
+            framebufferInfo.layers = 1;
+
+            if (vkCreateFramebuffer(m_Device, &framebufferInfo, nullptr, &m_SwapchainFramebuffers[i]) != VK_SUCCESS) 
+            {
+                AE_ENGINE_CRITICAL("Failed to create Framebuffer!");
+                return;
+            }
+        }
+        AE_ENGINE_INFO("Vulkan Framebuffers created successfully.");
+    }
+
+    void VulkanContext::CreateCommandPool()
+    {
+        QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(m_PhysicalDevice);
+
+        VkCommandPoolCreateInfo poolInfo{};
+        poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        poolInfo.queueFamilyIndex = queueFamilyIndices.GraphicsFamily.value();
+
+        if (vkCreateCommandPool(m_Device, &poolInfo, nullptr, &m_CommandPool) != VK_SUCCESS)
+        {
+            AE_ENGINE_CRITICAL("Failed to create Command Pool!");
+            return;
+        }
+        AE_ENGINE_TRACE("Vulkan Command Pool created successfully.");
+    }
+
+    void VulkanContext::CreateCommandBuffer()
+    {
+        m_CommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+
+        VkCommandBufferAllocateInfo allocInfo {};
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.commandPool = m_CommandPool;
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocInfo.commandBufferCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+        if (vkAllocateCommandBuffers(m_Device, &allocInfo, m_CommandBuffers.data()) != VK_SUCCESS)
+        {
+            AE_ENGINE_CRITICAL("Failed to allocate Command Buffers!");
+            return;
+        }
+        AE_ENGINE_TRACE("Vulkan Command Buffers allocated for {0} frames.", MAX_FRAMES_IN_FLIGHT);
+    }
+
+    void VulkanContext::CreateSyncObjects() 
+    {
+        m_ImageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+        m_RenderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+        m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+
+        VkSemaphoreCreateInfo semaphoreInfo {};
+        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+        VkFenceCreateInfo fenceInfo {};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            if (vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_ImageAvailableSemaphores[i]) != VK_SUCCESS ||
+                vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_RenderFinishedSemaphores[i]) != VK_SUCCESS ||
+                vkCreateFence(m_Device, &fenceInfo, nullptr, &m_InFlightFences[i]) != VK_SUCCESS) {
+                AE_ENGINE_ERROR("Failed to create synchronization objects for frame {0}", i);
+            }
+        }
+        AE_ENGINE_TRACE("Vulkan Synchronization Objects created for {0} frames.", MAX_FRAMES_IN_FLIGHT);
     }
 }
