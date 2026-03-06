@@ -7,13 +7,10 @@ extern Antelope::Application* Antelope::CreateApplication();
 
 int main(int argc, char** argv)
 {
-    Antelope::Log::Init();
-    AE_ENGINE_INFO("Engine is working");
-
+    Antelope::Log::Init();    
     auto app { Antelope::CreateApplication() };
-    AE_ENGINE_INFO("Editor is working");
-
     app->Run();
     delete app;
+    
     return 0;
 }

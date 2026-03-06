@@ -16,6 +16,26 @@ namespace Antelope
         Shutdown();
     }
 
+    void Window::OnUpdate()
+    {
+        glfwPollEvents();
+    }
+
+    bool Window::ShouldClose() const
+    {
+        return glfwWindowShouldClose(m_Window);
+    }
+
+    void Window::Shutdown()
+    {
+        if(m_Window) 
+        {
+            glfwDestroyWindow(m_Window);
+            AE_ENGINE_TRACE("Window destroyed");
+        }
+        glfwTerminate();
+    }
+
     void Window::Init(const WindowProps& props)
     {
         m_Data.Title = props.Title;
@@ -26,14 +46,13 @@ namespace Antelope
 
         if(!s_GLFWInitialized) 
         {
-            int succes { glfwInit() };
-
-            if(!succes)
+            if(glfwInit() == GLFW_FALSE)
             {
                 AE_ENGINE_ERROR("Could not initialize GLFW!");
                 return;
             }
             
+            AE_ENGINE_TRACE("GLFW Initialized successfully.");
             s_GLFWInitialized = true;
         }
 
@@ -49,25 +68,5 @@ namespace Antelope
         }
 
         glfwSetWindowUserPointer(m_Window, &m_Data);
-    }
-
-    void Window::Shutdown()
-    {
-        if(m_Window) 
-        {
-            glfwDestroyWindow(m_Window);
-            AE_ENGINE_INFO("Window destroyed");
-        }
-        glfwTerminate();
-    }
-
-    void Window::OnUpdate()
-    {
-        glfwPollEvents();
-    }
-
-    bool Window::ShouldClose() const
-    {
-        return glfwWindowShouldClose(m_Window);
     }
 }

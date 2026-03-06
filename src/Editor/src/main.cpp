@@ -7,13 +7,13 @@ class EditorApp : public Antelope::Application
     public:
         EditorApp()
         {
-            AE_CLIENT_TRACE("Editor is created");
+            AE_CLIENT_INFO("Antelope Editor instance created.");
         }
 
         ~EditorApp()
         {
-            AE_CLIENT_TRACE("Editor is destroyed");
+            AE_CLIENT_INFO("Antelope Editor instance destroyed.");
         }
 };
 
-Antelope::Application* Antelope::CreateApplication() { return new EditorApp(); } 
+Antelope::Application* Antelope::CreateApplication() { return new EditorApp(); }

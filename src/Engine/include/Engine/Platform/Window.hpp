@@ -29,17 +29,17 @@ namespace Antelope
             Window& operator=(const Window&) = delete;
 
             void OnUpdate();
-
+            bool ShouldClose() const;
+            
             inline uint32_t GetWidth() const { return m_Data.Width; }
             inline uint32_t GetHeight() const { return m_Data.Height; }
             inline GLFWwindow* GetNativeWindow() const { return m_Window; }
 
-            bool ShouldClose() const;
+        private:
+            void Shutdown();
+            void Init(const WindowProps& props);
 
         private:
-            void Init(const WindowProps& props);
-            void Shutdown();
-
             GLFWwindow* m_Window;
 
             struct WindowData

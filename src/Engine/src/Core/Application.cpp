@@ -26,6 +26,8 @@ namespace Antelope
 
     void Application::Run()
     {
+        AE_ENGINE_INFO("Engine Core Loop Started.");
+        
         while(m_Running)
         {
             m_Window->OnUpdate();
@@ -40,5 +42,7 @@ namespace Antelope
                 AE_ENGINE_TRACE("'A' key is pressed");
             }
         }
+        
+        AE_ENGINE_INFO("Engine Core Loop Stopped.");
     }
 }
