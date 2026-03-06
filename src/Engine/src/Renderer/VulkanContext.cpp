@@ -44,6 +44,24 @@ namespace Antelope
     VulkanContext::VulkanContext() {}
     VulkanContext::~VulkanContext() 
     {
+        if (!m_SwapchainImageViews.empty()) 
+        {
+            for (auto imageView : m_SwapchainImageViews) 
+            {
+                vkDestroyImageView(m_Device, imageView, nullptr);
+            }
+            
+            m_SwapchainImageViews.clear(); 
+            
+            AE_ENGINE_TRACE("Vulkan Swapchain Image Views destroyed.");
+        }
+
+        if(m_RenderPass != VK_NULL_HANDLE)
+        {
+            vkDestroyRenderPass(m_Device, m_RenderPass, nullptr);
+            AE_ENGINE_TRACE("Vulkan Render Pass destroyed.");
+        }
+
         if(m_Swapchain != VK_NULL_HANDLE)
         {
             vkDestroySwapchainKHR(m_Device, m_Swapchain, nullptr);
@@ -126,30 +144,6 @@ namespace Antelope
         }
 
         return VK_FALSE;
-    }
-
-    void VulkanContext::SetupDebugMessenger()
-    {
-        if(!m_EnableValidationLayers) { return; }
-
-        VkDebugUtilsMessengerCreateInfoEXT createInfo {};
-        createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT 
-                                   | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT 
-                                   | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT 
-                               | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT 
-                               | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-        createInfo.pfnUserCallback = DebugCallback;
-
-        if(CreateDebugUtilsMessengerEXT(m_Instance, &createInfo, nullptr, &m_DebugMessenger) != VK_SUCCESS)
-        {
-            AE_ENGINE_CRITICAL("Failed to setup debug messenger!");
-        }
-        else
-        {
-            AE_ENGINE_TRACE("Vulkan Debug Messenger connected to Engine Logger.");
-        }
     }
 
     bool VulkanContext::CheckDeviceExtensionSupport(VkPhysicalDevice device)
@@ -264,41 +258,6 @@ namespace Antelope
                deviceFeatures.geometryShader;
     }
 
-    void VulkanContext::PickPhysicalDevice()
-    {
-        uint32_t deviceCount { 0 };
-        vkEnumeratePhysicalDevices(m_Instance, &deviceCount, nullptr);
-
-        if(deviceCount == 0)
-        {
-            AE_ENGINE_CRITICAL("Failed to find GPUs with Vulkan support!");
-            return;
-        }
-
-        std::vector<VkPhysicalDevice> devices(deviceCount);
-        vkEnumeratePhysicalDevices(m_Instance, &deviceCount, devices.data());
-
-        for(const auto device : devices)
-        {
-            if(IsDeviceSuitable(device))
-            {
-                m_PhysicalDevice = device;
-                break;
-            }
-        }
-
-        if(m_PhysicalDevice == VK_NULL_HANDLE)
-        {
-            AE_ENGINE_CRITICAL("Failed to find a suitable GPU");
-        }
-        else
-        {
-            VkPhysicalDeviceProperties properties;
-            vkGetPhysicalDeviceProperties(m_PhysicalDevice, &properties);
-            AE_ENGINE_INFO("Physical Device Selected: {0} (ID: {1})", properties.deviceName, properties.deviceID);
-        }
-    }
-
     VkSurfaceFormatKHR VulkanContext::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
     {
         for(const auto& availableFormat : availableFormats)
@@ -348,127 +307,8 @@ namespace Antelope
         return actualExtent;
     }
 
-    void VulkanContext::CreateSwapchain()
+    void VulkanContext::CreateInstance()
     {
-        SwapchainSupportDetails swapchainSupport { QuerySwapChainSupport(m_PhysicalDevice) };
-        VkSurfaceFormatKHR surfaceFormat { ChooseSwapSurfaceFormat(swapchainSupport.Formats) };
-        VkPresentModeKHR presentMode { ChooseSwapPresentMode(swapchainSupport.PresentModes) };
-        VkExtent2D extent { ChooseSwapExtent(swapchainSupport.Capabilities, m_WindowHandle) };
-        uint32_t imageCount { swapchainSupport.Capabilities.minImageCount + 1 };
-
-        if(swapchainSupport.Capabilities.maxImageCount > 0 && imageCount > swapchainSupport.Capabilities.maxImageCount)
-        {
-            imageCount = swapchainSupport.Capabilities.maxImageCount;
-        }
-
-        VkSwapchainCreateInfoKHR createInfo {};
-        createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-        createInfo.surface = m_Surface;
-        createInfo.minImageCount = imageCount;
-        createInfo.imageFormat = surfaceFormat.format;
-        createInfo.imageColorSpace = surfaceFormat.colorSpace;
-        createInfo.imageExtent = extent;
-        createInfo.imageArrayLayers = 1;
-        createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-        QueueFamilyIndices indices { FindQueueFamilies(m_PhysicalDevice) };
-        uint32_t queueFamilyIndices[] { indices.GraphicsFamily.value(), indices.PresentFamily.value() };
-
-        if(indices.GraphicsFamily != indices.PresentFamily)
-        {
-            createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-            createInfo.queueFamilyIndexCount = 2;
-            createInfo.pQueueFamilyIndices = queueFamilyIndices;
-        }
-        else
-        {
-            createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-            createInfo.queueFamilyIndexCount = 0;
-            createInfo.pQueueFamilyIndices = nullptr;
-        }
-
-        createInfo.preTransform = swapchainSupport.Capabilities.currentTransform;
-        createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        createInfo.presentMode = presentMode;
-        createInfo.clipped = VK_TRUE;
-        createInfo.oldSwapchain = VK_NULL_HANDLE;
-
-        if(vkCreateSwapchainKHR(m_Device, &createInfo, nullptr, &m_Swapchain) != VK_SUCCESS)
-        {
-            AE_ENGINE_CRITICAL("Failed to create Swapchain!");
-            return;
-        }
-
-        AE_ENGINE_INFO("Vulkan Swapchain created successfully.");
-
-        vkGetSwapchainImagesKHR(m_Device, m_Swapchain, &imageCount, nullptr);
-        m_SwapchainImages.resize(imageCount);
-        vkGetSwapchainImagesKHR(m_Device, m_Swapchain, &imageCount, m_SwapchainImages.data());
-
-        m_SwapchainImageFormat = surfaceFormat.format;
-        m_SwapchainExtent = extent;
-
-        AE_ENGINE_TRACE("Swapchain images retrieved. Count: {0}", imageCount);
-    }
-
-    void VulkanContext::CreateLogicalDevice()
-    {
-        QueueFamilyIndices indices { FindQueueFamilies(m_PhysicalDevice) };
-
-        std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-        std::set<uint32_t> uniqueQueueFamilies { indices.GraphicsFamily.value(), indices.PresentFamily.value() };
-
-        float queuePriority { 0.1f };
-
-        for(uint32_t queueFamily : uniqueQueueFamilies)
-        {
-            VkDeviceQueueCreateInfo queueCreateInfo {};
-            queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-            queueCreateInfo.queueFamilyIndex = queueFamily;
-            queueCreateInfo.queueCount = 1;
-            queueCreateInfo.pQueuePriorities = &queuePriority;
-
-            queueCreateInfos.push_back(queueCreateInfo);
-        }
-
-        VkPhysicalDeviceFeatures deviceFeatures {};
-
-        VkDeviceCreateInfo createInfo {};
-        createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
-        createInfo.pQueueCreateInfos = queueCreateInfos.data();
-        createInfo.pEnabledFeatures = &deviceFeatures;
-        createInfo.enabledExtensionCount = static_cast<uint32_t>(m_DeviceExtensions.size());
-        createInfo.ppEnabledExtensionNames = m_DeviceExtensions.data();
-
-        if(m_EnableValidationLayers)
-        {
-            createInfo.enabledLayerCount = static_cast<uint32_t>(m_ValidationLayers.size());
-            createInfo.ppEnabledLayerNames = m_ValidationLayers.data();
-        }
-        else
-        {
-            createInfo.enabledLayerCount = 0;
-        }
-
-        if(vkCreateDevice(m_PhysicalDevice, &createInfo, nullptr, &m_Device) != VK_SUCCESS)
-        {
-            AE_ENGINE_CRITICAL("Failed to create Logical Device!");
-            return;
-        }
-        else
-        {
-            AE_ENGINE_INFO("Vulkan Logical Device created successfully.");
-        }
-
-        vkGetDeviceQueue(m_Device, indices.GraphicsFamily.value(), 0, &m_GraphicsQueue);
-        vkGetDeviceQueue(m_Device, indices.PresentFamily.value(), 0, &m_PresentQueue);
-    }
-
-    void VulkanContext::Init(GLFWwindow* windowHandle) 
-    {
-        m_WindowHandle = windowHandle;
-
         if(m_EnableValidationLayers && !CheckValidationLayerSupport())
         {
             AE_ENGINE_CRITICAL("Validation layers requested, but not available!");
@@ -534,10 +374,35 @@ namespace Antelope
         {
             AE_ENGINE_INFO("Vulkan Instance created successfully!");
         }
+    }
 
-        SetupDebugMessenger();
+    void VulkanContext::SetupDebugMessenger()
+    {
+        if(!m_EnableValidationLayers) { return; }
 
-        if(glfwCreateWindowSurface(m_Instance, windowHandle, nullptr, &m_Surface) != VK_SUCCESS)
+        VkDebugUtilsMessengerCreateInfoEXT createInfo {};
+        createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT 
+                                   | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT 
+                                   | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT 
+                               | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT 
+                               | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+        createInfo.pfnUserCallback = DebugCallback;
+
+        if(CreateDebugUtilsMessengerEXT(m_Instance, &createInfo, nullptr, &m_DebugMessenger) != VK_SUCCESS)
+        {
+            AE_ENGINE_CRITICAL("Failed to setup debug messenger!");
+        }
+        else
+        {
+            AE_ENGINE_TRACE("Vulkan Debug Messenger connected to Engine Logger.");
+        }
+    }
+
+    void VulkanContext::CreateSurface()
+    {
+        if(glfwCreateWindowSurface(m_Instance, m_WindowHandle, nullptr, &m_Surface) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Window Surface!");
             return;
@@ -546,9 +411,249 @@ namespace Antelope
         {
             AE_ENGINE_TRACE("Vulkan Window Surface created successfully.");
         }
+    }
 
+    void VulkanContext::PickPhysicalDevice()
+    {
+        uint32_t deviceCount { 0 };
+        vkEnumeratePhysicalDevices(m_Instance, &deviceCount, nullptr);
+
+        if(deviceCount == 0)
+        {
+            AE_ENGINE_CRITICAL("Failed to find GPUs with Vulkan support!");
+            return;
+        }
+
+        std::vector<VkPhysicalDevice> devices(deviceCount);
+        vkEnumeratePhysicalDevices(m_Instance, &deviceCount, devices.data());
+
+        for(const auto device : devices)
+        {
+            if(IsDeviceSuitable(device))
+            {
+                m_PhysicalDevice = device;
+                break;
+            }
+        }
+
+        if(m_PhysicalDevice == VK_NULL_HANDLE)
+        {
+            AE_ENGINE_CRITICAL("Failed to find a suitable GPU");
+        }
+        else
+        {
+            VkPhysicalDeviceProperties properties;
+            vkGetPhysicalDeviceProperties(m_PhysicalDevice, &properties);
+            AE_ENGINE_INFO("Physical Device Selected: {0} (ID: {1})", properties.deviceName, properties.deviceID);
+        }
+    }
+
+    void VulkanContext::CreateLogicalDevice()
+    {
+        QueueFamilyIndices indices { FindQueueFamilies(m_PhysicalDevice) };
+
+        std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+        std::set<uint32_t> uniqueQueueFamilies { indices.GraphicsFamily.value(), indices.PresentFamily.value() };
+
+        float queuePriority { 0.1f };
+
+        for(uint32_t queueFamily : uniqueQueueFamilies)
+        {
+            VkDeviceQueueCreateInfo queueCreateInfo {};
+            queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            queueCreateInfo.queueFamilyIndex = queueFamily;
+            queueCreateInfo.queueCount = 1;
+            queueCreateInfo.pQueuePriorities = &queuePriority;
+
+            queueCreateInfos.push_back(queueCreateInfo);
+        }
+
+        VkPhysicalDeviceFeatures deviceFeatures {};
+
+        VkDeviceCreateInfo createInfo {};
+        createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+        createInfo.pQueueCreateInfos = queueCreateInfos.data();
+        createInfo.pEnabledFeatures = &deviceFeatures;
+        createInfo.enabledExtensionCount = static_cast<uint32_t>(m_DeviceExtensions.size());
+        createInfo.ppEnabledExtensionNames = m_DeviceExtensions.data();
+
+        if(m_EnableValidationLayers)
+        {
+            createInfo.enabledLayerCount = static_cast<uint32_t>(m_ValidationLayers.size());
+            createInfo.ppEnabledLayerNames = m_ValidationLayers.data();
+        }
+        else
+        {
+            createInfo.enabledLayerCount = 0;
+        }
+
+        if(vkCreateDevice(m_PhysicalDevice, &createInfo, nullptr, &m_Device) != VK_SUCCESS)
+        {
+            AE_ENGINE_CRITICAL("Failed to create Logical Device!");
+            return;
+        }
+        else
+        {
+            AE_ENGINE_INFO("Vulkan Logical Device created successfully.");
+        }
+
+        vkGetDeviceQueue(m_Device, indices.GraphicsFamily.value(), 0, &m_GraphicsQueue);
+        vkGetDeviceQueue(m_Device, indices.PresentFamily.value(), 0, &m_PresentQueue);
+    }
+
+    void VulkanContext::CreateSwapchain()
+    {
+        SwapchainSupportDetails swapchainSupport { QuerySwapChainSupport(m_PhysicalDevice) };
+        VkSurfaceFormatKHR surfaceFormat { ChooseSwapSurfaceFormat(swapchainSupport.Formats) };
+        VkPresentModeKHR presentMode { ChooseSwapPresentMode(swapchainSupport.PresentModes) };
+        VkExtent2D extent { ChooseSwapExtent(swapchainSupport.Capabilities, m_WindowHandle) };
+        uint32_t imageCount { swapchainSupport.Capabilities.minImageCount + 1 };
+
+        if(swapchainSupport.Capabilities.maxImageCount > 0 && imageCount > swapchainSupport.Capabilities.maxImageCount)
+        {
+            imageCount = swapchainSupport.Capabilities.maxImageCount;
+        }
+
+        VkSwapchainCreateInfoKHR createInfo {};
+        createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+        createInfo.surface = m_Surface;
+        createInfo.minImageCount = imageCount;
+        createInfo.imageFormat = surfaceFormat.format;
+        createInfo.imageColorSpace = surfaceFormat.colorSpace;
+        createInfo.imageExtent = extent;
+        createInfo.imageArrayLayers = 1;
+        createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+        QueueFamilyIndices indices { FindQueueFamilies(m_PhysicalDevice) };
+        uint32_t queueFamilyIndices[] { indices.GraphicsFamily.value(), indices.PresentFamily.value() };
+
+        if(indices.GraphicsFamily != indices.PresentFamily)
+        {
+            createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+            createInfo.queueFamilyIndexCount = 2;
+            createInfo.pQueueFamilyIndices = queueFamilyIndices;
+        }
+        else
+        {
+            createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+            createInfo.queueFamilyIndexCount = 0;
+            createInfo.pQueueFamilyIndices = nullptr;
+        }
+
+        createInfo.preTransform = swapchainSupport.Capabilities.currentTransform;
+        createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+        createInfo.presentMode = presentMode;
+        createInfo.clipped = VK_TRUE;
+        createInfo.oldSwapchain = VK_NULL_HANDLE;
+
+        if(vkCreateSwapchainKHR(m_Device, &createInfo, nullptr, &m_Swapchain) != VK_SUCCESS)
+        {
+            AE_ENGINE_CRITICAL("Failed to create Swapchain!");
+            return;
+        }
+
+        AE_ENGINE_INFO("Vulkan Swapchain created successfully.");
+
+        vkGetSwapchainImagesKHR(m_Device, m_Swapchain, &imageCount, nullptr);
+        m_SwapchainImages.resize(imageCount);
+        vkGetSwapchainImagesKHR(m_Device, m_Swapchain, &imageCount, m_SwapchainImages.data());
+
+        m_SwapchainImageFormat = surfaceFormat.format;
+        m_SwapchainExtent = extent;
+
+        AE_ENGINE_TRACE("Swapchain images retrieved. Count: {0}", imageCount);
+    }
+
+    void VulkanContext::CreateImageViews()
+    {
+        uint32_t imageViewsSize = m_SwapchainImages.size();
+        m_SwapchainImageViews.resize(imageViewsSize);
+
+        for(size_t i = 0; i < imageViewsSize; ++i)
+        {
+            VkImageViewCreateInfo createInfo {};
+            createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            createInfo.image = m_SwapchainImages[i];
+            createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            createInfo.format = m_SwapchainImageFormat;
+            createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            createInfo.subresourceRange.baseMipLevel = 0;
+            createInfo.subresourceRange.levelCount = 1;
+            createInfo.subresourceRange.baseArrayLayer = 0;
+            createInfo.subresourceRange.layerCount = 1;
+
+            if(vkCreateImageView(m_Device, &createInfo, nullptr, &m_SwapchainImageViews[i]) != VK_SUCCESS)
+            {
+                AE_ENGINE_CRITICAL("Failed to create Swapchain Image Views!");
+                return;
+            }
+        }
+        AE_ENGINE_INFO("Vulkan Swapchain Image Views created successfully.");
+    }
+
+    void VulkanContext::CreateRenderPass()
+    {
+        VkAttachmentDescription colorAttachment {};
+        colorAttachment.format = m_SwapchainImageFormat;
+        colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+        colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+        VkAttachmentReference colorAttachmentRef {};
+        colorAttachmentRef.attachment = 0;
+        colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+        VkSubpassDescription subpass {};
+        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.colorAttachmentCount = 1;
+        subpass.pColorAttachments = &colorAttachmentRef;
+
+        VkSubpassDependency dependency {};
+        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependency.dstSubpass = 0;
+        dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.srcAccessMask = 0;
+        dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+        VkRenderPassCreateInfo createInfo {};
+        createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        createInfo.attachmentCount = 1;
+        createInfo.pAttachments = &colorAttachment;
+        createInfo.subpassCount = 1;
+        createInfo.pSubpasses = &subpass;
+        createInfo.dependencyCount = 1;
+        createInfo.pDependencies = &dependency;
+
+        if(vkCreateRenderPass(m_Device, &createInfo, nullptr, &m_RenderPass) != VK_SUCCESS)
+        {
+            AE_ENGINE_CRITICAL("Failed to create Render Pass!");
+            return;
+        }
+
+        AE_ENGINE_INFO("Vulkan Render Pass created successfully.");
+    }
+
+    void VulkanContext::Init(GLFWwindow* windowHandle) 
+    {
+        m_WindowHandle = windowHandle;
+
+        CreateInstance();
+        SetupDebugMessenger();
+        CreateSurface();
         PickPhysicalDevice();
         CreateLogicalDevice();
         CreateSwapchain();
+        CreateImageViews();
+        CreateRenderPass();
     }
 }
