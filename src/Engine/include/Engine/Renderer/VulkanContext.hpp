@@ -5,6 +5,7 @@
 #include <optional>
 #include <glm/glm.hpp>
 #include <array>
+#include <vk_mem_alloc.h>
 
 struct GLFWwindow; 
 
@@ -63,28 +64,33 @@ namespace Antelope
 
             static VkVertexInputBindingDescription GetBindingDescription();
             static std::array<VkVertexInputAttributeDescription, 2> GetAttributeDescriptions();
-            uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
+            void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize bufferSize);
+            void CreateStagingBuffer(const void* data, VkDeviceSize size, VkBuffer& outBuffer, VmaAllocation& outAllocation);
             
             void CreateInstance();
             void SetupDebugMessenger();
             void CreateSurface();
             void PickPhysicalDevice();
             void CreateLogicalDevice();
+            void CreateMemoryAllocator();
             void CreateSwapchain();
             void CreateImageViews();
             void CreateRenderPass();
             void CreateGraphicsPipeline();
             void CreateFramebuffers();
             void CreateCommandPool();
-            void CreateCommandBuffer();
+            void CreateCommandBuffers();
             void CreateSyncObjects();
             void CreateVertexBuffer();
+            void CreateIndexBuffer();
             
         private:
             const int MAX_FRAMES_IN_FLIGHT = 3;
             uint32_t m_CurrentFrame = 0;
 
             VkInstance m_Instance { VK_NULL_HANDLE };
+            VmaAllocator m_Allocator { VK_NULL_HANDLE };
             VkDebugUtilsMessengerEXT m_DebugMessenger { VK_NULL_HANDLE };
             VkSurfaceKHR m_Surface { VK_NULL_HANDLE };
             VkPhysicalDevice m_PhysicalDevice { VK_NULL_HANDLE };
@@ -97,7 +103,9 @@ namespace Antelope
             VkPipeline m_GraphicsPipeline { VK_NULL_HANDLE };
             VkCommandPool m_CommandPool { VK_NULL_HANDLE };
             VkBuffer m_VertexBuffer { VK_NULL_HANDLE };
-            VkDeviceMemory m_VertexBufferMemory { VK_NULL_HANDLE };
+            VmaAllocation m_VertexBufferAllocation { VK_NULL_HANDLE };
+            VkBuffer m_IndexBuffer { VK_NULL_HANDLE };
+            VmaAllocation m_IndexBufferAllocation { VK_NULL_HANDLE };
             
             VkFormat m_SwapchainImageFormat { VK_FORMAT_UNDEFINED };
             VkExtent2D m_SwapchainExtent { 0, 0 };

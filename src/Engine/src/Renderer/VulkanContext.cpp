@@ -1,3 +1,5 @@
+#define VMA_IMPLEMENTATION
+
 #include <Engine/Debug/Log.hpp>
 #include <Engine/Renderer/VulkanContext.hpp>
 #include <GLFW/glfw3.h>
@@ -11,16 +13,16 @@ namespace Antelope
 {
     VkResult CreateDebugUtilsMessengerEXT(
         VkInstance instance, 
-        const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo, 
+        const VkDebugUtilsMessengerCreateInfoEXT *pMessengerInfo, 
         const VkAllocationCallbacks *pAllocator,
-        VkDebugUtilsMessengerEXT *pDebugMessenger
+        VkDebugUtilsMessengerEXT *pMessenger
     )
     {
         auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
 
         if(func != nullptr)
         {
-            return(func(instance, pCreateInfo, pAllocator, pDebugMessenger));
+            return(func(instance, pMessengerInfo, pAllocator, pMessenger));
         }
         else
         {
@@ -30,7 +32,7 @@ namespace Antelope
 
     void DestroyDebugUtilsMessengerEXT(
         VkInstance instance,
-        VkDebugUtilsMessengerEXT debugMessenger,
+        VkDebugUtilsMessengerEXT messenger,
         const VkAllocationCallbacks *pAllocator
     )
     {
@@ -38,7 +40,7 @@ namespace Antelope
 
         if(func != nullptr)
         {
-            func(instance, debugMessenger, pAllocator);
+            func(instance, messenger, pAllocator);
         }
     }
 
@@ -49,16 +51,21 @@ namespace Antelope
             vkDeviceWaitIdle(m_Device);
         }
 
-        if (m_VertexBuffer != VK_NULL_HANDLE) 
+        if (m_IndexBuffer != VK_NULL_HANDLE) 
         {
-            vkDestroyBuffer(m_Device, m_VertexBuffer, nullptr);
-            AE_ENGINE_TRACE("Vulkan Vertex Buffer destroyed.");
+            vmaDestroyBuffer(m_Allocator, m_IndexBuffer, m_IndexBufferAllocation);
+            AE_ENGINE_TRACE("Vulkan Index Buffer destroyed.");
         }
 
-        if (m_VertexBufferMemory != VK_NULL_HANDLE) 
+        if (m_VertexBuffer != VK_NULL_HANDLE) 
         {
-            vkFreeMemory(m_Device, m_VertexBufferMemory, nullptr);
-            AE_ENGINE_TRACE("Vulkan Vertex Buffer Memory freed.");
+            vmaDestroyBuffer(m_Allocator, m_VertexBuffer, m_VertexBufferAllocation);
+            AE_ENGINE_TRACE("Vulkan Vertex Buffer destroyed.");
+        }
+   
+        if (m_Allocator != VK_NULL_HANDLE) {
+            vmaDestroyAllocator(m_Allocator);
+            AE_ENGINE_TRACE("VMA Allocator destroyed.");
         }
 
         if (!m_InFlightFences.empty()) 
@@ -180,9 +187,11 @@ namespace Antelope
         CreateGraphicsPipeline();
         CreateFramebuffers();
         CreateCommandPool();
-        CreateCommandBuffer();
+        CreateCommandBuffers();
         CreateSyncObjects();
+        CreateMemoryAllocator();
         CreateVertexBuffer();
+        CreateIndexBuffer();
     }
 
     void VulkanContext::DrawFrame()
@@ -200,10 +209,10 @@ namespace Antelope
         vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
         vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
 
-        VkCommandBufferBeginInfo beginInfo {};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        VkCommandBufferBeginInfo commandBufferInfo {};
+        commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         
-        if (vkBeginCommandBuffer(m_CommandBuffers[m_CurrentFrame], &beginInfo) != VK_SUCCESS) {
+        if (vkBeginCommandBuffer(m_CommandBuffers[m_CurrentFrame], &commandBufferInfo) != VK_SUCCESS) {
             AE_ENGINE_ERROR("Failed to begin recording command buffer!");
             return;
         }
@@ -240,7 +249,8 @@ namespace Antelope
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindVertexBuffers(m_CommandBuffers[m_CurrentFrame], 0, 1, vertexBuffers, offsets);
 
-        vkCmdDraw(m_CommandBuffers[m_CurrentFrame], 3, 1, 0, 0);
+        vkCmdBindIndexBuffer(m_CommandBuffers[m_CurrentFrame], m_IndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+        vkCmdDrawIndexed(m_CommandBuffers[m_CurrentFrame], 6, 1, 0, 0, 0);
 
         vkCmdEndRenderPass(m_CommandBuffers[m_CurrentFrame]);
 
@@ -522,14 +532,14 @@ namespace Antelope
 
     VkShaderModule VulkanContext::CreateShaderModule(const std::vector<char>& code)
     {
-        VkShaderModuleCreateInfo createInfo {};
-        createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        createInfo.codeSize = code.size();
-        createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+        VkShaderModuleCreateInfo shaderModuleInfo {};
+        shaderModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        shaderModuleInfo.codeSize = code.size();
+        shaderModuleInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
 
         VkShaderModule shaderModule;
         
-        if(vkCreateShaderModule(m_Device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
+        if(vkCreateShaderModule(m_Device, &shaderModuleInfo, nullptr, &shaderModule) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Shader Module!");
         }
@@ -559,20 +569,61 @@ namespace Antelope
         return attributeDescriptions;
     }
 
-    uint32_t VulkanContext::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+    void VulkanContext::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize bufferSize)
     {
-        VkPhysicalDeviceMemoryProperties memoryProperties;
-        vkGetPhysicalDeviceMemoryProperties(m_PhysicalDevice, &memoryProperties);
+        VkCommandBufferAllocateInfo allocationInfo {};
+        allocationInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocationInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocationInfo.commandPool = m_CommandPool;
+        allocationInfo.commandBufferCount = 1;
 
-        for(uint32_t i { 0 }; i < memoryProperties.memoryTypeCount; ++i)
+        VkCommandBuffer commandBuffer;
+        vkAllocateCommandBuffers(m_Device, &allocationInfo, &commandBuffer);
+
+        VkCommandBufferBeginInfo commandBufferBeginInfo {};
+        commandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        commandBufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo);
+
+        VkBufferCopy copyRegion {};
+        copyRegion.srcOffset = 0;
+        copyRegion.dstOffset = 0;
+        copyRegion.size = bufferSize;
+        vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+        vkEndCommandBuffer(commandBuffer);
+
+        VkSubmitInfo submitInfo {};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &commandBuffer;
+
+        vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo,VK_NULL_HANDLE);
+        vkQueueWaitIdle(m_GraphicsQueue);
+        vkFreeCommandBuffers(m_Device, m_CommandPool, 1, &commandBuffer); 
+    }
+
+    void VulkanContext::CreateStagingBuffer(const void* data, VkDeviceSize bufferSize, VkBuffer& outBuffer, VmaAllocation& outAllocation)
+    {
+        VkBufferCreateInfo bufferInfo {};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = bufferSize;
+        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT; 
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VmaAllocationCreateInfo allocationInfo {};
+        allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        allocationInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+
+        if (vmaCreateBuffer(m_Allocator, &bufferInfo, &allocationInfo, &outBuffer, &outAllocation, nullptr) != VK_SUCCESS)
         {
-            if((typeFilter & (1 << i)) && (memoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
-            {
-                return i;
-            }
+            AE_ENGINE_CRITICAL("Failed to create staging buffer! Size: {0} bytes.", bufferSize);
+            return;
         }
-
-        throw std::runtime_error("failed to find suitable memory type!");
+        AE_ENGINE_TRACE("Staging buffer created. Size: {0} bytes.", bufferSize);
+        
+        vmaCopyMemoryToAllocation(m_Allocator, data, outAllocation, 0, bufferSize);
+        
+        AE_ENGINE_TRACE("Data mapped and copied to staging buffer.");
     }
 
     void VulkanContext::CreateInstance()
@@ -600,38 +651,38 @@ namespace Antelope
             extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         }
         
-        VkInstanceCreateInfo createInfo {};
-        createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-        createInfo.pApplicationInfo = &appInfo;
-        createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
-        createInfo.ppEnabledExtensionNames = extensions.data();
+        VkInstanceCreateInfo instanceInfo {};
+        instanceInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+        instanceInfo.pApplicationInfo = &appInfo;
+        instanceInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+        instanceInfo.ppEnabledExtensionNames = extensions.data();
 
-        VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo {};
+        VkDebugUtilsMessengerCreateInfoEXT messengerInfo {};
 
         if(m_EnableValidationLayers)
         {
-            createInfo.enabledLayerCount = static_cast<uint32_t>(m_ValidationLayers.size());
-            createInfo.ppEnabledLayerNames = m_ValidationLayers.data();
+            instanceInfo.enabledLayerCount = static_cast<uint32_t>(m_ValidationLayers.size());
+            instanceInfo.ppEnabledLayerNames = m_ValidationLayers.data();
             AE_ENGINE_TRACE("Vulkan Validation Layers enabled.");
 
-            debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-            debugCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT 
+            messengerInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+            messengerInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT 
                                     | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT 
                                     | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-            debugCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT 
+            messengerInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT 
                                 | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT 
                                 | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-            debugCreateInfo.pfnUserCallback = DebugCallback;
-            createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*) &debugCreateInfo;
+            messengerInfo.pfnUserCallback = DebugCallback;
+            instanceInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*) &messengerInfo;
         }
         else
         {
-            createInfo.enabledLayerCount = 0;
-            createInfo.pNext = nullptr;
+            instanceInfo.enabledLayerCount = 0;
+            instanceInfo.pNext = nullptr;
             AE_ENGINE_INFO("Vulkan Validation Layers disabled (Release Mode).");
         }
 
-        VkResult result { vkCreateInstance(&createInfo, nullptr, &m_Instance) };
+        VkResult result { vkCreateInstance(&instanceInfo, nullptr, &m_Instance) };
 
         if(result != VK_SUCCESS)
         {
@@ -648,17 +699,17 @@ namespace Antelope
     {
         if(!m_EnableValidationLayers) { return; }
 
-        VkDebugUtilsMessengerCreateInfoEXT createInfo {};
-        createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT 
+        VkDebugUtilsMessengerCreateInfoEXT messengerInfo {};
+        messengerInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        messengerInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT 
                                    | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT 
                                    | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT 
+        messengerInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT 
                                | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT 
                                | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-        createInfo.pfnUserCallback = DebugCallback;
+        messengerInfo.pfnUserCallback = DebugCallback;
 
-        if(CreateDebugUtilsMessengerEXT(m_Instance, &createInfo, nullptr, &m_DebugMessenger) != VK_SUCCESS)
+        if(CreateDebugUtilsMessengerEXT(m_Instance, &messengerInfo, nullptr, &m_DebugMessenger) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to setup debug messenger!");
         }
@@ -727,36 +778,36 @@ namespace Antelope
 
         for(uint32_t queueFamily : uniqueQueueFamilies)
         {
-            VkDeviceQueueCreateInfo queueCreateInfo {};
-            queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-            queueCreateInfo.queueFamilyIndex = queueFamily;
-            queueCreateInfo.queueCount = 1;
-            queueCreateInfo.pQueuePriorities = &queuePriority;
+            VkDeviceQueueCreateInfo deviceQueueInfo {};
+            deviceQueueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            deviceQueueInfo.queueFamilyIndex = queueFamily;
+            deviceQueueInfo.queueCount = 1;
+            deviceQueueInfo.pQueuePriorities = &queuePriority;
 
-            queueCreateInfos.push_back(queueCreateInfo);
+            queueCreateInfos.push_back(deviceQueueInfo);
         }
 
         VkPhysicalDeviceFeatures deviceFeatures {};
 
-        VkDeviceCreateInfo createInfo {};
-        createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
-        createInfo.pQueueCreateInfos = queueCreateInfos.data();
-        createInfo.pEnabledFeatures = &deviceFeatures;
-        createInfo.enabledExtensionCount = static_cast<uint32_t>(m_DeviceExtensions.size());
-        createInfo.ppEnabledExtensionNames = m_DeviceExtensions.data();
+        VkDeviceCreateInfo deviceInfo {};
+        deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        deviceInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+        deviceInfo.pQueueCreateInfos = queueCreateInfos.data();
+        deviceInfo.pEnabledFeatures = &deviceFeatures;
+        deviceInfo.enabledExtensionCount = static_cast<uint32_t>(m_DeviceExtensions.size());
+        deviceInfo.ppEnabledExtensionNames = m_DeviceExtensions.data();
 
         if(m_EnableValidationLayers)
         {
-            createInfo.enabledLayerCount = static_cast<uint32_t>(m_ValidationLayers.size());
-            createInfo.ppEnabledLayerNames = m_ValidationLayers.data();
+            deviceInfo.enabledLayerCount = static_cast<uint32_t>(m_ValidationLayers.size());
+            deviceInfo.ppEnabledLayerNames = m_ValidationLayers.data();
         }
         else
         {
-            createInfo.enabledLayerCount = 0;
+            deviceInfo.enabledLayerCount = 0;
         }
 
-        if(vkCreateDevice(m_PhysicalDevice, &createInfo, nullptr, &m_Device) != VK_SUCCESS)
+        if(vkCreateDevice(m_PhysicalDevice, &deviceInfo, nullptr, &m_Device) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Logical Device!");
             return;
@@ -769,6 +820,22 @@ namespace Antelope
         vkGetDeviceQueue(m_Device, indices.GraphicsFamily.value(), 0, &m_GraphicsQueue);
         vkGetDeviceQueue(m_Device, indices.PresentFamily.value(), 0, &m_PresentQueue);
     }
+
+    void VulkanContext::CreateMemoryAllocator()
+{
+    VmaAllocatorCreateInfo allocatorInfo {};
+    allocatorInfo.physicalDevice = m_PhysicalDevice;
+    allocatorInfo.device = m_Device;
+    allocatorInfo.instance = m_Instance;
+    allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
+    // allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+
+    if (vmaCreateAllocator(&allocatorInfo, &m_Allocator) != VK_SUCCESS) {
+        AE_ENGINE_CRITICAL("Failed to create VMA Allocator!");
+    } else {
+        AE_ENGINE_TRACE("VMA Allocator created successfully.");
+    }
+}
 
     void VulkanContext::CreateSwapchain()
     {
@@ -783,39 +850,39 @@ namespace Antelope
             imageCount = swapchainSupport.Capabilities.maxImageCount;
         }
 
-        VkSwapchainCreateInfoKHR createInfo {};
-        createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-        createInfo.surface = m_Surface;
-        createInfo.minImageCount = imageCount;
-        createInfo.imageFormat = surfaceFormat.format;
-        createInfo.imageColorSpace = surfaceFormat.colorSpace;
-        createInfo.imageExtent = extent;
-        createInfo.imageArrayLayers = 1;
-        createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        VkSwapchainCreateInfoKHR swapchainInfo {};
+        swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+        swapchainInfo.surface = m_Surface;
+        swapchainInfo.minImageCount = imageCount;
+        swapchainInfo.imageFormat = surfaceFormat.format;
+        swapchainInfo.imageColorSpace = surfaceFormat.colorSpace;
+        swapchainInfo.imageExtent = extent;
+        swapchainInfo.imageArrayLayers = 1;
+        swapchainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
         QueueFamilyIndices indices { FindQueueFamilies(m_PhysicalDevice) };
         uint32_t queueFamilyIndices[] { indices.GraphicsFamily.value(), indices.PresentFamily.value() };
 
         if(indices.GraphicsFamily != indices.PresentFamily)
         {
-            createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-            createInfo.queueFamilyIndexCount = 2;
-            createInfo.pQueueFamilyIndices = queueFamilyIndices;
+            swapchainInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+            swapchainInfo.queueFamilyIndexCount = 2;
+            swapchainInfo.pQueueFamilyIndices = queueFamilyIndices;
         }
         else
         {
-            createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-            createInfo.queueFamilyIndexCount = 0;
-            createInfo.pQueueFamilyIndices = nullptr;
+            swapchainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+            swapchainInfo.queueFamilyIndexCount = 0;
+            swapchainInfo.pQueueFamilyIndices = nullptr;
         }
 
-        createInfo.preTransform = swapchainSupport.Capabilities.currentTransform;
-        createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        createInfo.presentMode = presentMode;
-        createInfo.clipped = VK_TRUE;
-        createInfo.oldSwapchain = VK_NULL_HANDLE;
+        swapchainInfo.preTransform = swapchainSupport.Capabilities.currentTransform;
+        swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+        swapchainInfo.presentMode = presentMode;
+        swapchainInfo.clipped = VK_TRUE;
+        swapchainInfo.oldSwapchain = VK_NULL_HANDLE;
 
-        if(vkCreateSwapchainKHR(m_Device, &createInfo, nullptr, &m_Swapchain) != VK_SUCCESS)
+        if(vkCreateSwapchainKHR(m_Device, &swapchainInfo, nullptr, &m_Swapchain) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Swapchain!");
             return;
@@ -840,22 +907,22 @@ namespace Antelope
 
         for(size_t i = 0; i < imageViewsSize; ++i)
         {
-            VkImageViewCreateInfo createInfo {};
-            createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            createInfo.image = m_SwapchainImages[i];
-            createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            createInfo.format = m_SwapchainImageFormat;
-            createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-            createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-            createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-            createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-            createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            createInfo.subresourceRange.baseMipLevel = 0;
-            createInfo.subresourceRange.levelCount = 1;
-            createInfo.subresourceRange.baseArrayLayer = 0;
-            createInfo.subresourceRange.layerCount = 1;
+            VkImageViewCreateInfo ImageViewInfo {};
+            ImageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            ImageViewInfo.image = m_SwapchainImages[i];
+            ImageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            ImageViewInfo.format = m_SwapchainImageFormat;
+            ImageViewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+            ImageViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+            ImageViewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+            ImageViewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+            ImageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            ImageViewInfo.subresourceRange.baseMipLevel = 0;
+            ImageViewInfo.subresourceRange.levelCount = 1;
+            ImageViewInfo.subresourceRange.baseArrayLayer = 0;
+            ImageViewInfo.subresourceRange.layerCount = 1;
 
-            if(vkCreateImageView(m_Device, &createInfo, nullptr, &m_SwapchainImageViews[i]) != VK_SUCCESS)
+            if(vkCreateImageView(m_Device, &ImageViewInfo, nullptr, &m_SwapchainImageViews[i]) != VK_SUCCESS)
             {
                 AE_ENGINE_CRITICAL("Failed to create Swapchain Image Views!");
                 return;
@@ -893,16 +960,16 @@ namespace Antelope
         dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
-        VkRenderPassCreateInfo createInfo {};
-        createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        createInfo.attachmentCount = 1;
-        createInfo.pAttachments = &colorAttachment;
-        createInfo.subpassCount = 1;
-        createInfo.pSubpasses = &subpass;
-        createInfo.dependencyCount = 1;
-        createInfo.pDependencies = &dependency;
+        VkRenderPassCreateInfo renderPassInfo {};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        renderPassInfo.attachmentCount = 1;
+        renderPassInfo.pAttachments = &colorAttachment;
+        renderPassInfo.subpassCount = 1;
+        renderPassInfo.pSubpasses = &subpass;
+        renderPassInfo.dependencyCount = 1;
+        renderPassInfo.pDependencies = &dependency;
 
-        if(vkCreateRenderPass(m_Device, &createInfo, nullptr, &m_RenderPass) != VK_SUCCESS)
+        if(vkCreateRenderPass(m_Device, &renderPassInfo, nullptr, &m_RenderPass) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Render Pass!");
             return;
@@ -939,56 +1006,56 @@ namespace Antelope
         auto bindingDescription = GetBindingDescription();
         auto attributeDescriptions = GetAttributeDescriptions();
 
-        VkPipelineVertexInputStateCreateInfo vertexInputInfo {};
-        vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertexInputInfo.vertexBindingDescriptionCount = 1;
-        vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-        vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-        vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+        VkPipelineVertexInputStateCreateInfo vertexInputStateInfo {};
+        vertexInputStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        vertexInputStateInfo.vertexBindingDescriptionCount = 1;
+        vertexInputStateInfo.pVertexBindingDescriptions = &bindingDescription;
+        vertexInputStateInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+        vertexInputStateInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
-        VkPipelineInputAssemblyStateCreateInfo inputAssembly {};
-        inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        inputAssembly.primitiveRestartEnable = VK_FALSE;
+        VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateInfo {};
+        inputAssemblyStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        inputAssemblyStateInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        inputAssemblyStateInfo.primitiveRestartEnable = VK_FALSE;
 
         std::vector<VkDynamicState> dynamicStates {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
-        VkPipelineDynamicStateCreateInfo dynamicState {};
-        dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-        dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
-        dynamicState.pDynamicStates = dynamicStates.data();
+        VkPipelineDynamicStateCreateInfo dynamicStateInfo {};
+        dynamicStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+        dynamicStateInfo.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+        dynamicStateInfo.pDynamicStates = dynamicStates.data();
 
-        VkPipelineViewportStateCreateInfo viewportState {};
-        viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-        viewportState.viewportCount = 1;
-        viewportState.scissorCount = 1;
+        VkPipelineViewportStateCreateInfo viewportStateInfo {};
+        viewportStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        viewportStateInfo.viewportCount = 1;
+        viewportStateInfo.scissorCount = 1;
 
-        VkPipelineRasterizationStateCreateInfo rasterizer {};
-        rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-        rasterizer.depthClampEnable = VK_FALSE;
-        rasterizer.rasterizerDiscardEnable = VK_FALSE;
-        rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-        rasterizer.lineWidth = 1.0f;
-        rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-        rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
-        rasterizer.depthBiasEnable = VK_FALSE;
+        VkPipelineRasterizationStateCreateInfo rasterizationStateInfo {};
+        rasterizationStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        rasterizationStateInfo.depthClampEnable = VK_FALSE;
+        rasterizationStateInfo.rasterizerDiscardEnable = VK_FALSE;
+        rasterizationStateInfo.polygonMode = VK_POLYGON_MODE_FILL;
+        rasterizationStateInfo.lineWidth = 1.0f;
+        rasterizationStateInfo.cullMode = VK_CULL_MODE_BACK_BIT;
+        rasterizationStateInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        rasterizationStateInfo.depthBiasEnable = VK_FALSE;
 
-        VkPipelineMultisampleStateCreateInfo multisampling{};
-        multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-        multisampling.sampleShadingEnable = VK_FALSE;
-        multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        VkPipelineMultisampleStateCreateInfo multisampleStateInfo{};
+        multisampleStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+        multisampleStateInfo.sampleShadingEnable = VK_FALSE;
+        multisampleStateInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-        VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-        colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT 
+        VkPipelineColorBlendAttachmentState colorBlendAttachmentStateInfo{};
+        colorBlendAttachmentStateInfo.colorWriteMask = VK_COLOR_COMPONENT_R_BIT 
                                             | VK_COLOR_COMPONENT_G_BIT 
                                             | VK_COLOR_COMPONENT_B_BIT 
                                             | VK_COLOR_COMPONENT_A_BIT;
-        colorBlendAttachment.blendEnable = VK_FALSE;
+        colorBlendAttachmentStateInfo.blendEnable = VK_FALSE;
 
         VkPipelineColorBlendStateCreateInfo colorBlending{};
         colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
         colorBlending.logicOpEnable = VK_FALSE;
         colorBlending.attachmentCount = 1;
-        colorBlending.pAttachments = &colorBlendAttachment;
+        colorBlending.pAttachments = &colorBlendAttachmentStateInfo;
 
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -1005,14 +1072,14 @@ namespace Antelope
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
         pipelineInfo.stageCount = 2;
         pipelineInfo.pStages = shaderStages;
-        pipelineInfo.pVertexInputState = &vertexInputInfo;
-        pipelineInfo.pInputAssemblyState = &inputAssembly;
-        pipelineInfo.pViewportState = &viewportState;
-        pipelineInfo.pRasterizationState = &rasterizer;
-        pipelineInfo.pMultisampleState = &multisampling;
+        pipelineInfo.pVertexInputState = &vertexInputStateInfo;
+        pipelineInfo.pInputAssemblyState = &inputAssemblyStateInfo;
+        pipelineInfo.pViewportState = &viewportStateInfo;
+        pipelineInfo.pRasterizationState = &rasterizationStateInfo;
+        pipelineInfo.pMultisampleState = &multisampleStateInfo;
         pipelineInfo.pDepthStencilState = nullptr;
         pipelineInfo.pColorBlendState = &colorBlending;
-        pipelineInfo.pDynamicState = &dynamicState;
+        pipelineInfo.pDynamicState = &dynamicStateInfo;
         pipelineInfo.layout = m_PipelineLayout;
         pipelineInfo.renderPass = m_RenderPass;
         pipelineInfo.subpass = 0;
@@ -1060,12 +1127,12 @@ namespace Antelope
     {
         QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(m_PhysicalDevice);
 
-        VkCommandPoolCreateInfo poolInfo{};
-        poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        poolInfo.queueFamilyIndex = queueFamilyIndices.GraphicsFamily.value();
+        VkCommandPoolCreateInfo commandPoolInfo{};
+        commandPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        commandPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        commandPoolInfo.queueFamilyIndex = queueFamilyIndices.GraphicsFamily.value();
 
-        if (vkCreateCommandPool(m_Device, &poolInfo, nullptr, &m_CommandPool) != VK_SUCCESS)
+        if (vkCreateCommandPool(m_Device, &commandPoolInfo, nullptr, &m_CommandPool) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Command Pool!");
             return;
@@ -1073,17 +1140,17 @@ namespace Antelope
         AE_ENGINE_TRACE("Vulkan Command Pool created successfully.");
     }
 
-    void VulkanContext::CreateCommandBuffer()
+    void VulkanContext::CreateCommandBuffers()
     {
         m_CommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 
-        VkCommandBufferAllocateInfo allocInfo {};
-        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocInfo.commandPool = m_CommandPool;
-        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandBufferCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+        VkCommandBufferAllocateInfo commandBufferAllocationInfo {};
+        commandBufferAllocationInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        commandBufferAllocationInfo.commandPool = m_CommandPool;
+        commandBufferAllocationInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        commandBufferAllocationInfo.commandBufferCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
-        if (vkAllocateCommandBuffers(m_Device, &allocInfo, m_CommandBuffers.data()) != VK_SUCCESS)
+        if (vkAllocateCommandBuffers(m_Device, &commandBufferAllocationInfo, m_CommandBuffers.data()) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to allocate Command Buffers!");
             return;
@@ -1116,50 +1183,77 @@ namespace Antelope
 
     void VulkanContext::CreateVertexBuffer()
     {
-        const std::array<Vertex, 3> vertices = 
+        const std::array<Vertex, 4> vertices = 
         {{
-            {{ 0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-            {{ 0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},
-            {{-0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}} 
+            {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+            {{ 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+            {{ 0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},
+            {{-0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}}
         }};
 
         VkDeviceSize bufferSize = sizeof(Vertex) * vertices.size();
 
-        VkBufferCreateInfo bufferCreateInfo {};
-        bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferCreateInfo.size = bufferSize;
-        bufferCreateInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-        bufferCreateInfo.sharingMode= VK_SHARING_MODE_EXCLUSIVE;
+        VkBuffer stagingBuffer;
+        VmaAllocation stagingBufferAllocation;
+        CreateStagingBuffer(vertices.data(), bufferSize, stagingBuffer, stagingBufferAllocation);
 
-        if(vkCreateBuffer(m_Device, &bufferCreateInfo, nullptr, &m_VertexBuffer) != VK_SUCCESS)
+        VkBufferCreateInfo vertexBufferInfo {};
+        vertexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        vertexBufferInfo.size = bufferSize;
+        vertexBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        vertexBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VmaAllocationCreateInfo vertexAllocInfo {};
+        vertexAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+
+        if(vmaCreateBuffer(m_Allocator, &vertexBufferInfo, &vertexAllocInfo, &m_VertexBuffer, &m_VertexBufferAllocation, nullptr) != VK_SUCCESS)
         {
-            AE_ENGINE_CRITICAL("Failed to create vertex buffer!");
+            AE_ENGINE_CRITICAL("Failed to create device local vertex buffer!");
             return;
         }
+        AE_ENGINE_TRACE("Device local vertex buffer created. Size: {0} bytes.", bufferSize);
 
-        VkMemoryRequirements memoryRequirements;
-        vkGetBufferMemoryRequirements(m_Device, m_VertexBuffer, &memoryRequirements);
+        CopyBuffer(stagingBuffer, m_VertexBuffer, bufferSize);
+        AE_ENGINE_TRACE("Data copied from staging buffer to vertex buffer.");
 
-        VkMemoryAllocateInfo allocationInfo {};
-        allocationInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        allocationInfo.allocationSize = memoryRequirements.size;
-        allocationInfo.memoryTypeIndex = FindMemoryType(memoryRequirements.memoryTypeBits,
-                                                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT 
-                                                      | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        vmaDestroyBuffer(m_Allocator, stagingBuffer, stagingBufferAllocation);
+        AE_ENGINE_TRACE("Staging buffer destroyed.");
+    }
 
-        if(vkAllocateMemory(m_Device, &allocationInfo, nullptr, &m_VertexBufferMemory) != VK_SUCCESS)
+    void VulkanContext::CreateIndexBuffer()
+    {
+        const std::array<uint16_t, 6> indices = 
         {
-            AE_ENGINE_CRITICAL("Failed to allocate vertex buffer memory!");
+            0, 1, 2,
+            2, 3, 0 
+        };
+
+        VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+
+        VkBuffer stagingBuffer;
+        VmaAllocation stagingBufferAllocation;
+        CreateStagingBuffer(indices.data(), bufferSize, stagingBuffer, stagingBufferAllocation);
+
+        VkBufferCreateInfo indexBufferInfo {};
+        indexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        indexBufferInfo.size = bufferSize;
+        indexBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        indexBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VmaAllocationCreateInfo indexAllocInfo {};
+        indexAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+
+        if(vmaCreateBuffer(m_Allocator, &indexBufferInfo, &indexAllocInfo, &m_IndexBuffer, &m_IndexBufferAllocation, nullptr) != VK_SUCCESS)
+        {
+            AE_ENGINE_CRITICAL("Failed to create device local index buffer!");
             return;
         }
-        
-        vkBindBufferMemory(m_Device, m_VertexBuffer, m_VertexBufferMemory, 0);
-        
-        void* data;
-        vkMapMemory(m_Device, m_VertexBufferMemory, 0, bufferSize, 0, &data);
-        memcpy(data, vertices.data(), (size_t)bufferSize);
-        vkUnmapMemory(m_Device, m_VertexBufferMemory);
+        AE_ENGINE_TRACE("Device local index buffer created. Size: {0} bytes.", bufferSize);
 
-        AE_ENGINE_TRACE("Vertex Buffer created and data uploaded to GPU.");
+        CopyBuffer(stagingBuffer, m_IndexBuffer, bufferSize);
+        AE_ENGINE_TRACE("Data copied from staging buffer to index buffer.");
+
+        vmaDestroyBuffer(m_Allocator, stagingBuffer, stagingBufferAllocation);
+        AE_ENGINE_TRACE("Index staging buffer destroyed.");
     }
 }
