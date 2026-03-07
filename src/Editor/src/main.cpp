@@ -2,6 +2,7 @@
 #include <Engine/Core/EntryPoint.hpp>
 #include <Engine/Debug/Log.hpp>
 
+
 class EditorApp : public Antelope::Application
 {
     public:

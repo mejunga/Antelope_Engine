@@ -1,13 +1,16 @@
 #define VMA_IMPLEMENTATION
 
-#include <Engine/Debug/Log.hpp>
 #include <Engine/Renderer/VulkanContext.hpp>
+#include <Engine/Debug/Log.hpp>
+
 #include <GLFW/glfw3.h>
-#include <cstring>
+
 #include <algorithm>
 #include <limits>
 #include <set>
 #include <fstream>
+#include <cstring>
+
 
 namespace Antelope
 {
@@ -49,6 +52,27 @@ namespace Antelope
     {
         if (m_Device != VK_NULL_HANDLE) {
             vkDeviceWaitIdle(m_Device);
+        }
+
+        if (m_DescriptorPool != VK_NULL_HANDLE) 
+        {
+            vkDestroyDescriptorPool(m_Device, m_DescriptorPool, nullptr);
+            AE_ENGINE_TRACE("Vulkan Descriptor Pool destroyed.");
+        }
+
+        if (!m_UniformBuffers.empty()) 
+        {
+            for (size_t i = 0; i < m_UniformBuffers.size(); i++) 
+            {
+                if (m_UniformBuffers[i] != VK_NULL_HANDLE) 
+                {
+                    vmaDestroyBuffer(m_Allocator, m_UniformBuffers[i], m_UniformBuffersAllocations[i]);
+                }
+            }
+            m_UniformBuffers.clear();
+            m_UniformBuffersAllocations.clear();
+            m_UniformBuffersMapped.clear();
+            AE_ENGINE_TRACE("Vulkan Uniform Buffers destroyed.");
         }
 
         if (m_IndexBuffer != VK_NULL_HANDLE) 
@@ -125,6 +149,12 @@ namespace Antelope
             AE_ENGINE_TRACE("Vulkan Pipeline Layout destroyed.");
         }
 
+        if (m_DescriptorSetLayout != VK_NULL_HANDLE) 
+        {
+            vkDestroyDescriptorSetLayout(m_Device, m_DescriptorSetLayout, nullptr);
+            AE_ENGINE_TRACE("Vulkan Descriptor Set Layout destroyed.");
+        }
+
         if(m_RenderPass != VK_NULL_HANDLE)
         {
             vkDestroyRenderPass(m_Device, m_RenderPass, nullptr);
@@ -184,6 +214,7 @@ namespace Antelope
         CreateSwapchain();
         CreateImageViews();
         CreateRenderPass();
+        CreateDescriptorSetLayout();
         CreateGraphicsPipeline();
         CreateFramebuffers();
         CreateCommandPool();
@@ -192,6 +223,9 @@ namespace Antelope
         CreateMemoryAllocator();
         CreateVertexBuffer();
         CreateIndexBuffer();
+        CreateUniformBuffers();
+        CreateDescriptorPool();
+        CreateDescriptorSets();
     }
 
     void VulkanContext::DrawFrame()
@@ -207,6 +241,7 @@ namespace Antelope
         }
 
         vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
+        UpdateUniformBuffer(m_CurrentFrame);
         vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
 
         VkCommandBufferBeginInfo commandBufferInfo {};
@@ -247,11 +282,11 @@ namespace Antelope
 
         VkBuffer vertexBuffers[] = { m_VertexBuffer };
         VkDeviceSize offsets[] = { 0 };
+
         vkCmdBindVertexBuffers(m_CommandBuffers[m_CurrentFrame], 0, 1, vertexBuffers, offsets);
-
         vkCmdBindIndexBuffer(m_CommandBuffers[m_CurrentFrame], m_IndexBuffer, 0, VK_INDEX_TYPE_UINT16);
-        vkCmdDrawIndexed(m_CommandBuffers[m_CurrentFrame], 6, 1, 0, 0, 0);
-
+        vkCmdBindDescriptorSets(m_CommandBuffers[m_CurrentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, m_PipelineLayout, 0, 1, &m_DescriptorSets[m_CurrentFrame], 0, nullptr);
+        vkCmdDrawIndexed(m_CommandBuffers[m_CurrentFrame], 36, 1, 0, 0, 0);
         vkCmdEndRenderPass(m_CommandBuffers[m_CurrentFrame]);
 
         if (vkEndCommandBuffer(m_CommandBuffers[m_CurrentFrame]) != VK_SUCCESS) {
@@ -560,7 +595,7 @@ namespace Antelope
         std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions;
         attributeDescriptions[0].binding = 0;
         attributeDescriptions[0].location = 0;
-        attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+        attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
         attributeDescriptions[0].offset = offsetof(Vertex, pos);
         attributeDescriptions[1].binding = 0;
         attributeDescriptions[1].location = 1;
@@ -604,17 +639,17 @@ namespace Antelope
 
     void VulkanContext::CreateStagingBuffer(const void* data, VkDeviceSize bufferSize, VkBuffer& outBuffer, VmaAllocation& outAllocation)
     {
-        VkBufferCreateInfo bufferInfo {};
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = bufferSize;
-        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT; 
-        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        VkBufferCreateInfo stagingBufferInfo {};
+        stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        stagingBufferInfo.size = bufferSize;
+        stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT; 
+        stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
         VmaAllocationCreateInfo allocationInfo {};
         allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
         allocationInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 
-        if (vmaCreateBuffer(m_Allocator, &bufferInfo, &allocationInfo, &outBuffer, &outAllocation, nullptr) != VK_SUCCESS)
+        if (vmaCreateBuffer(m_Allocator, &stagingBufferInfo, &allocationInfo, &outBuffer, &outAllocation, nullptr) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create staging buffer! Size: {0} bytes.", bufferSize);
             return;
@@ -624,6 +659,21 @@ namespace Antelope
         vmaCopyMemoryToAllocation(m_Allocator, data, outAllocation, 0, bufferSize);
         
         AE_ENGINE_TRACE("Data mapped and copied to staging buffer.");
+    }
+
+    void VulkanContext::UpdateUniformBuffer(uint32_t currentImage)
+    {
+        static auto startTime = std::chrono::high_resolution_clock::now();
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+        UniformBufferObject ubo{};
+        ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        ubo.proj = glm::perspective(glm::radians(45.0f), m_SwapchainExtent.width / (float)m_SwapchainExtent.height, 0.1f, 10.0f);
+        ubo.proj[1][1] *= -1;
+
+        memcpy(m_UniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
     }
 
     void VulkanContext::CreateInstance()
@@ -978,6 +1028,28 @@ namespace Antelope
         AE_ENGINE_INFO("Vulkan Render Pass created successfully.");
     }
 
+    void VulkanContext::CreateDescriptorSetLayout()
+    {
+        VkDescriptorSetLayoutBinding uboLayoutBinding {};
+        uboLayoutBinding.binding = 0;
+        uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        uboLayoutBinding.descriptorCount = 1; 
+        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; 
+        uboLayoutBinding.pImmutableSamplers = nullptr;
+
+        VkDescriptorSetLayoutCreateInfo layoutInfo {};
+        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layoutInfo.bindingCount = 1;
+        layoutInfo.pBindings = &uboLayoutBinding;
+
+        if (vkCreateDescriptorSetLayout(m_Device, &layoutInfo, nullptr, &m_DescriptorSetLayout) != VK_SUCCESS)
+        {
+            AE_ENGINE_CRITICAL("Failed to create Descriptor Set Layout!");
+            return;
+        }
+        AE_ENGINE_TRACE("Vulkan Descriptor Set Layout created.");
+    }
+
     void VulkanContext::CreateGraphicsPipeline()
     {
         auto vertShaderCode {ReadFile("Shaders/base.vert.spv")};
@@ -1036,7 +1108,7 @@ namespace Antelope
         rasterizationStateInfo.polygonMode = VK_POLYGON_MODE_FILL;
         rasterizationStateInfo.lineWidth = 1.0f;
         rasterizationStateInfo.cullMode = VK_CULL_MODE_BACK_BIT;
-        rasterizationStateInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        rasterizationStateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         rasterizationStateInfo.depthBiasEnable = VK_FALSE;
 
         VkPipelineMultisampleStateCreateInfo multisampleStateInfo{};
@@ -1059,7 +1131,8 @@ namespace Antelope
 
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutInfo.setLayoutCount = 0;
+        pipelineLayoutInfo.setLayoutCount = 1;
+        pipelineLayoutInfo.pSetLayouts = &m_DescriptorSetLayout;
         pipelineLayoutInfo.pushConstantRangeCount = 0;
 
         if (vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &m_PipelineLayout) != VK_SUCCESS) 
@@ -1183,13 +1256,19 @@ namespace Antelope
 
     void VulkanContext::CreateVertexBuffer()
     {
-        const std::array<Vertex, 4> vertices = 
-        {{
-            {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-            {{ 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-            {{ 0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},
-            {{-0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}}
-        }};
+        const std::array<Vertex, 8> vertices = 
+    {{
+        
+        {{-0.5f, -0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}},
+        {{ 0.5f, -0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}},
+        {{ 0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
+        {{-0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
+        
+        {{-0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}},
+        {{ 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},
+        {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}},
+        {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}}
+    }};
 
         VkDeviceSize bufferSize = sizeof(Vertex) * vertices.size();
 
@@ -1222,10 +1301,14 @@ namespace Antelope
 
     void VulkanContext::CreateIndexBuffer()
     {
-        const std::array<uint16_t, 6> indices = 
+        const std::array<uint16_t, 36> indices = 
         {
-            0, 1, 2,
-            2, 3, 0 
+            0, 1, 2, 2, 3, 0,
+            4, 5, 6, 6, 7, 4,
+            0, 1, 5, 5, 4, 0,
+            2, 3, 7, 7, 6, 2,
+            1, 2, 6, 6, 5, 1,
+            3, 0, 4, 4, 7, 3
         };
 
         VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
@@ -1255,5 +1338,98 @@ namespace Antelope
 
         vmaDestroyBuffer(m_Allocator, stagingBuffer, stagingBufferAllocation);
         AE_ENGINE_TRACE("Index staging buffer destroyed.");
+    }
+
+    void VulkanContext::CreateUniformBuffers()
+    {
+        VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+
+        m_UniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+        m_UniformBuffersAllocations.resize(MAX_FRAMES_IN_FLIGHT);
+        m_UniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
+        {
+            VkBufferCreateInfo uniformBufferInfo {};
+            uniformBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            uniformBufferInfo.size = bufferSize;
+            uniformBufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+            uniformBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+            VmaAllocationCreateInfo allocationInfo {};
+            allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
+            allocationInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                                   VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+            VmaAllocationInfo allocationResult;
+
+            if (vmaCreateBuffer(m_Allocator, &uniformBufferInfo, &allocationInfo, &m_UniformBuffers[i], &m_UniformBuffersAllocations[i], &allocationResult) != VK_SUCCESS) 
+            {
+                AE_ENGINE_CRITICAL("Failed to create Uniform Buffer for frame {0}!", i);
+                return;
+            }
+
+            m_UniformBuffersMapped[i] = allocationResult.pMappedData;
+        }
+        AE_ENGINE_TRACE("Uniform buffers created and mapped for {0} frames. Total size: {1} bytes.", MAX_FRAMES_IN_FLIGHT, bufferSize * MAX_FRAMES_IN_FLIGHT);
+    }
+
+    void VulkanContext::CreateDescriptorPool()
+    {
+        VkDescriptorPoolSize descriptorPoolSize {};
+        descriptorPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorPoolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+        VkDescriptorPoolCreateInfo descriptorPoolInfo {};
+        descriptorPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        descriptorPoolInfo.poolSizeCount = 1;
+        descriptorPoolInfo.pPoolSizes = &descriptorPoolSize;
+        descriptorPoolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+        if (vkCreateDescriptorPool(m_Device, &descriptorPoolInfo, nullptr, &m_DescriptorPool) != VK_SUCCESS) 
+        {
+            AE_ENGINE_CRITICAL("Failed to create Descriptor Pool!");
+            return;
+        }
+        AE_ENGINE_TRACE("Descriptor pool created.");
+    }
+
+    void VulkanContext::CreateDescriptorSets()
+    {
+        std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, m_DescriptorSetLayout);
+        
+        VkDescriptorSetAllocateInfo decriptorSetallocationInfo {};
+        decriptorSetallocationInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        decriptorSetallocationInfo.descriptorPool = m_DescriptorPool;
+        decriptorSetallocationInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+        decriptorSetallocationInfo.pSetLayouts = layouts.data();
+
+        m_DescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+        
+        if (vkAllocateDescriptorSets(m_Device, &decriptorSetallocationInfo, m_DescriptorSets.data()) != VK_SUCCESS) 
+        {
+            AE_ENGINE_CRITICAL("Failed to allocate Descriptor Sets!");
+            return;
+        }
+
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
+        {
+            VkDescriptorBufferInfo descriptorBufferInfo {};
+            descriptorBufferInfo.buffer = m_UniformBuffers[i];
+            descriptorBufferInfo.offset = 0;
+            descriptorBufferInfo.range = sizeof(UniformBufferObject);
+
+            VkWriteDescriptorSet descriptorWriteSet {};
+            descriptorWriteSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWriteSet.dstSet = m_DescriptorSets[i];
+            descriptorWriteSet.dstBinding = 0;
+            descriptorWriteSet.dstArrayElement = 0;
+            descriptorWriteSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            descriptorWriteSet.descriptorCount = 1;
+            descriptorWriteSet.pBufferInfo = &descriptorBufferInfo;
+
+            vkUpdateDescriptorSets(m_Device, 1, &descriptorWriteSet, 0, nullptr);
+        }
+        AE_ENGINE_TRACE("Descriptor sets allocated and bound.");
     }
 }

@@ -1,6 +1,8 @@
 #include <Engine/Platform/Window.hpp>
 #include <Engine/Debug/Log.hpp>
+
 #include <GLFW/glfw3.h>
+
 
 namespace Antelope
 {

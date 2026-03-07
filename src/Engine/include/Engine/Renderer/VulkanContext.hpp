@@ -1,11 +1,18 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
+#include <vk_mem_alloc.h>
+
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
+#include <array>
 #include <vector>
 #include <optional>
-#include <glm/glm.hpp>
-#include <array>
-#include <vk_mem_alloc.h>
+#include <chrono>
+
 
 struct GLFWwindow; 
 
@@ -28,8 +35,15 @@ namespace Antelope
 
     struct Vertex
     {
-        glm::vec2 pos;
+        glm::vec3 pos;
         glm::vec3 color;
+    };
+
+    struct UniformBufferObject
+    {
+        glm::mat4 model;
+        glm::mat4 view;
+        glm::mat4 proj;
     };
 
     class VulkanContext
@@ -67,6 +81,7 @@ namespace Antelope
 
             void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize bufferSize);
             void CreateStagingBuffer(const void* data, VkDeviceSize size, VkBuffer& outBuffer, VmaAllocation& outAllocation);
+            void UpdateUniformBuffer(uint32_t currentImage);
             
             void CreateInstance();
             void SetupDebugMessenger();
@@ -77,6 +92,7 @@ namespace Antelope
             void CreateSwapchain();
             void CreateImageViews();
             void CreateRenderPass();
+            void CreateDescriptorSetLayout();
             void CreateGraphicsPipeline();
             void CreateFramebuffers();
             void CreateCommandPool();
@@ -84,21 +100,25 @@ namespace Antelope
             void CreateSyncObjects();
             void CreateVertexBuffer();
             void CreateIndexBuffer();
+            void CreateUniformBuffers();
+            void CreateDescriptorPool();
+            void CreateDescriptorSets();
             
         private:
             const int MAX_FRAMES_IN_FLIGHT = 3;
             uint32_t m_CurrentFrame = 0;
 
             VkInstance m_Instance { VK_NULL_HANDLE };
-            VmaAllocator m_Allocator { VK_NULL_HANDLE };
             VkDebugUtilsMessengerEXT m_DebugMessenger { VK_NULL_HANDLE };
             VkSurfaceKHR m_Surface { VK_NULL_HANDLE };
             VkPhysicalDevice m_PhysicalDevice { VK_NULL_HANDLE };
             VkDevice m_Device { VK_NULL_HANDLE };
             VkQueue m_GraphicsQueue { VK_NULL_HANDLE };
             VkQueue m_PresentQueue { VK_NULL_HANDLE };
+            VmaAllocator m_Allocator { VK_NULL_HANDLE };
             VkSwapchainKHR m_Swapchain { VK_NULL_HANDLE };
             VkRenderPass m_RenderPass { VK_NULL_HANDLE };
+            VkDescriptorSetLayout m_DescriptorSetLayout { VK_NULL_HANDLE };
             VkPipelineLayout m_PipelineLayout { VK_NULL_HANDLE };
             VkPipeline m_GraphicsPipeline { VK_NULL_HANDLE };
             VkCommandPool m_CommandPool { VK_NULL_HANDLE };
@@ -106,6 +126,7 @@ namespace Antelope
             VmaAllocation m_VertexBufferAllocation { VK_NULL_HANDLE };
             VkBuffer m_IndexBuffer { VK_NULL_HANDLE };
             VmaAllocation m_IndexBufferAllocation { VK_NULL_HANDLE };
+            VkDescriptorPool m_DescriptorPool { VK_NULL_HANDLE };
             
             VkFormat m_SwapchainImageFormat { VK_FORMAT_UNDEFINED };
             VkExtent2D m_SwapchainExtent { 0, 0 };
@@ -120,6 +141,10 @@ namespace Antelope
             std::vector<VkSemaphore> m_RenderFinishedSemaphores;
             std::vector<VkFence> m_InFlightFences;
             std::vector<VkCommandBuffer> m_CommandBuffers;
+            std::vector<VkBuffer> m_UniformBuffers;
+            std::vector<VmaAllocation> m_UniformBuffersAllocations;
+            std::vector<void*> m_UniformBuffersMapped;
+            std::vector<VkDescriptorSet> m_DescriptorSets;
 
         #ifdef NDEBUG
             const bool m_EnableValidationLayers { false };

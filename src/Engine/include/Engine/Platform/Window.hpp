@@ -3,6 +3,7 @@
 #include <string>
 #include <cstdint>
 
+
 struct GLFWwindow;
 
 namespace Antelope
