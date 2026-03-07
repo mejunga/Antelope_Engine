@@ -3,6 +3,8 @@
 #include <vulkan/vulkan.h>
 #include <vector>
 #include <optional>
+#include <glm/glm.hpp>
+#include <array>
 
 struct GLFWwindow; 
 
@@ -21,6 +23,12 @@ namespace Antelope
         VkSurfaceCapabilitiesKHR Capabilities;
         std::vector<VkSurfaceFormatKHR> Formats;
         std::vector<VkPresentModeKHR> PresentModes;
+    };
+
+    struct Vertex
+    {
+        glm::vec2 pos;
+        glm::vec3 color;
     };
 
     class VulkanContext
@@ -52,6 +60,10 @@ namespace Antelope
 
             static std::vector<char> ReadFile(const std::string& fileName);
             VkShaderModule CreateShaderModule(const std::vector<char>& code);
+
+            static VkVertexInputBindingDescription GetBindingDescription();
+            static std::array<VkVertexInputAttributeDescription, 2> GetAttributeDescriptions();
+            uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
             
             void CreateInstance();
             void SetupDebugMessenger();
@@ -66,6 +78,7 @@ namespace Antelope
             void CreateCommandPool();
             void CreateCommandBuffer();
             void CreateSyncObjects();
+            void CreateVertexBuffer();
             
         private:
             const int MAX_FRAMES_IN_FLIGHT = 3;
@@ -83,9 +96,11 @@ namespace Antelope
             VkPipelineLayout m_PipelineLayout { VK_NULL_HANDLE };
             VkPipeline m_GraphicsPipeline { VK_NULL_HANDLE };
             VkCommandPool m_CommandPool { VK_NULL_HANDLE };
+            VkBuffer m_VertexBuffer { VK_NULL_HANDLE };
+            VkDeviceMemory m_VertexBufferMemory { VK_NULL_HANDLE };
             
-            VkFormat m_SwapchainImageFormat;
-            VkExtent2D m_SwapchainExtent;
+            VkFormat m_SwapchainImageFormat { VK_FORMAT_UNDEFINED };
+            VkExtent2D m_SwapchainExtent { 0, 0 };
             GLFWwindow *m_WindowHandle { nullptr };
 
             const std::vector<const char*> m_ValidationLayers { "VK_LAYER_KHRONOS_validation" };

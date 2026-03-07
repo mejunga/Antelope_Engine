@@ -49,6 +49,18 @@ namespace Antelope
             vkDeviceWaitIdle(m_Device);
         }
 
+        if (m_VertexBuffer != VK_NULL_HANDLE) 
+        {
+            vkDestroyBuffer(m_Device, m_VertexBuffer, nullptr);
+            AE_ENGINE_TRACE("Vulkan Vertex Buffer destroyed.");
+        }
+
+        if (m_VertexBufferMemory != VK_NULL_HANDLE) 
+        {
+            vkFreeMemory(m_Device, m_VertexBufferMemory, nullptr);
+            AE_ENGINE_TRACE("Vulkan Vertex Buffer Memory freed.");
+        }
+
         if (!m_InFlightFences.empty()) 
         {
             for (size_t i = 0; i < m_InFlightFences.size(); i++) 
@@ -170,6 +182,7 @@ namespace Antelope
         CreateCommandPool();
         CreateCommandBuffer();
         CreateSyncObjects();
+        CreateVertexBuffer();
     }
 
     void VulkanContext::DrawFrame()
@@ -178,14 +191,13 @@ namespace Antelope
 
         uint32_t imageIndex;
         VkResult result = vkAcquireNextImageKHR(m_Device, m_Swapchain, UINT64_MAX, 
-            m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
+                                                m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
 
         if (result == VK_ERROR_OUT_OF_DATE_KHR) {
             return; 
         }
 
         vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
-
         vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
 
         VkCommandBufferBeginInfo beginInfo {};
@@ -208,7 +220,6 @@ namespace Antelope
         renderPassInfo.pClearValues = &clearColor;
 
         vkCmdBeginRenderPass(m_CommandBuffers[m_CurrentFrame], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
         vkCmdBindPipeline(m_CommandBuffers[m_CurrentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicsPipeline);
 
         VkViewport viewport {};
@@ -224,6 +235,10 @@ namespace Antelope
         scissor.offset = {0, 0};
         scissor.extent = m_SwapchainExtent;
         vkCmdSetScissor(m_CommandBuffers[m_CurrentFrame], 0, 1, &scissor);
+
+        VkBuffer vertexBuffers[] = { m_VertexBuffer };
+        VkDeviceSize offsets[] = { 0 };
+        vkCmdBindVertexBuffers(m_CommandBuffers[m_CurrentFrame], 0, 1, vertexBuffers, offsets);
 
         vkCmdDraw(m_CommandBuffers[m_CurrentFrame], 3, 1, 0, 0);
 
@@ -519,6 +534,45 @@ namespace Antelope
             AE_ENGINE_CRITICAL("Failed to create Shader Module!");
         }
         return shaderModule;
+    }
+
+    VkVertexInputBindingDescription VulkanContext::GetBindingDescription()
+    {
+        VkVertexInputBindingDescription bindingDescription {};
+        bindingDescription.binding = 0;
+        bindingDescription.stride = sizeof(Vertex);
+        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+        return bindingDescription;
+    }
+
+    std::array<VkVertexInputAttributeDescription, 2> VulkanContext::GetAttributeDescriptions()
+    {
+        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions;
+        attributeDescriptions[0].binding = 0;
+        attributeDescriptions[0].location = 0;
+        attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+        attributeDescriptions[0].offset = offsetof(Vertex, pos);
+        attributeDescriptions[1].binding = 0;
+        attributeDescriptions[1].location = 1;
+        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[1].offset = offsetof(Vertex, color);
+        return attributeDescriptions;
+    }
+
+    uint32_t VulkanContext::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+    {
+        VkPhysicalDeviceMemoryProperties memoryProperties;
+        vkGetPhysicalDeviceMemoryProperties(m_PhysicalDevice, &memoryProperties);
+
+        for(uint32_t i { 0 }; i < memoryProperties.memoryTypeCount; ++i)
+        {
+            if((typeFilter & (1 << i)) && (memoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
+            {
+                return i;
+            }
+        }
+
+        throw std::runtime_error("failed to find suitable memory type!");
     }
 
     void VulkanContext::CreateInstance()
@@ -882,10 +936,15 @@ namespace Antelope
 
         VkPipelineShaderStageCreateInfo shaderStages[] {vertShaderStageInfo, fragShaderStageInfo};
 
+        auto bindingDescription = GetBindingDescription();
+        auto attributeDescriptions = GetAttributeDescriptions();
+
         VkPipelineVertexInputStateCreateInfo vertexInputInfo {};
         vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertexInputInfo.vertexBindingDescriptionCount = 0;
-        vertexInputInfo.vertexAttributeDescriptionCount = 0;
+        vertexInputInfo.vertexBindingDescriptionCount = 1;
+        vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+        vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+        vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
         VkPipelineInputAssemblyStateCreateInfo inputAssembly {};
         inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -1053,5 +1112,54 @@ namespace Antelope
             }
         }
         AE_ENGINE_TRACE("Vulkan Synchronization Objects created for {0} frames.", MAX_FRAMES_IN_FLIGHT);
+    }
+
+    void VulkanContext::CreateVertexBuffer()
+    {
+        const std::array<Vertex, 3> vertices = 
+        {{
+            {{ 0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+            {{ 0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},
+            {{-0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}} 
+        }};
+
+        VkDeviceSize bufferSize = sizeof(Vertex) * vertices.size();
+
+        VkBufferCreateInfo bufferCreateInfo {};
+        bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferCreateInfo.size = bufferSize;
+        bufferCreateInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        bufferCreateInfo.sharingMode= VK_SHARING_MODE_EXCLUSIVE;
+
+        if(vkCreateBuffer(m_Device, &bufferCreateInfo, nullptr, &m_VertexBuffer) != VK_SUCCESS)
+        {
+            AE_ENGINE_CRITICAL("Failed to create vertex buffer!");
+            return;
+        }
+
+        VkMemoryRequirements memoryRequirements;
+        vkGetBufferMemoryRequirements(m_Device, m_VertexBuffer, &memoryRequirements);
+
+        VkMemoryAllocateInfo allocationInfo {};
+        allocationInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocationInfo.allocationSize = memoryRequirements.size;
+        allocationInfo.memoryTypeIndex = FindMemoryType(memoryRequirements.memoryTypeBits,
+                                                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT 
+                                                      | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+        if(vkAllocateMemory(m_Device, &allocationInfo, nullptr, &m_VertexBufferMemory) != VK_SUCCESS)
+        {
+            AE_ENGINE_CRITICAL("Failed to allocate vertex buffer memory!");
+            return;
+        }
+        
+        vkBindBufferMemory(m_Device, m_VertexBuffer, m_VertexBufferMemory, 0);
+        
+        void* data;
+        vkMapMemory(m_Device, m_VertexBufferMemory, 0, bufferSize, 0, &data);
+        memcpy(data, vertices.data(), (size_t)bufferSize);
+        vkUnmapMemory(m_Device, m_VertexBufferMemory);
+
+        AE_ENGINE_TRACE("Vertex Buffer created and data uploaded to GPU.");
     }
 }
