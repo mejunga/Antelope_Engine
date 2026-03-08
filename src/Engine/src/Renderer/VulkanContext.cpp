@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <limits>
 #include <set>
-#include <fstream>
+#include <stdexcept>
 #include <cstring>
 
 
@@ -47,115 +47,30 @@ namespace Antelope
         }
     }
 
-    VulkanContext::VulkanContext() {}
+    VulkanContext::VulkanContext(GLFWwindow* windowHandle) : m_WindowHandle(windowHandle)
+    {
+        CreateInstance();
+        AE_ENGINE_INFO("Vulkan Instance created.");
+        SetupDebugMessenger();
+        AE_ENGINE_TRACE("Debug Messenger connected to Engine Logger.");
+        CreateSurface();
+        AE_ENGINE_TRACE("Window Surface created.");
+        PickPhysicalDevice();
+        CreateLogicalDevice();
+        AE_ENGINE_INFO("Logical Device created.");
+        CreateMemoryAllocator();
+        AE_ENGINE_TRACE("VMA Allocator created.");
+    }
+
     VulkanContext::~VulkanContext() 
     {
-        if (m_Device != VK_NULL_HANDLE) {
+        if (m_Device != VK_NULL_HANDLE) 
+        {
             vkDeviceWaitIdle(m_Device);
         }
 
-        if (m_DescriptorPool != VK_NULL_HANDLE) 
+        if (m_Allocator != VK_NULL_HANDLE) 
         {
-            vkDestroyDescriptorPool(m_Device, m_DescriptorPool, nullptr);
-            AE_ENGINE_TRACE("Vulkan Descriptor Pool destroyed.");
-        }
-
-        if (!m_UniformBuffers.empty()) 
-        {
-            for (size_t i = 0; i < m_UniformBuffers.size(); i++) 
-            {
-                if (m_UniformBuffers[i] != VK_NULL_HANDLE) 
-                {
-                    vmaDestroyBuffer(m_Allocator, m_UniformBuffers[i], m_UniformBuffersAllocations[i]);
-                }
-            }
-            m_UniformBuffers.clear();
-            m_UniformBuffersAllocations.clear();
-            m_UniformBuffersMapped.clear();
-            AE_ENGINE_TRACE("Vulkan Uniform Buffers destroyed.");
-        }
-
-        if (m_IndexBuffer != VK_NULL_HANDLE) 
-        {
-            vmaDestroyBuffer(m_Allocator, m_IndexBuffer, m_IndexBufferAllocation);
-            AE_ENGINE_TRACE("Vulkan Index Buffer destroyed.");
-        }
-
-        if (m_VertexBuffer != VK_NULL_HANDLE) 
-        {
-            vmaDestroyBuffer(m_Allocator, m_VertexBuffer, m_VertexBufferAllocation);
-            AE_ENGINE_TRACE("Vulkan Vertex Buffer destroyed.");
-        }
-
-        if (!m_InFlightFences.empty()) 
-        {
-            for (size_t i = 0; i < m_InFlightFences.size(); i++) 
-            {
-                vkDestroyFence(m_Device, m_InFlightFences[i], nullptr);
-            }
-            m_InFlightFences.clear();
-            AE_ENGINE_TRACE("Vulkan In-Flight Fences destroyed.");
-        }
-
-        if (!m_RenderFinishedSemaphores.empty()) 
-        {
-            for (size_t i = 0; i < m_RenderFinishedSemaphores.size(); i++) 
-            {
-                vkDestroySemaphore(m_Device, m_RenderFinishedSemaphores[i], nullptr);
-            }
-            m_RenderFinishedSemaphores.clear();
-            AE_ENGINE_TRACE("Vulkan Render Finished Semaphores destroyed.");
-        }
-
-        if (!m_ImageAvailableSemaphores.empty()) 
-        {
-            for (size_t i = 0; i < m_ImageAvailableSemaphores.size(); i++) 
-            {
-                vkDestroySemaphore(m_Device, m_ImageAvailableSemaphores[i], nullptr);
-            }
-            m_ImageAvailableSemaphores.clear();
-            AE_ENGINE_TRACE("Vulkan Image Available Semaphores destroyed.");
-        }
-
-        if(m_CommandPool != VK_NULL_HANDLE)
-        {
-            vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
-            AE_ENGINE_TRACE("Vulkan Command Pool destroyed.");
-        }
-
-        if(m_GraphicsPipeline != VK_NULL_HANDLE) 
-        {
-            vkDestroyPipeline(m_Device, m_GraphicsPipeline, nullptr);
-            AE_ENGINE_TRACE("Vulkan Graphics Pipeline destroyed.");
-        }
-        
-        if(m_PipelineLayout != VK_NULL_HANDLE) 
-        {
-            vkDestroyPipelineLayout(m_Device, m_PipelineLayout, nullptr);
-            AE_ENGINE_TRACE("Vulkan Pipeline Layout destroyed.");
-        }
-
-        if (m_DescriptorSetLayout != VK_NULL_HANDLE) 
-        {
-            vkDestroyDescriptorSetLayout(m_Device, m_DescriptorSetLayout, nullptr);
-            AE_ENGINE_TRACE("Vulkan Descriptor Set Layout destroyed.");
-        }
-
-        if(m_RenderPass != VK_NULL_HANDLE)
-        {
-            vkDestroyRenderPass(m_Device, m_RenderPass, nullptr);
-            AE_ENGINE_TRACE("Vulkan Render Pass destroyed.");
-        }
-
-        if (m_Swapchain != VK_NULL_HANDLE)
-        {
-            CleanupSwapchain();
-            AE_ENGINE_TRACE("Vulkan Framebuffers destroyed.");
-            AE_ENGINE_TRACE("Vulkan Swapchain Image Views destroyed.");
-            AE_ENGINE_TRACE("Vulkan Swapchain destroyed.");
-        }
-
-        if (m_Allocator != VK_NULL_HANDLE) {
             vmaDestroyAllocator(m_Allocator);
             AE_ENGINE_TRACE("VMA Allocator destroyed.");
         }
@@ -185,254 +100,30 @@ namespace Antelope
         }
     }
 
-    void VulkanContext::Init(GLFWwindow* windowHandle)
+    SwapchainSupportDetails VulkanContext::QuerySwapChainSupport(VkPhysicalDevice device)
     {
-        m_WindowHandle = windowHandle;
+        SwapchainSupportDetails details;
+        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, m_Surface, &details.Capabilities);
 
-        CreateInstance();
-        AE_ENGINE_INFO("Vulkan Instance created.");
-        SetupDebugMessenger();
-        AE_ENGINE_TRACE("Debug Messenger connected to Engine Logger.");
-        CreateSurface();
-        AE_ENGINE_TRACE("Window Surface created.");
-        PickPhysicalDevice();
-        CreateLogicalDevice();
-        AE_ENGINE_INFO("Logical Device created.");
-        CreateMemoryAllocator();
-        AE_ENGINE_TRACE("VMA Allocator created.");
-        CreateSwapchain();
-        AE_ENGINE_INFO("Swapchain created.");
-        CreateImageViews();
-        AE_ENGINE_INFO("Swapchain Image Views created.");
-        CreateDepthResources();
-        AE_ENGINE_INFO("Depth Resources created");
-        CreateRenderPass();
-        AE_ENGINE_INFO("Render Pass created.");
-        CreateDescriptorSetLayout();
-        AE_ENGINE_TRACE("Descriptor Set Layout created.");
-        CreateGraphicsPipeline();
-        AE_ENGINE_INFO("Graphics Pipeline created.");
-        CreateFramebuffers();
-        AE_ENGINE_INFO("Framebuffers created.");
-        CreateCommandPool();
-        AE_ENGINE_TRACE("Command Pool created.");
-        CreateCommandBuffers();
-        AE_ENGINE_TRACE("Command Buffers allocated for {0} frames.", MAX_FRAMES_IN_FLIGHT);
-        CreateSyncObjects();
-        AE_ENGINE_TRACE("Synchronization Objects created for {0} frames.", MAX_FRAMES_IN_FLIGHT);
-        CreateVertexBuffer();
-        AE_ENGINE_TRACE("Device local vertex buffer created and uploaded to GPU.");
-        CreateIndexBuffer();
-        AE_ENGINE_TRACE("Device local index buffer created and uploaded to GPU.");
-        CreateUniformBuffers();
-        AE_ENGINE_TRACE("Uniform buffers created and mapped for {0} frames.", MAX_FRAMES_IN_FLIGHT);
-        CreateDescriptorPool();
-        AE_ENGINE_TRACE("Descriptor pool created.");
-        CreateDescriptorSets();
-        AE_ENGINE_TRACE("Descriptor sets allocated and bound.");
-    }
+        uint32_t formatCount;
+        vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_Surface, &formatCount, nullptr);
 
-    void VulkanContext::DrawFrame()
-    {
-        vkWaitForFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
-
-        uint32_t imageIndex;
-        VkResult result = vkAcquireNextImageKHR(m_Device, m_Swapchain, UINT64_MAX, 
-                                                m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
-
-        if(result == VK_ERROR_OUT_OF_DATE_KHR)
+        if(formatCount != 0)
         {
-            RecreateSwapchain();
-            return; 
+            details.Formats.resize(formatCount);
+            vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_Surface, &formatCount, details.Formats.data());
         }
-        else if(result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+
+        uint32_t presentModeCount;
+        vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_Surface, &presentModeCount, nullptr);
+
+        if(presentModeCount != 0)
         {
-            AE_ENGINE_ERROR("Failed to acquire swapchain image!");
-            return;
+            details.PresentModes.resize(presentModeCount);
+            vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_Surface, &presentModeCount, details.PresentModes.data());
         }
 
-        vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
-        UpdateUniformBuffer(m_CurrentFrame);
-        vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
-
-        VkCommandBufferBeginInfo commandBufferInfo {};
-        commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        
-        if (vkBeginCommandBuffer(m_CommandBuffers[m_CurrentFrame], &commandBufferInfo) != VK_SUCCESS) {
-            AE_ENGINE_ERROR("Failed to begin recording command buffer!");
-            return;
-        }
-
-        VkRenderPassBeginInfo renderPassInfo {};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassInfo.renderPass = m_RenderPass;
-        renderPassInfo.framebuffer = m_SwapchainFramebuffers[imageIndex];
-        renderPassInfo.renderArea.offset = {0, 0};
-        renderPassInfo.renderArea.extent = m_SwapchainExtent;
-
-        std::array<VkClearValue, 2> clearValues {};
-        clearValues[0].color = {{0.01f, 0.01f, 0.03f, 1.0f}};
-        clearValues[1].depthStencil = {1.0f, 0};
-
-        renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-        renderPassInfo.pClearValues = clearValues.data();
-
-        vkCmdBeginRenderPass(m_CommandBuffers[m_CurrentFrame], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-        vkCmdBindPipeline(m_CommandBuffers[m_CurrentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicsPipeline);
-
-        VkViewport viewport {};
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width = static_cast<float>(m_SwapchainExtent.width);
-        viewport.height = static_cast<float>(m_SwapchainExtent.height);
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-        vkCmdSetViewport(m_CommandBuffers[m_CurrentFrame], 0, 1, &viewport);
-
-        VkRect2D scissor {};
-        scissor.offset = {0, 0};
-        scissor.extent = m_SwapchainExtent;
-        vkCmdSetScissor(m_CommandBuffers[m_CurrentFrame], 0, 1, &scissor);
-
-        VkBuffer vertexBuffers[] = { m_VertexBuffer };
-        VkDeviceSize offsets[] = { 0 };
-
-        vkCmdBindVertexBuffers(m_CommandBuffers[m_CurrentFrame], 0, 1, vertexBuffers, offsets);
-        vkCmdBindIndexBuffer(m_CommandBuffers[m_CurrentFrame], m_IndexBuffer, 0, VK_INDEX_TYPE_UINT16);
-        vkCmdBindDescriptorSets(m_CommandBuffers[m_CurrentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, m_PipelineLayout, 0, 1, &m_DescriptorSets[m_CurrentFrame], 0, nullptr);
-        vkCmdDrawIndexed(m_CommandBuffers[m_CurrentFrame], 36, 1, 0, 0, 0);
-        vkCmdEndRenderPass(m_CommandBuffers[m_CurrentFrame]);
-
-        if (vkEndCommandBuffer(m_CommandBuffers[m_CurrentFrame]) != VK_SUCCESS) {
-            AE_ENGINE_ERROR("Failed to record command buffer!");
-            return;
-        }
-
-        VkSubmitInfo submitInfo {};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-        VkSemaphore waitSemaphores[] { m_ImageAvailableSemaphores[m_CurrentFrame] };
-        VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-        submitInfo.waitSemaphoreCount = 1;
-        submitInfo.pWaitSemaphores = waitSemaphores;
-        submitInfo.pWaitDstStageMask = waitStages;
-
-        submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &m_CommandBuffers[m_CurrentFrame];
-
-        VkSemaphore signalSemaphores[] { m_RenderFinishedSemaphores[m_CurrentFrame] };
-        submitInfo.signalSemaphoreCount = 1;
-        submitInfo.pSignalSemaphores = signalSemaphores;
-
-        if (vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_InFlightFences[m_CurrentFrame]) != VK_SUCCESS) {
-            AE_ENGINE_ERROR("Failed to submit draw command buffer!");
-            return;
-        }
-
-        VkPresentInfoKHR presentInfo {};
-        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-        presentInfo.waitSemaphoreCount = 1;
-        presentInfo.pWaitSemaphores = signalSemaphores; 
-
-        VkSwapchainKHR swapchains[] { m_Swapchain };
-        presentInfo.swapchainCount = 1;
-        presentInfo.pSwapchains = swapchains;
-        presentInfo.pImageIndices = &imageIndex;
-
-        result = vkQueuePresentKHR(m_PresentQueue, &presentInfo);
-
-        if(result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_FramebufferResized)
-        {
-            m_FramebufferResized = false;
-            RecreateSwapchain();
-        }
-        else if(result != VK_SUCCESS)
-        {
-            AE_ENGINE_ERROR("Failed to present swapchain image!");
-        }
-        
-        vkQueueWaitIdle(m_PresentQueue);
-        m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
-    }
-
-    bool VulkanContext::CheckValidationLayerSupport()
-    {
-        uint32_t layerCount;
-        vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-
-        std::vector<VkLayerProperties> availableLayers(layerCount);
-        vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
-    
-        for(const char* layerName : m_ValidationLayers)
-        {
-            bool layerFound { false };
-
-            for(const auto& layerProperties : availableLayers)
-            {
-                if(strcmp(layerName, layerProperties.layerName) == 0) 
-                {
-                    layerFound = true;
-                    break;
-                }
-            }
-
-            if(!layerFound)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    VKAPI_ATTR VkBool32 VKAPI_CALL VulkanContext::DebugCallback(
-        VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-        VkDebugUtilsMessageTypeFlagsEXT messageType,
-        const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-        void *pUserData
-    )
-    {
-        if(messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
-        {
-            AE_ENGINE_ERROR("VULKAN VALIDATION: {0}", pCallbackData->pMessage);
-        }
-        else if(messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
-        {
-            AE_ENGINE_WARN("VULKAN VALIDATION: {0}", pCallbackData->pMessage);
-        }
-        else if(messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
-        {
-            AE_ENGINE_TRACE("VULKAN VALIDATION: {0}", pCallbackData->pMessage);
-        }
-
-        return VK_FALSE;
-    }
-
-    bool VulkanContext::CheckDeviceExtensionSupport(VkPhysicalDevice device)
-    {
-        uint32_t extensionCount;
-        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
-
-        std::vector<VkExtensionProperties> availableExtensions(extensionCount);
-        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
-
-        for (const char* requiredExt : m_DeviceExtensions)
-        {
-            bool found = false;
-
-            for (const auto& availableExt : availableExtensions)
-            {
-                if (strcmp(requiredExt, availableExt.extensionName) == 0)
-                {
-                    found = true;
-                    break;
-                }
-            }
-            
-            if (!found) { return false; }
-        }
-
-        return true;
+        return details;
     }
 
     QueueFamilyIndices VulkanContext::FindQueueFamilies(VkPhysicalDevice device)
@@ -468,30 +159,76 @@ namespace Antelope
         return indices;
     }
 
-    SwapchainSupportDetails VulkanContext::QuerySwapChainSupport(VkPhysicalDevice device)
+    VkFormat VulkanContext::FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features) 
     {
-        SwapchainSupportDetails details;
-        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, m_Surface, &details.Capabilities);
-
-        uint32_t formatCount;
-        vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_Surface, &formatCount, nullptr);
-
-        if(formatCount != 0)
+        for (VkFormat format : candidates) 
         {
-            details.Formats.resize(formatCount);
-            vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_Surface, &formatCount, details.Formats.data());
+            VkFormatProperties props;
+            vkGetPhysicalDeviceFormatProperties(m_PhysicalDevice, format, &props);
+
+            if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) return format;
+            else if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) return format;
+        }
+        
+        AE_ENGINE_CRITICAL("Failed to find supported format!");
+        throw std::runtime_error("Failed to find supported format");
+    }
+
+    bool VulkanContext::CheckValidationLayerSupport()
+    {
+        uint32_t layerCount;
+        vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+
+        std::vector<VkLayerProperties> availableLayers(layerCount);
+        vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+    
+        for(const char* layerName : m_ValidationLayers)
+        {
+            bool layerFound { false };
+
+            for(const auto& layerProperties : availableLayers)
+            {
+                if(strcmp(layerName, layerProperties.layerName) == 0) 
+                {
+                    layerFound = true;
+                    break;
+                }
+            }
+
+            if(!layerFound)
+            {
+                return false;
+            }
         }
 
-        uint32_t presentModeCount;
-        vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_Surface, &presentModeCount, nullptr);
+        return true;
+    }
 
-        if(presentModeCount != 0)
+    bool VulkanContext::CheckDeviceExtensionSupport(VkPhysicalDevice device)
+    {
+        uint32_t extensionCount;
+        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+
+        std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+
+        for (const char* requiredExt : m_DeviceExtensions)
         {
-            details.PresentModes.resize(presentModeCount);
-            vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_Surface, &presentModeCount, details.PresentModes.data());
+            bool found = false;
+
+            for (const auto& availableExt : availableExtensions)
+            {
+                if (strcmp(requiredExt, availableExt.extensionName) == 0)
+                {
+                    found = true;
+                    break;
+                }
+            }
+            
+            if (!found) { return false; }
         }
 
-        return details;
+        return true;
     }
 
     bool VulkanContext::IsDeviceSuitable(VkPhysicalDevice device)
@@ -520,251 +257,44 @@ namespace Antelope
                deviceFeatures.geometryShader;
     }
 
-    VkSurfaceFormatKHR VulkanContext::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
+    VKAPI_ATTR VkBool32 VKAPI_CALL VulkanContext::DebugCallback(
+        VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+        VkDebugUtilsMessageTypeFlagsEXT messageType,
+        const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+        void *pUserData
+    )
     {
-        for(const auto& availableFormat : availableFormats)
+        if(messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
         {
-            if(availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-            {
-                return availableFormat;
-            }
+            AE_ENGINE_ERROR("VULKAN VALIDATION: {0}", pCallbackData->pMessage);
         }
-
-        return availableFormats[0];
-    }
-
-    VkPresentModeKHR VulkanContext::ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
-    {
-        for(const auto& availablePresentMode : availablePresentModes)
+        else if(messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
         {
-            if(availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
-            {
-                return availablePresentMode;
-            }
+            AE_ENGINE_WARN("VULKAN VALIDATION: {0}", pCallbackData->pMessage);
         }
-
-        return VK_PRESENT_MODE_FIFO_KHR;
-    }
-
-    VkExtent2D VulkanContext::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* windowHandle)
-    {
-        if(capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) 
-        { 
-            return capabilities.currentExtent; 
-        }
-
-        int width, height;
-        glfwGetFramebufferSize(windowHandle, &width, &height);
-
-        VkExtent2D actualExtent { static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
-        actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
-        actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
-        return actualExtent;
-    }
-
-    std::vector<char> VulkanContext::ReadFile(const std::string& fileName)
-    {
-        std::ifstream file(fileName, std::ios::ate | std::ios::binary);
-        
-        if(!file.is_open())
+        else if(messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
         {
-            AE_ENGINE_CRITICAL("Failed to open file: {0}", fileName);
-            throw std::runtime_error("Failed to open file");
+            AE_ENGINE_TRACE("VULKAN VALIDATION: {0}", pCallbackData->pMessage);
         }
 
-        size_t fileSize { (size_t)file.tellg() };
-        std::vector<char> buffer(fileSize);
-
-        file.seekg(0);
-        file.read(buffer.data(), fileSize);
-        file.close();
-
-        return buffer;
+        return VK_FALSE;
     }
 
-    VkShaderModule VulkanContext::CreateShaderModule(const std::vector<char>& code)
+    VkSampleCountFlagBits VulkanContext::GetMaxUsableSampleCount() 
     {
-        VkShaderModuleCreateInfo shaderModuleInfo {};
-        shaderModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        shaderModuleInfo.codeSize = code.size();
-        shaderModuleInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+        VkPhysicalDeviceProperties physicalDeviceProperties;
+        vkGetPhysicalDeviceProperties(m_PhysicalDevice, &physicalDeviceProperties);
 
-        VkShaderModule shaderModule;
-        
-        if(vkCreateShaderModule(m_Device, &shaderModuleInfo, nullptr, &shaderModule) != VK_SUCCESS)
-        {
-            AE_ENGINE_CRITICAL("Failed to create Shader Module!");
-        }
-        return shaderModule;
-    }
+        VkSampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts & physicalDeviceProperties.limits.framebufferDepthSampleCounts;
 
-    VkVertexInputBindingDescription VulkanContext::GetBindingDescription()
-    {
-        VkVertexInputBindingDescription bindingDescription {};
-        bindingDescription.binding = 0;
-        bindingDescription.stride = sizeof(Vertex);
-        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-        return bindingDescription;
-    }
+        if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
+        if (counts & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
+        if (counts & VK_SAMPLE_COUNT_16_BIT) { return VK_SAMPLE_COUNT_16_BIT; }
+        if (counts & VK_SAMPLE_COUNT_8_BIT) { return VK_SAMPLE_COUNT_8_BIT; }
+        if (counts & VK_SAMPLE_COUNT_4_BIT) { return VK_SAMPLE_COUNT_4_BIT; }
+        if (counts & VK_SAMPLE_COUNT_2_BIT) { return VK_SAMPLE_COUNT_2_BIT; }
 
-    std::array<VkVertexInputAttributeDescription, 2> VulkanContext::GetAttributeDescriptions()
-    {
-        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions;
-        attributeDescriptions[0].binding = 0;
-        attributeDescriptions[0].location = 0;
-        attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[0].offset = offsetof(Vertex, pos);
-        attributeDescriptions[1].binding = 0;
-        attributeDescriptions[1].location = 1;
-        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[1].offset = offsetof(Vertex, color);
-        return attributeDescriptions;
-    }
-
-    void VulkanContext::CleanupSwapchain()
-    {
-        if (m_DepthImageView != VK_NULL_HANDLE) {
-            vkDestroyImageView(m_Device, m_DepthImageView, nullptr);
-            m_DepthImageView = VK_NULL_HANDLE;
-        }
-
-        if (m_DepthImage != VK_NULL_HANDLE) {
-            vmaDestroyImage(m_Allocator, m_DepthImage, m_DepthImageAllocation);
-            m_DepthImage = VK_NULL_HANDLE;
-        }
-
-        if (!m_SwapchainFramebuffers.empty()) 
-        {
-            for (auto framebuffer : m_SwapchainFramebuffers) 
-            {
-                vkDestroyFramebuffer(m_Device, framebuffer, nullptr);
-            }
-            m_SwapchainFramebuffers.clear();
-        }
-
-        if (!m_SwapchainImageViews.empty()) 
-        {
-            for (auto imageView : m_SwapchainImageViews) 
-            {
-                vkDestroyImageView(m_Device, imageView, nullptr);
-            }
-            m_SwapchainImageViews.clear(); 
-        }
-
-        if(m_Swapchain != VK_NULL_HANDLE)
-        {
-            vkDestroySwapchainKHR(m_Device, m_Swapchain, nullptr);
-            m_Swapchain = VK_NULL_HANDLE;
-        }
-    }
-
-    void VulkanContext::RecreateSwapchain()
-    {
-        int width = 0, height = 0;
-        glfwGetFramebufferSize(m_WindowHandle, &width, &height);
-        while (width == 0 || height == 0) {
-            glfwGetFramebufferSize(m_WindowHandle, &width, &height);
-            glfwWaitEvents();
-        }
-
-        vkDeviceWaitIdle(m_Device);
-        CleanupSwapchain();
-        CreateSwapchain();
-        CreateImageViews();
-        CreateDepthResources();
-        CreateFramebuffers();
-    }
-
-    void VulkanContext::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize bufferSize)
-    {
-        VkCommandBufferAllocateInfo allocationInfo {};
-        allocationInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocationInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocationInfo.commandPool = m_CommandPool;
-        allocationInfo.commandBufferCount = 1;
-
-        VkCommandBuffer commandBuffer;
-        vkAllocateCommandBuffers(m_Device, &allocationInfo, &commandBuffer);
-
-        VkCommandBufferBeginInfo commandBufferBeginInfo {};
-        commandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        commandBufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo);
-
-        VkBufferCopy copyRegion {};
-        copyRegion.srcOffset = 0;
-        copyRegion.dstOffset = 0;
-        copyRegion.size = bufferSize;
-        vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
-        vkEndCommandBuffer(commandBuffer);
-
-        VkSubmitInfo submitInfo {};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &commandBuffer;
-
-        vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo,VK_NULL_HANDLE);
-        vkQueueWaitIdle(m_GraphicsQueue);
-        vkFreeCommandBuffers(m_Device, m_CommandPool, 1, &commandBuffer); 
-    }
-
-    void VulkanContext::CreateStagingBuffer(const void* data, VkDeviceSize bufferSize, VkBuffer& outBuffer, VmaAllocation& outAllocation)
-    {
-        VkBufferCreateInfo stagingBufferInfo {};
-        stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        stagingBufferInfo.size = bufferSize;
-        stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT; 
-        stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-        VmaAllocationCreateInfo allocationInfo {};
-        allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        allocationInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-
-        if (vmaCreateBuffer(m_Allocator, &stagingBufferInfo, &allocationInfo, &outBuffer, &outAllocation, nullptr) != VK_SUCCESS)
-        {
-            AE_ENGINE_CRITICAL("Failed to create staging buffer! Size: {0} bytes.", bufferSize);
-            throw std::runtime_error("Failed to create staging buffer");
-        }
-
-        vmaCopyMemoryToAllocation(m_Allocator, data, outAllocation, 0, bufferSize);
-    }
-
-    void VulkanContext::UpdateUniformBuffer(uint32_t currentImage)
-    {
-        static auto startTime = std::chrono::high_resolution_clock::now();
-        auto currentTime = std::chrono::high_resolution_clock::now();
-        float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
-        UniformBufferObject ubo{};
-        ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        ubo.proj = glm::perspective(glm::radians(45.0f), m_SwapchainExtent.width / (float)m_SwapchainExtent.height, 0.1f, 10.0f);
-        ubo.proj[1][1] *= -1;
-
-        memcpy(m_UniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
-    }
-
-    VkFormat VulkanContext::FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features) 
-    {
-        for (VkFormat format : candidates) 
-        {
-            VkFormatProperties props;
-            vkGetPhysicalDeviceFormatProperties(m_PhysicalDevice, format, &props);
-
-            if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) return format;
-            else if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) return format;
-        }
-        AE_ENGINE_CRITICAL("Failed to find supported format!");
-        throw std::runtime_error("Failed to find supported format");
-    }
-
-    VkFormat VulkanContext::FindDepthFormat() 
-    {
-        return FindSupportedFormat(
-            {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
-            VK_IMAGE_TILING_OPTIMAL,
-            VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
-        );
+        return VK_SAMPLE_COUNT_1_BIT;
     }
 
     void VulkanContext::CreateInstance()
@@ -860,10 +390,6 @@ namespace Antelope
             AE_ENGINE_CRITICAL("Failed to create Window Surface!");
             throw std::runtime_error("Failed to create Window Surface");
         }
-        else
-        {
-            AE_ENGINE_TRACE("Vulkan Window Surface created.");
-        }
     }
 
     void VulkanContext::PickPhysicalDevice()
@@ -899,6 +425,9 @@ namespace Antelope
             VkPhysicalDeviceProperties properties;
             vkGetPhysicalDeviceProperties(m_PhysicalDevice, &properties);
             AE_ENGINE_INFO("Physical Device Selected: {0} (ID: {1})", properties.deviceName, properties.deviceID);
+
+            m_MsaaSamples = GetMaxUsableSampleCount();
+            AE_ENGINE_INFO("Max usable MSAA samples: {0}", (int)m_MsaaSamples);
         }
     }
 
@@ -959,603 +488,11 @@ namespace Antelope
         allocatorInfo.device = m_Device;
         allocatorInfo.instance = m_Instance;
         allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
-        // allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 
-        if (vmaCreateAllocator(&allocatorInfo, &m_Allocator) != VK_SUCCESS) {
+        if (vmaCreateAllocator(&allocatorInfo, &m_Allocator) != VK_SUCCESS) 
+        {
             AE_ENGINE_CRITICAL("Failed to create VMA Allocator!");
             throw std::runtime_error("Failed to create VMA Allocator");
         } 
     }
-
-    void VulkanContext::CreateSwapchain()
-    {
-        SwapchainSupportDetails swapchainSupport { QuerySwapChainSupport(m_PhysicalDevice) };
-        VkSurfaceFormatKHR surfaceFormat { ChooseSwapSurfaceFormat(swapchainSupport.Formats) };
-        VkPresentModeKHR presentMode { ChooseSwapPresentMode(swapchainSupport.PresentModes) };
-        VkExtent2D extent { ChooseSwapExtent(swapchainSupport.Capabilities, m_WindowHandle) };
-        uint32_t imageCount { swapchainSupport.Capabilities.minImageCount + 1 };
-
-        if(swapchainSupport.Capabilities.maxImageCount > 0 && imageCount > swapchainSupport.Capabilities.maxImageCount)
-        {
-            imageCount = swapchainSupport.Capabilities.maxImageCount;
-        }
-
-        VkSwapchainCreateInfoKHR swapchainInfo {};
-        swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-        swapchainInfo.surface = m_Surface;
-        swapchainInfo.minImageCount = imageCount;
-        swapchainInfo.imageFormat = surfaceFormat.format;
-        swapchainInfo.imageColorSpace = surfaceFormat.colorSpace;
-        swapchainInfo.imageExtent = extent;
-        swapchainInfo.imageArrayLayers = 1;
-        swapchainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-        QueueFamilyIndices indices { FindQueueFamilies(m_PhysicalDevice) };
-        uint32_t queueFamilyIndices[] { indices.GraphicsFamily.value(), indices.PresentFamily.value() };
-
-        if(indices.GraphicsFamily != indices.PresentFamily)
-        {
-            swapchainInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-            swapchainInfo.queueFamilyIndexCount = 2;
-            swapchainInfo.pQueueFamilyIndices = queueFamilyIndices;
-        }
-        else
-        {
-            swapchainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-            swapchainInfo.queueFamilyIndexCount = 0;
-            swapchainInfo.pQueueFamilyIndices = nullptr;
-        }
-
-        swapchainInfo.preTransform = swapchainSupport.Capabilities.currentTransform;
-        swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        swapchainInfo.presentMode = presentMode;
-        swapchainInfo.clipped = VK_TRUE;
-        swapchainInfo.oldSwapchain = VK_NULL_HANDLE;
-
-        if(vkCreateSwapchainKHR(m_Device, &swapchainInfo, nullptr, &m_Swapchain) != VK_SUCCESS)
-        {
-            AE_ENGINE_CRITICAL("Failed to create Swapchain!");
-            throw std::runtime_error("Failed to create Swapchain");
-        }
-
-        vkGetSwapchainImagesKHR(m_Device, m_Swapchain, &imageCount, nullptr);
-        m_SwapchainImages.resize(imageCount);
-        vkGetSwapchainImagesKHR(m_Device, m_Swapchain, &imageCount, m_SwapchainImages.data());
-        m_SwapchainImageFormat = surfaceFormat.format;
-        m_SwapchainExtent = extent;
-    }
-
-    void VulkanContext::CreateImageViews()
-    {
-        uint32_t imageViewsSize = m_SwapchainImages.size();
-        m_SwapchainImageViews.resize(imageViewsSize);
-
-        for(size_t i = 0; i < imageViewsSize; ++i)
-        {
-            VkImageViewCreateInfo ImageViewInfo {};
-            ImageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            ImageViewInfo.image = m_SwapchainImages[i];
-            ImageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            ImageViewInfo.format = m_SwapchainImageFormat;
-            ImageViewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-            ImageViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-            ImageViewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-            ImageViewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-            ImageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            ImageViewInfo.subresourceRange.baseMipLevel = 0;
-            ImageViewInfo.subresourceRange.levelCount = 1;
-            ImageViewInfo.subresourceRange.baseArrayLayer = 0;
-            ImageViewInfo.subresourceRange.layerCount = 1;
-
-            if(vkCreateImageView(m_Device, &ImageViewInfo, nullptr, &m_SwapchainImageViews[i]) != VK_SUCCESS)
-            {
-                AE_ENGINE_CRITICAL("Failed to create Swapchain Image Views!");
-                throw std::runtime_error("Failed to create Swapchain Image Views");
-            }
-        }
-    }
-
-    void VulkanContext::CreateRenderPass()
-    {
-        VkAttachmentDescription colorAttachment {};
-        colorAttachment.format = m_SwapchainImageFormat;
-        colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-        colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-        VkAttachmentDescription depthAttachment{};
-        depthAttachment.format = FindDepthFormat();
-        depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-        depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-        VkAttachmentReference colorAttachmentRef {};
-        colorAttachmentRef.attachment = 0;
-        colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-        VkAttachmentReference depthAttachmentRef{};
-        depthAttachmentRef.attachment = 1;
-        depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-        VkSubpassDescription subpass {};
-        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpass.colorAttachmentCount = 1;
-        subpass.pColorAttachments = &colorAttachmentRef;
-        subpass.pDepthStencilAttachment = &depthAttachmentRef;
-
-        VkSubpassDependency dependency{};
-        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-        dependency.dstSubpass = 0;
-        dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-        dependency.srcAccessMask = 0;
-        dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-        std::array<VkAttachmentDescription, 2> attachments = {colorAttachment, depthAttachment};
-
-        VkRenderPassCreateInfo renderPassInfo{};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-        renderPassInfo.pAttachments = attachments.data();
-        renderPassInfo.subpassCount = 1;
-        renderPassInfo.pSubpasses = &subpass;
-        renderPassInfo.dependencyCount = 1;
-        renderPassInfo.pDependencies = &dependency;
-
-        if(vkCreateRenderPass(m_Device, &renderPassInfo, nullptr, &m_RenderPass) != VK_SUCCESS)
-        {
-            AE_ENGINE_CRITICAL("Failed to create Render Pass!");
-            throw std::runtime_error("Failed to create Render Pass");
-        }
-    }
-
-    void VulkanContext::CreateDescriptorSetLayout()
-    {
-        VkDescriptorSetLayoutBinding uboLayoutBinding {};
-        uboLayoutBinding.binding = 0;
-        uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        uboLayoutBinding.descriptorCount = 1; 
-        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; 
-        uboLayoutBinding.pImmutableSamplers = nullptr;
-
-        VkDescriptorSetLayoutCreateInfo layoutInfo {};
-        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layoutInfo.bindingCount = 1;
-        layoutInfo.pBindings = &uboLayoutBinding;
-
-        if (vkCreateDescriptorSetLayout(m_Device, &layoutInfo, nullptr, &m_DescriptorSetLayout) != VK_SUCCESS)
-        {
-            AE_ENGINE_CRITICAL("Failed to create Descriptor Set Layout!");
-            throw std::runtime_error("Failed to create Descriptor Set Layout");
-        }
-    }
-
-    void VulkanContext::CreateGraphicsPipeline()
-    {
-        auto vertShaderCode {ReadFile("Shaders/base.vert.spv")};
-        auto fragShaderCode {ReadFile("Shaders/base.frag.spv")};
-
-        VkShaderModule vertShaderModule { CreateShaderModule(vertShaderCode) }; 
-        VkShaderModule fragShaderModule { CreateShaderModule(fragShaderCode) };
-
-        VkPipelineShaderStageCreateInfo vertShaderStageInfo {};
-        vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-        vertShaderStageInfo.module = vertShaderModule;
-        vertShaderStageInfo.pName = "main";
-
-        VkPipelineShaderStageCreateInfo fragShaderStageInfo {};
-        fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        fragShaderStageInfo.module = fragShaderModule;
-        fragShaderStageInfo.pName = "main";
-
-        VkPipelineShaderStageCreateInfo shaderStages[] {vertShaderStageInfo, fragShaderStageInfo};
-
-        auto bindingDescription = GetBindingDescription();
-        auto attributeDescriptions = GetAttributeDescriptions();
-
-        VkPipelineVertexInputStateCreateInfo vertexInputStateInfo {};
-        vertexInputStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertexInputStateInfo.vertexBindingDescriptionCount = 1;
-        vertexInputStateInfo.pVertexBindingDescriptions = &bindingDescription;
-        vertexInputStateInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-        vertexInputStateInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
-
-        VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateInfo {};
-        inputAssemblyStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-        inputAssemblyStateInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        inputAssemblyStateInfo.primitiveRestartEnable = VK_FALSE;
-
-        std::vector<VkDynamicState> dynamicStates {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
-        VkPipelineDynamicStateCreateInfo dynamicStateInfo {};
-        dynamicStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-        dynamicStateInfo.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
-        dynamicStateInfo.pDynamicStates = dynamicStates.data();
-
-        VkPipelineViewportStateCreateInfo viewportStateInfo {};
-        viewportStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-        viewportStateInfo.viewportCount = 1;
-        viewportStateInfo.scissorCount = 1;
-
-        VkPipelineRasterizationStateCreateInfo rasterizationStateInfo {};
-        rasterizationStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-        rasterizationStateInfo.depthClampEnable = VK_FALSE;
-        rasterizationStateInfo.rasterizerDiscardEnable = VK_FALSE;
-        rasterizationStateInfo.polygonMode = VK_POLYGON_MODE_FILL;
-        rasterizationStateInfo.lineWidth = 1.0f;
-        rasterizationStateInfo.cullMode = VK_CULL_MODE_BACK_BIT;
-        rasterizationStateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-        rasterizationStateInfo.depthBiasEnable = VK_FALSE;
-
-        VkPipelineMultisampleStateCreateInfo multisampleStateInfo{};
-        multisampleStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-        multisampleStateInfo.sampleShadingEnable = VK_FALSE;
-        multisampleStateInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-        VkPipelineColorBlendAttachmentState colorBlendAttachmentStateInfo{};
-        colorBlendAttachmentStateInfo.colorWriteMask = VK_COLOR_COMPONENT_R_BIT 
-                                                     | VK_COLOR_COMPONENT_G_BIT 
-                                                     | VK_COLOR_COMPONENT_B_BIT 
-                                                     | VK_COLOR_COMPONENT_A_BIT;
-        colorBlendAttachmentStateInfo.blendEnable = VK_FALSE;
-
-        VkPipelineColorBlendStateCreateInfo colorBlending{};
-        colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-        colorBlending.logicOpEnable = VK_FALSE;
-        colorBlending.attachmentCount = 1;
-        colorBlending.pAttachments = &colorBlendAttachmentStateInfo;
-
-        VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutInfo.setLayoutCount = 1;
-        pipelineLayoutInfo.pSetLayouts = &m_DescriptorSetLayout;
-        pipelineLayoutInfo.pushConstantRangeCount = 0;
-
-        if (vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &m_PipelineLayout) != VK_SUCCESS) 
-        {
-            AE_ENGINE_CRITICAL("Failed to create Pipeline Layout!");
-            throw std::runtime_error("Failed to create Pipeline Layout");
-        }
-
-        VkPipelineDepthStencilStateCreateInfo depthStencilState{};
-        depthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-        depthStencilState.depthTestEnable = VK_TRUE;
-        depthStencilState.depthWriteEnable = VK_TRUE;
-        depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS;
-        depthStencilState.depthBoundsTestEnable = VK_FALSE;
-        depthStencilState.stencilTestEnable = VK_FALSE;
-
-        VkGraphicsPipelineCreateInfo pipelineInfo{};
-        pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipelineInfo.stageCount = 2;
-        pipelineInfo.pStages = shaderStages;
-        pipelineInfo.pVertexInputState = &vertexInputStateInfo;
-        pipelineInfo.pInputAssemblyState = &inputAssemblyStateInfo;
-        pipelineInfo.pViewportState = &viewportStateInfo;
-        pipelineInfo.pRasterizationState = &rasterizationStateInfo;
-        pipelineInfo.pMultisampleState = &multisampleStateInfo;
-        pipelineInfo.pDepthStencilState = &depthStencilState;
-        pipelineInfo.pColorBlendState = &colorBlending;
-        pipelineInfo.pDynamicState = &dynamicStateInfo;
-        pipelineInfo.layout = m_PipelineLayout;
-        pipelineInfo.renderPass = m_RenderPass;
-        pipelineInfo.subpass = 0;
-        pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
-
-        if (vkCreateGraphicsPipelines(m_Device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_GraphicsPipeline) != VK_SUCCESS) 
-        {
-            AE_ENGINE_CRITICAL("Failed to create Graphics Pipeline!");
-            throw std::runtime_error("Failed to create Graphics Pipeline");
-        }
-
-        vkDestroyShaderModule(m_Device, fragShaderModule, nullptr);
-        vkDestroyShaderModule(m_Device, vertShaderModule, nullptr);
-    }
-
-    void VulkanContext::CreateFramebuffers()
-    {
-        m_SwapchainFramebuffers.resize(m_SwapchainImageViews.size());
-
-        for (size_t i = 0; i < m_SwapchainImageViews.size(); i++) 
-        {
-            std::array<VkImageView, 2> attachments = {
-                m_SwapchainImageViews[i],
-                m_DepthImageView
-            };
-
-            VkFramebufferCreateInfo framebufferInfo{};
-            framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-            framebufferInfo.renderPass = m_RenderPass;
-            framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-            framebufferInfo.pAttachments = attachments.data();
-            framebufferInfo.width = m_SwapchainExtent.width;
-            framebufferInfo.height = m_SwapchainExtent.height;
-            framebufferInfo.layers = 1;
-
-            if (vkCreateFramebuffer(m_Device, &framebufferInfo, nullptr, &m_SwapchainFramebuffers[i]) != VK_SUCCESS) 
-            {
-                AE_ENGINE_CRITICAL("Failed to create Framebuffer!");
-                throw std::runtime_error("Failed to create Framebuffer");
-            }
-        }
-    }
-
-    void VulkanContext::CreateCommandPool()
-    {
-        QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(m_PhysicalDevice);
-
-        VkCommandPoolCreateInfo commandPoolInfo{};
-        commandPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        commandPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        commandPoolInfo.queueFamilyIndex = queueFamilyIndices.GraphicsFamily.value();
-
-        if (vkCreateCommandPool(m_Device, &commandPoolInfo, nullptr, &m_CommandPool) != VK_SUCCESS)
-        {
-            AE_ENGINE_CRITICAL("Failed to create Command Pool!");
-            throw std::runtime_error("Failed to create Command Pool");
-        }
-    }
-
-    void VulkanContext::CreateCommandBuffers()
-    {
-        m_CommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-
-        VkCommandBufferAllocateInfo allocationInfo {};
-        allocationInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocationInfo.commandPool = m_CommandPool;
-        allocationInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocationInfo.commandBufferCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-
-        if (vkAllocateCommandBuffers(m_Device, &allocationInfo, m_CommandBuffers.data()) != VK_SUCCESS)
-        {
-            AE_ENGINE_CRITICAL("Failed to allocate Command Buffers!");
-            throw std::runtime_error("Failed to allocate Command Buffers");
-        }
-    }
-
-    void VulkanContext::CreateSyncObjects() 
-    {
-        m_ImageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-        m_RenderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-        m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
-
-        VkSemaphoreCreateInfo semaphoreInfo {};
-        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-        VkFenceCreateInfo fenceInfo {};
-        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-            if (vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_ImageAvailableSemaphores[i]) != VK_SUCCESS ||
-                vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_RenderFinishedSemaphores[i]) != VK_SUCCESS ||
-                vkCreateFence(m_Device, &fenceInfo, nullptr, &m_InFlightFences[i]) != VK_SUCCESS) {
-                AE_ENGINE_ERROR("Failed to create synchronization objects for frame {0}!", i);
-                throw std::runtime_error("Failed to create synchronization objects");
-            }
-        }
-    }
-
-    void VulkanContext::CreateVertexBuffer()
-    {
-        const std::array<Vertex, 8> vertices = 
-    {{
-        
-        {{-0.5f, -0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}},
-        {{ 0.5f, -0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}},
-        {{ 0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-        {{-0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-        
-        {{-0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}},
-        {{ 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},
-        {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}},
-        {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}}
-    }};
-
-        VkDeviceSize bufferSize = sizeof(Vertex) * vertices.size();
-
-        VkBuffer stagingBuffer;
-        VmaAllocation stagingBufferAllocation;
-        CreateStagingBuffer(vertices.data(), bufferSize, stagingBuffer, stagingBufferAllocation);
-
-        VkBufferCreateInfo vertexBufferInfo {};
-        vertexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        vertexBufferInfo.size = bufferSize;
-        vertexBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-        vertexBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-        VmaAllocationCreateInfo vertexAllocInfo {};
-        vertexAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-
-        if(vmaCreateBuffer(m_Allocator, &vertexBufferInfo, &vertexAllocInfo, &m_VertexBuffer, &m_VertexBufferAllocation, nullptr) != VK_SUCCESS)
-        {
-            AE_ENGINE_CRITICAL("Failed to create device local vertex buffer!");
-            throw std::runtime_error("Failed to create device local vertex buffer");
-        }
-
-        CopyBuffer(stagingBuffer, m_VertexBuffer, bufferSize);
-        vmaDestroyBuffer(m_Allocator, stagingBuffer, stagingBufferAllocation);
-    }
-
-    void VulkanContext::CreateIndexBuffer()
-    {
-        const std::array<uint16_t, 36> indices = 
-        {
-            0, 1, 2, 2, 3, 0,
-            4, 5, 6, 6, 7, 4,
-            0, 1, 5, 5, 4, 0,
-            2, 3, 7, 7, 6, 2,
-            1, 2, 6, 6, 5, 1,
-            3, 0, 4, 4, 7, 3
-        };
-
-        VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
-
-        VkBuffer stagingBuffer;
-        VmaAllocation stagingBufferAllocation;
-        CreateStagingBuffer(indices.data(), bufferSize, stagingBuffer, stagingBufferAllocation);
-
-        VkBufferCreateInfo indexBufferInfo {};
-        indexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        indexBufferInfo.size = bufferSize;
-        indexBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-        indexBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-        VmaAllocationCreateInfo indexAllocInfo {};
-        indexAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-
-        if(vmaCreateBuffer(m_Allocator, &indexBufferInfo, &indexAllocInfo, &m_IndexBuffer, &m_IndexBufferAllocation, nullptr) != VK_SUCCESS)
-        {
-            AE_ENGINE_CRITICAL("Failed to create device local index buffer!");
-            throw std::runtime_error("Failed to create device local index buffer");
-        }
-        CopyBuffer(stagingBuffer, m_IndexBuffer, bufferSize);
-        vmaDestroyBuffer(m_Allocator, stagingBuffer, stagingBufferAllocation);
-    }
-
-    void VulkanContext::CreateUniformBuffers()
-    {
-        VkDeviceSize bufferSize = sizeof(UniformBufferObject);
-
-        m_UniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-        m_UniformBuffersAllocations.resize(MAX_FRAMES_IN_FLIGHT);
-        m_UniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
-
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
-        {
-            VkBufferCreateInfo uniformBufferInfo {};
-            uniformBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-            uniformBufferInfo.size = bufferSize;
-            uniformBufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-            uniformBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-            VmaAllocationCreateInfo allocationInfo {};
-            allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
-            allocationInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT 
-                                 | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-
-            VmaAllocationInfo allocationResult;
-
-            if (vmaCreateBuffer(m_Allocator, &uniformBufferInfo, &allocationInfo, &m_UniformBuffers[i], &m_UniformBuffersAllocations[i], &allocationResult) != VK_SUCCESS) 
-            {
-                AE_ENGINE_CRITICAL("Failed to create Uniform Buffer for frame {0}!", i);
-                throw std::runtime_error("Failed to create Uniform Buffers");
-            }
-
-            m_UniformBuffersMapped[i] = allocationResult.pMappedData;
-        }
-    }
-
-    void VulkanContext::CreateDescriptorPool()
-    {
-        VkDescriptorPoolSize descriptorPoolSize {};
-        descriptorPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptorPoolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-
-        VkDescriptorPoolCreateInfo descriptorPoolInfo {};
-        descriptorPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        descriptorPoolInfo.poolSizeCount = 1;
-        descriptorPoolInfo.pPoolSizes = &descriptorPoolSize;
-        descriptorPoolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-
-        if (vkCreateDescriptorPool(m_Device, &descriptorPoolInfo, nullptr, &m_DescriptorPool) != VK_SUCCESS) 
-        {
-            AE_ENGINE_CRITICAL("Failed to create Descriptor Pool!");
-            throw std::runtime_error("Failed to create Descriptor Pool");
-        }
-    }
-
-    void VulkanContext::CreateDescriptorSets()
-    {
-        std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, m_DescriptorSetLayout);
-        
-        VkDescriptorSetAllocateInfo decriptorSetallocationInfo {};
-        decriptorSetallocationInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        decriptorSetallocationInfo.descriptorPool = m_DescriptorPool;
-        decriptorSetallocationInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-        decriptorSetallocationInfo.pSetLayouts = layouts.data();
-
-        m_DescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-        
-        if (vkAllocateDescriptorSets(m_Device, &decriptorSetallocationInfo, m_DescriptorSets.data()) != VK_SUCCESS) 
-        {
-            AE_ENGINE_CRITICAL("Failed to allocate Descriptor Sets!");
-            throw std::runtime_error("Failed to allocate Descriptor Sets");
-        }
-
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
-        {
-            VkDescriptorBufferInfo descriptorBufferInfo {};
-            descriptorBufferInfo.buffer = m_UniformBuffers[i];
-            descriptorBufferInfo.offset = 0;
-            descriptorBufferInfo.range = sizeof(UniformBufferObject);
-
-            VkWriteDescriptorSet descriptorWriteSet {};
-            descriptorWriteSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            descriptorWriteSet.dstSet = m_DescriptorSets[i];
-            descriptorWriteSet.dstBinding = 0;
-            descriptorWriteSet.dstArrayElement = 0;
-            descriptorWriteSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            descriptorWriteSet.descriptorCount = 1;
-            descriptorWriteSet.pBufferInfo = &descriptorBufferInfo;
-
-            vkUpdateDescriptorSets(m_Device, 1, &descriptorWriteSet, 0, nullptr);
-        }
-    }
-
-    void VulkanContext::CreateDepthResources() 
-    {
-        m_DepthFormat = FindDepthFormat();
-
-        VkImageCreateInfo imageInfo {};
-        imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-        imageInfo.imageType = VK_IMAGE_TYPE_2D;
-        imageInfo.extent.width = m_SwapchainExtent.width;
-        imageInfo.extent.height = m_SwapchainExtent.height;
-        imageInfo.extent.depth = 1;
-        imageInfo.mipLevels = 1;
-        imageInfo.arrayLayers = 1;
-        imageInfo.format = m_DepthFormat;
-        imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-        imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-        imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-        imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-        VmaAllocationCreateInfo allocationInfo {};
-        allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        allocationInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
-
-        if(vmaCreateImage(m_Allocator, &imageInfo, &allocationInfo, &m_DepthImage, &m_DepthImageAllocation, nullptr) != VK_SUCCESS)
-        {
-            AE_CLIENT_CRITICAL("Failed to create depth image!");
-            throw std::runtime_error("Failed to create depth image");
-        }
-
-        VkImageViewCreateInfo viewInfo {};
-        viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        viewInfo.image = m_DepthImage;
-        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        viewInfo.format = m_DepthFormat;
-        viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        viewInfo.subresourceRange.baseMipLevel = 0;
-        viewInfo.subresourceRange.levelCount = 1;
-        viewInfo.subresourceRange.baseArrayLayer = 0;
-        viewInfo.subresourceRange.layerCount = 1;
-
-        if (vkCreateImageView(m_Device, &viewInfo, nullptr, &m_DepthImageView) != VK_SUCCESS)
-        {
-            AE_CLIENT_CRITICAL("Failed to create depth image view!");
-            throw std::runtime_error("Failed to create depth image view");
-        }
-        }
 }

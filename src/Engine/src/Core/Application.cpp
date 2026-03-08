@@ -19,9 +19,10 @@ namespace Antelope
 
         s_Instance = this;
         m_Window = std::make_unique<Window>();
-
-        m_VulkanContext = std::make_unique<VulkanContext>();
-        m_VulkanContext->Init(m_Window->GetNativeWindow());
+        m_VulkanContext = std::make_shared<VulkanContext>(m_Window->GetNativeWindow());
+        m_SwapChain = std::make_shared<SwapChain>(m_VulkanContext);
+        m_LowLevelRenderer = std::make_shared<LowLevelRenderer>(m_VulkanContext, m_SwapChain);
+        m_HighLevelRenderer = std::make_shared<HighLevelRenderer>(m_LowLevelRenderer);
     }
 
     Application::~Application() {}
@@ -33,7 +34,11 @@ namespace Antelope
         while(m_Running)
         {
             m_Window->OnUpdate();
-            m_VulkanContext->DrawFrame();
+            
+            if(m_LowLevelRenderer)
+            {
+                m_LowLevelRenderer->DrawFrame();
+            }
 
             if(m_Window->ShouldClose()) 
             {
