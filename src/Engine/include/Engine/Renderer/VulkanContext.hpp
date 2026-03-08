@@ -54,6 +54,7 @@ namespace Antelope
 
             void Init(GLFWwindow *windowHandle);
             void DrawFrame();
+            void SetFramebufferResized(bool resized) { m_FramebufferResized = resized; }
 
         private:
             bool CheckValidationLayerSupport();
@@ -79,9 +80,14 @@ namespace Antelope
             static VkVertexInputBindingDescription GetBindingDescription();
             static std::array<VkVertexInputAttributeDescription, 2> GetAttributeDescriptions();
 
+            void CleanupSwapchain();
+            void RecreateSwapchain();
+
             void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize bufferSize);
             void CreateStagingBuffer(const void* data, VkDeviceSize size, VkBuffer& outBuffer, VmaAllocation& outAllocation);
             void UpdateUniformBuffer(uint32_t currentImage);
+            VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
+            VkFormat FindDepthFormat();
             
             void CreateInstance();
             void SetupDebugMessenger();
@@ -91,10 +97,11 @@ namespace Antelope
             void CreateMemoryAllocator();
             void CreateSwapchain();
             void CreateImageViews();
+            void CreateDepthResources();
+            void CreateFramebuffers();
             void CreateRenderPass();
             void CreateDescriptorSetLayout();
             void CreateGraphicsPipeline();
-            void CreateFramebuffers();
             void CreateCommandPool();
             void CreateCommandBuffers();
             void CreateSyncObjects();
@@ -127,10 +134,15 @@ namespace Antelope
             VkBuffer m_IndexBuffer { VK_NULL_HANDLE };
             VmaAllocation m_IndexBufferAllocation { VK_NULL_HANDLE };
             VkDescriptorPool m_DescriptorPool { VK_NULL_HANDLE };
+            VkImage m_DepthImage { VK_NULL_HANDLE };
+            VmaAllocation m_DepthImageAllocation { VK_NULL_HANDLE };
+            VkImageView m_DepthImageView { VK_NULL_HANDLE };
+            VkFormat m_DepthFormat { VK_FORMAT_UNDEFINED };
             
             VkFormat m_SwapchainImageFormat { VK_FORMAT_UNDEFINED };
             VkExtent2D m_SwapchainExtent { 0, 0 };
             GLFWwindow *m_WindowHandle { nullptr };
+            bool m_FramebufferResized { false };
 
             const std::vector<const char*> m_ValidationLayers { "VK_LAYER_KHRONOS_validation" };
             const std::vector<const char*> m_DeviceExtensions { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
@@ -147,9 +159,9 @@ namespace Antelope
             std::vector<VkDescriptorSet> m_DescriptorSets;
 
         #ifdef NDEBUG
-            const bool m_EnableValidationLayers { false };
+            bool m_EnableValidationLayers { false };
         #else
-            const bool m_EnableValidationLayers { true };
+            bool m_EnableValidationLayers { true };
         #endif
     };
 }

@@ -18,6 +18,11 @@ namespace Antelope
             Application& operator=(const Application&) = delete;
 
             void Run();
+            void OnWindowResize(int width, int height) 
+            {
+                if (m_VulkanContext)
+                    m_VulkanContext->SetFramebufferResized(true);
+            }
 
             inline Window& GetWindow() { return *m_Window; }
             inline static Application& Get() { return *s_Instance; }

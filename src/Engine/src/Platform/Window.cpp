@@ -1,5 +1,6 @@
 #include <Engine/Platform/Window.hpp>
 #include <Engine/Debug/Log.hpp>
+#include <Engine/Core/Application.hpp>
 
 #include <GLFW/glfw3.h>
 
@@ -21,6 +22,11 @@ namespace Antelope
     void Window::OnUpdate()
     {
         glfwPollEvents();
+        if (m_Data.IsResizing && (glfwGetTime() - m_Data.LastResizeTime) > 0.15)
+        {
+            m_Data.IsResizing = false;
+            AE_ENGINE_INFO("Window resized to: {0}x{1}", m_Data.Width, m_Data.Height);
+        }
     }
 
     bool Window::ShouldClose() const
@@ -36,6 +42,7 @@ namespace Antelope
             AE_ENGINE_TRACE("Window destroyed");
         }
         glfwTerminate();
+        s_GLFWInitialized = false;
     }
 
     void Window::Init(const WindowProps& props)
@@ -59,7 +66,7 @@ namespace Antelope
         }
 
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
         m_Window = glfwCreateWindow((int)m_Data.Width, (int)m_Data.Height, m_Data.Title.c_str(), nullptr, nullptr);
 
@@ -70,5 +77,17 @@ namespace Antelope
         }
 
         glfwSetWindowUserPointer(m_Window, &m_Data);
+
+        glfwSetFramebufferSizeCallback(m_Window, [](GLFWwindow* window, int width, int height)
+        {
+            auto data = reinterpret_cast<WindowData*>(glfwGetWindowUserPointer(window));
+            
+            data->Width = width;
+            data->Height = height;
+            data->LastResizeTime = glfwGetTime();
+            data->IsResizing = true;
+
+            Application::Get().OnWindowResize(width, height);
+        });
     }
 }

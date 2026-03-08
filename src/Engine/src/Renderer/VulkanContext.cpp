@@ -86,11 +86,6 @@ namespace Antelope
             vmaDestroyBuffer(m_Allocator, m_VertexBuffer, m_VertexBufferAllocation);
             AE_ENGINE_TRACE("Vulkan Vertex Buffer destroyed.");
         }
-   
-        if (m_Allocator != VK_NULL_HANDLE) {
-            vmaDestroyAllocator(m_Allocator);
-            AE_ENGINE_TRACE("VMA Allocator destroyed.");
-        }
 
         if (!m_InFlightFences.empty()) 
         {
@@ -128,21 +123,12 @@ namespace Antelope
             AE_ENGINE_TRACE("Vulkan Command Pool destroyed.");
         }
 
-        if (!m_SwapchainFramebuffers.empty()) 
-        {
-            for (auto framebuffer : m_SwapchainFramebuffers) 
-            {
-                vkDestroyFramebuffer(m_Device, framebuffer, nullptr);
-            }
-            m_SwapchainFramebuffers.clear();
-            AE_ENGINE_TRACE("Vulkan Framebuffers destroyed.");
-        }
-
         if(m_GraphicsPipeline != VK_NULL_HANDLE) 
         {
             vkDestroyPipeline(m_Device, m_GraphicsPipeline, nullptr);
             AE_ENGINE_TRACE("Vulkan Graphics Pipeline destroyed.");
         }
+        
         if(m_PipelineLayout != VK_NULL_HANDLE) 
         {
             vkDestroyPipelineLayout(m_Device, m_PipelineLayout, nullptr);
@@ -161,20 +147,17 @@ namespace Antelope
             AE_ENGINE_TRACE("Vulkan Render Pass destroyed.");
         }
 
-        if (!m_SwapchainImageViews.empty()) 
+        if (m_Swapchain != VK_NULL_HANDLE)
         {
-            for (auto imageView : m_SwapchainImageViews) 
-            {
-                vkDestroyImageView(m_Device, imageView, nullptr);
-            }
-            m_SwapchainImageViews.clear(); 
+            CleanupSwapchain();
+            AE_ENGINE_TRACE("Vulkan Framebuffers destroyed.");
             AE_ENGINE_TRACE("Vulkan Swapchain Image Views destroyed.");
+            AE_ENGINE_TRACE("Vulkan Swapchain destroyed.");
         }
 
-        if(m_Swapchain != VK_NULL_HANDLE)
-        {
-            vkDestroySwapchainKHR(m_Device, m_Swapchain, nullptr);
-            AE_ENGINE_TRACE("Vulkan Swapchain destroyed.");
+        if (m_Allocator != VK_NULL_HANDLE) {
+            vmaDestroyAllocator(m_Allocator);
+            AE_ENGINE_TRACE("VMA Allocator destroyed.");
         }
 
         if(m_Device != VK_NULL_HANDLE)
@@ -207,25 +190,46 @@ namespace Antelope
         m_WindowHandle = windowHandle;
 
         CreateInstance();
+        AE_ENGINE_INFO("Vulkan Instance created.");
         SetupDebugMessenger();
+        AE_ENGINE_TRACE("Debug Messenger connected to Engine Logger.");
         CreateSurface();
+        AE_ENGINE_TRACE("Window Surface created.");
         PickPhysicalDevice();
         CreateLogicalDevice();
-        CreateSwapchain();
-        CreateImageViews();
-        CreateRenderPass();
-        CreateDescriptorSetLayout();
-        CreateGraphicsPipeline();
-        CreateFramebuffers();
-        CreateCommandPool();
-        CreateCommandBuffers();
-        CreateSyncObjects();
+        AE_ENGINE_INFO("Logical Device created.");
         CreateMemoryAllocator();
+        AE_ENGINE_TRACE("VMA Allocator created.");
+        CreateSwapchain();
+        AE_ENGINE_INFO("Swapchain created.");
+        CreateImageViews();
+        AE_ENGINE_INFO("Swapchain Image Views created.");
+        CreateDepthResources();
+        AE_ENGINE_INFO("Depth Resources created");
+        CreateRenderPass();
+        AE_ENGINE_INFO("Render Pass created.");
+        CreateDescriptorSetLayout();
+        AE_ENGINE_TRACE("Descriptor Set Layout created.");
+        CreateGraphicsPipeline();
+        AE_ENGINE_INFO("Graphics Pipeline created.");
+        CreateFramebuffers();
+        AE_ENGINE_INFO("Framebuffers created.");
+        CreateCommandPool();
+        AE_ENGINE_TRACE("Command Pool created.");
+        CreateCommandBuffers();
+        AE_ENGINE_TRACE("Command Buffers allocated for {0} frames.", MAX_FRAMES_IN_FLIGHT);
+        CreateSyncObjects();
+        AE_ENGINE_TRACE("Synchronization Objects created for {0} frames.", MAX_FRAMES_IN_FLIGHT);
         CreateVertexBuffer();
+        AE_ENGINE_TRACE("Device local vertex buffer created and uploaded to GPU.");
         CreateIndexBuffer();
+        AE_ENGINE_TRACE("Device local index buffer created and uploaded to GPU.");
         CreateUniformBuffers();
+        AE_ENGINE_TRACE("Uniform buffers created and mapped for {0} frames.", MAX_FRAMES_IN_FLIGHT);
         CreateDescriptorPool();
+        AE_ENGINE_TRACE("Descriptor pool created.");
         CreateDescriptorSets();
+        AE_ENGINE_TRACE("Descriptor sets allocated and bound.");
     }
 
     void VulkanContext::DrawFrame()
@@ -236,8 +240,15 @@ namespace Antelope
         VkResult result = vkAcquireNextImageKHR(m_Device, m_Swapchain, UINT64_MAX, 
                                                 m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
 
-        if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+        if(result == VK_ERROR_OUT_OF_DATE_KHR)
+        {
+            RecreateSwapchain();
             return; 
+        }
+        else if(result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+        {
+            AE_ENGINE_ERROR("Failed to acquire swapchain image!");
+            return;
         }
 
         vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
@@ -259,9 +270,12 @@ namespace Antelope
         renderPassInfo.renderArea.offset = {0, 0};
         renderPassInfo.renderArea.extent = m_SwapchainExtent;
 
-        VkClearValue clearColor = {{{0.01f, 0.01f, 0.03f, 1.0f}}}; 
-        renderPassInfo.clearValueCount = 1;
-        renderPassInfo.pClearValues = &clearColor;
+        std::array<VkClearValue, 2> clearValues {};
+        clearValues[0].color = {{0.01f, 0.01f, 0.03f, 1.0f}};
+        clearValues[1].depthStencil = {1.0f, 0};
+
+        renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+        renderPassInfo.pClearValues = clearValues.data();
 
         vkCmdBeginRenderPass(m_CommandBuffers[m_CurrentFrame], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdBindPipeline(m_CommandBuffers[m_CurrentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicsPipeline);
@@ -325,9 +339,19 @@ namespace Antelope
         presentInfo.pSwapchains = swapchains;
         presentInfo.pImageIndices = &imageIndex;
 
-        vkQueuePresentKHR(m_PresentQueue, &presentInfo);
-        vkQueueWaitIdle(m_PresentQueue);
+        result = vkQueuePresentKHR(m_PresentQueue, &presentInfo);
 
+        if(result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_FramebufferResized)
+        {
+            m_FramebufferResized = false;
+            RecreateSwapchain();
+        }
+        else if(result != VK_SUCCESS)
+        {
+            AE_ENGINE_ERROR("Failed to present swapchain image!");
+        }
+        
+        vkQueueWaitIdle(m_PresentQueue);
         m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
@@ -502,12 +526,10 @@ namespace Antelope
         {
             if(availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
             {
-                AE_ENGINE_TRACE("Swapchain Format: B8G8R8A8_SRGB");
                 return availableFormat;
             }
         }
 
-        AE_ENGINE_TRACE("Swapchain Format: Default (ID: {0})", (int)availableFormats[0].format);
         return availableFormats[0];
     }
 
@@ -517,12 +539,10 @@ namespace Antelope
         {
             if(availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
             {
-                AE_ENGINE_TRACE("Swapchain Present Mode: MAILBOX");
                 return availablePresentMode;
             }
         }
 
-        AE_ENGINE_TRACE("Swapchain Present Mode: FIFO (V-Sync - Capped FPS)");
         return VK_PRESENT_MODE_FIFO_KHR;
     }
 
@@ -530,7 +550,6 @@ namespace Antelope
     {
         if(capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) 
         { 
-            AE_ENGINE_TRACE("Swapchain Extent: {0}x{1}", capabilities.currentExtent.width, capabilities.currentExtent.height);
             return capabilities.currentExtent; 
         }
 
@@ -540,8 +559,6 @@ namespace Antelope
         VkExtent2D actualExtent { static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
         actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
         actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
-
-        AE_ENGINE_TRACE("Swapchain Extent: {0}x{1}", actualExtent.width, actualExtent.height);
         return actualExtent;
     }
 
@@ -552,7 +569,7 @@ namespace Antelope
         if(!file.is_open())
         {
             AE_ENGINE_CRITICAL("Failed to open file: {0}", fileName);
-            throw std::runtime_error("Failed to open file!");
+            throw std::runtime_error("Failed to open file");
         }
 
         size_t fileSize { (size_t)file.tellg() };
@@ -604,6 +621,60 @@ namespace Antelope
         return attributeDescriptions;
     }
 
+    void VulkanContext::CleanupSwapchain()
+    {
+        if (m_DepthImageView != VK_NULL_HANDLE) {
+            vkDestroyImageView(m_Device, m_DepthImageView, nullptr);
+            m_DepthImageView = VK_NULL_HANDLE;
+        }
+
+        if (m_DepthImage != VK_NULL_HANDLE) {
+            vmaDestroyImage(m_Allocator, m_DepthImage, m_DepthImageAllocation);
+            m_DepthImage = VK_NULL_HANDLE;
+        }
+
+        if (!m_SwapchainFramebuffers.empty()) 
+        {
+            for (auto framebuffer : m_SwapchainFramebuffers) 
+            {
+                vkDestroyFramebuffer(m_Device, framebuffer, nullptr);
+            }
+            m_SwapchainFramebuffers.clear();
+        }
+
+        if (!m_SwapchainImageViews.empty()) 
+        {
+            for (auto imageView : m_SwapchainImageViews) 
+            {
+                vkDestroyImageView(m_Device, imageView, nullptr);
+            }
+            m_SwapchainImageViews.clear(); 
+        }
+
+        if(m_Swapchain != VK_NULL_HANDLE)
+        {
+            vkDestroySwapchainKHR(m_Device, m_Swapchain, nullptr);
+            m_Swapchain = VK_NULL_HANDLE;
+        }
+    }
+
+    void VulkanContext::RecreateSwapchain()
+    {
+        int width = 0, height = 0;
+        glfwGetFramebufferSize(m_WindowHandle, &width, &height);
+        while (width == 0 || height == 0) {
+            glfwGetFramebufferSize(m_WindowHandle, &width, &height);
+            glfwWaitEvents();
+        }
+
+        vkDeviceWaitIdle(m_Device);
+        CleanupSwapchain();
+        CreateSwapchain();
+        CreateImageViews();
+        CreateDepthResources();
+        CreateFramebuffers();
+    }
+
     void VulkanContext::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize bufferSize)
     {
         VkCommandBufferAllocateInfo allocationInfo {};
@@ -652,13 +723,10 @@ namespace Antelope
         if (vmaCreateBuffer(m_Allocator, &stagingBufferInfo, &allocationInfo, &outBuffer, &outAllocation, nullptr) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create staging buffer! Size: {0} bytes.", bufferSize);
-            return;
+            throw std::runtime_error("Failed to create staging buffer");
         }
-        AE_ENGINE_TRACE("Staging buffer created. Size: {0} bytes.", bufferSize);
-        
+
         vmaCopyMemoryToAllocation(m_Allocator, data, outAllocation, 0, bufferSize);
-        
-        AE_ENGINE_TRACE("Data mapped and copied to staging buffer.");
     }
 
     void VulkanContext::UpdateUniformBuffer(uint32_t currentImage)
@@ -676,12 +744,35 @@ namespace Antelope
         memcpy(m_UniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
     }
 
+    VkFormat VulkanContext::FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features) 
+    {
+        for (VkFormat format : candidates) 
+        {
+            VkFormatProperties props;
+            vkGetPhysicalDeviceFormatProperties(m_PhysicalDevice, format, &props);
+
+            if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) return format;
+            else if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) return format;
+        }
+        AE_ENGINE_CRITICAL("Failed to find supported format!");
+        throw std::runtime_error("Failed to find supported format");
+    }
+
+    VkFormat VulkanContext::FindDepthFormat() 
+    {
+        return FindSupportedFormat(
+            {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
+            VK_IMAGE_TILING_OPTIMAL,
+            VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
+        );
+    }
+
     void VulkanContext::CreateInstance()
     {
         if(m_EnableValidationLayers && !CheckValidationLayerSupport())
         {
-            AE_ENGINE_CRITICAL("Validation layers requested, but not available!");
-            return;
+            AE_ENGINE_WARN("Validation layers requested, but not available! Proceeding without validation layers.");
+            m_EnableValidationLayers = false;
         }
 
         VkApplicationInfo appInfo {};
@@ -717,11 +808,11 @@ namespace Antelope
 
             messengerInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
             messengerInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT 
-                                    | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT 
-                                    | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+                                          | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT 
+                                          | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
             messengerInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT 
-                                | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT 
-                                | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+                                      | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT 
+                                      | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
             messengerInfo.pfnUserCallback = DebugCallback;
             instanceInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*) &messengerInfo;
         }
@@ -737,11 +828,7 @@ namespace Antelope
         if(result != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Vulkan Instance! Error Code: {0}", (int)result);
-            return;
-        }
-        else
-        {
-            AE_ENGINE_INFO("Vulkan Instance created successfully!");
+            throw std::runtime_error("Failed to create Vulkan Instance");
         }
     }
 
@@ -752,20 +839,17 @@ namespace Antelope
         VkDebugUtilsMessengerCreateInfoEXT messengerInfo {};
         messengerInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
         messengerInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT 
-                                   | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT 
-                                   | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+                                      | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT 
+                                      | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
         messengerInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT 
-                               | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT 
-                               | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+                                  | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT 
+                                  | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
         messengerInfo.pfnUserCallback = DebugCallback;
 
         if(CreateDebugUtilsMessengerEXT(m_Instance, &messengerInfo, nullptr, &m_DebugMessenger) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to setup debug messenger!");
-        }
-        else
-        {
-            AE_ENGINE_TRACE("Vulkan Debug Messenger connected to Engine Logger.");
+            throw std::runtime_error("Failed to setup debug messenger");
         }
     }
 
@@ -774,11 +858,11 @@ namespace Antelope
         if(glfwCreateWindowSurface(m_Instance, m_WindowHandle, nullptr, &m_Surface) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Window Surface!");
-            return;
+            throw std::runtime_error("Failed to create Window Surface");
         }
         else
         {
-            AE_ENGINE_TRACE("Vulkan Window Surface created successfully.");
+            AE_ENGINE_TRACE("Vulkan Window Surface created.");
         }
     }
 
@@ -790,7 +874,7 @@ namespace Antelope
         if(deviceCount == 0)
         {
             AE_ENGINE_CRITICAL("Failed to find GPUs with Vulkan support!");
-            return;
+            throw std::runtime_error("Failed to find GPUs with Vulkan support");
         }
 
         std::vector<VkPhysicalDevice> devices(deviceCount);
@@ -807,7 +891,8 @@ namespace Antelope
 
         if(m_PhysicalDevice == VK_NULL_HANDLE)
         {
-            AE_ENGINE_CRITICAL("Failed to find a suitable GPU");
+            AE_ENGINE_CRITICAL("Failed to find a suitable GPU!");
+            throw std::runtime_error("Failed to find a suitable GPU");
         }
         else
         {
@@ -860,11 +945,7 @@ namespace Antelope
         if(vkCreateDevice(m_PhysicalDevice, &deviceInfo, nullptr, &m_Device) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Logical Device!");
-            return;
-        }
-        else
-        {
-            AE_ENGINE_INFO("Vulkan Logical Device created successfully.");
+            throw std::runtime_error("Failed to create Logical Device");
         }
 
         vkGetDeviceQueue(m_Device, indices.GraphicsFamily.value(), 0, &m_GraphicsQueue);
@@ -872,20 +953,19 @@ namespace Antelope
     }
 
     void VulkanContext::CreateMemoryAllocator()
-{
-    VmaAllocatorCreateInfo allocatorInfo {};
-    allocatorInfo.physicalDevice = m_PhysicalDevice;
-    allocatorInfo.device = m_Device;
-    allocatorInfo.instance = m_Instance;
-    allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
-    // allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+    {
+        VmaAllocatorCreateInfo allocatorInfo {};
+        allocatorInfo.physicalDevice = m_PhysicalDevice;
+        allocatorInfo.device = m_Device;
+        allocatorInfo.instance = m_Instance;
+        allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
+        // allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 
-    if (vmaCreateAllocator(&allocatorInfo, &m_Allocator) != VK_SUCCESS) {
-        AE_ENGINE_CRITICAL("Failed to create VMA Allocator!");
-    } else {
-        AE_ENGINE_TRACE("VMA Allocator created successfully.");
+        if (vmaCreateAllocator(&allocatorInfo, &m_Allocator) != VK_SUCCESS) {
+            AE_ENGINE_CRITICAL("Failed to create VMA Allocator!");
+            throw std::runtime_error("Failed to create VMA Allocator");
+        } 
     }
-}
 
     void VulkanContext::CreateSwapchain()
     {
@@ -935,19 +1015,14 @@ namespace Antelope
         if(vkCreateSwapchainKHR(m_Device, &swapchainInfo, nullptr, &m_Swapchain) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Swapchain!");
-            return;
+            throw std::runtime_error("Failed to create Swapchain");
         }
-
-        AE_ENGINE_INFO("Vulkan Swapchain created successfully.");
 
         vkGetSwapchainImagesKHR(m_Device, m_Swapchain, &imageCount, nullptr);
         m_SwapchainImages.resize(imageCount);
         vkGetSwapchainImagesKHR(m_Device, m_Swapchain, &imageCount, m_SwapchainImages.data());
-
         m_SwapchainImageFormat = surfaceFormat.format;
         m_SwapchainExtent = extent;
-
-        AE_ENGINE_TRACE("Swapchain images retrieved. Count: {0}", imageCount);
     }
 
     void VulkanContext::CreateImageViews()
@@ -975,10 +1050,9 @@ namespace Antelope
             if(vkCreateImageView(m_Device, &ImageViewInfo, nullptr, &m_SwapchainImageViews[i]) != VK_SUCCESS)
             {
                 AE_ENGINE_CRITICAL("Failed to create Swapchain Image Views!");
-                return;
+                throw std::runtime_error("Failed to create Swapchain Image Views");
             }
         }
-        AE_ENGINE_INFO("Vulkan Swapchain Image Views created successfully.");
     }
 
     void VulkanContext::CreateRenderPass()
@@ -993,27 +1067,44 @@ namespace Antelope
         colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
+        VkAttachmentDescription depthAttachment{};
+        depthAttachment.format = FindDepthFormat();
+        depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+        depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
         VkAttachmentReference colorAttachmentRef {};
         colorAttachmentRef.attachment = 0;
         colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+        VkAttachmentReference depthAttachmentRef{};
+        depthAttachmentRef.attachment = 1;
+        depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
         VkSubpassDescription subpass {};
         subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
         subpass.colorAttachmentCount = 1;
         subpass.pColorAttachments = &colorAttachmentRef;
+        subpass.pDepthStencilAttachment = &depthAttachmentRef;
 
-        VkSubpassDependency dependency {};
+        VkSubpassDependency dependency{};
         dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
         dependency.dstSubpass = 0;
-        dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
         dependency.srcAccessMask = 0;
-        dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
-        VkRenderPassCreateInfo renderPassInfo {};
+        std::array<VkAttachmentDescription, 2> attachments = {colorAttachment, depthAttachment};
+
+        VkRenderPassCreateInfo renderPassInfo{};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        renderPassInfo.attachmentCount = 1;
-        renderPassInfo.pAttachments = &colorAttachment;
+        renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+        renderPassInfo.pAttachments = attachments.data();
         renderPassInfo.subpassCount = 1;
         renderPassInfo.pSubpasses = &subpass;
         renderPassInfo.dependencyCount = 1;
@@ -1022,10 +1113,8 @@ namespace Antelope
         if(vkCreateRenderPass(m_Device, &renderPassInfo, nullptr, &m_RenderPass) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Render Pass!");
-            return;
+            throw std::runtime_error("Failed to create Render Pass");
         }
-
-        AE_ENGINE_INFO("Vulkan Render Pass created successfully.");
     }
 
     void VulkanContext::CreateDescriptorSetLayout()
@@ -1045,18 +1134,14 @@ namespace Antelope
         if (vkCreateDescriptorSetLayout(m_Device, &layoutInfo, nullptr, &m_DescriptorSetLayout) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Descriptor Set Layout!");
-            return;
+            throw std::runtime_error("Failed to create Descriptor Set Layout");
         }
-        AE_ENGINE_TRACE("Vulkan Descriptor Set Layout created.");
     }
 
     void VulkanContext::CreateGraphicsPipeline()
     {
         auto vertShaderCode {ReadFile("Shaders/base.vert.spv")};
         auto fragShaderCode {ReadFile("Shaders/base.frag.spv")};
-
-        AE_ENGINE_TRACE("Vertex Shader size: {0} bytes", vertShaderCode.size());
-        AE_ENGINE_TRACE("Fragment Shader size: {0} bytes", fragShaderCode.size());
 
         VkShaderModule vertShaderModule { CreateShaderModule(vertShaderCode) }; 
         VkShaderModule fragShaderModule { CreateShaderModule(fragShaderCode) };
@@ -1118,9 +1203,9 @@ namespace Antelope
 
         VkPipelineColorBlendAttachmentState colorBlendAttachmentStateInfo{};
         colorBlendAttachmentStateInfo.colorWriteMask = VK_COLOR_COMPONENT_R_BIT 
-                                            | VK_COLOR_COMPONENT_G_BIT 
-                                            | VK_COLOR_COMPONENT_B_BIT 
-                                            | VK_COLOR_COMPONENT_A_BIT;
+                                                     | VK_COLOR_COMPONENT_G_BIT 
+                                                     | VK_COLOR_COMPONENT_B_BIT 
+                                                     | VK_COLOR_COMPONENT_A_BIT;
         colorBlendAttachmentStateInfo.blendEnable = VK_FALSE;
 
         VkPipelineColorBlendStateCreateInfo colorBlending{};
@@ -1138,8 +1223,16 @@ namespace Antelope
         if (vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &m_PipelineLayout) != VK_SUCCESS) 
         {
             AE_ENGINE_CRITICAL("Failed to create Pipeline Layout!");
-            return;
+            throw std::runtime_error("Failed to create Pipeline Layout");
         }
+
+        VkPipelineDepthStencilStateCreateInfo depthStencilState{};
+        depthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+        depthStencilState.depthTestEnable = VK_TRUE;
+        depthStencilState.depthWriteEnable = VK_TRUE;
+        depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS;
+        depthStencilState.depthBoundsTestEnable = VK_FALSE;
+        depthStencilState.stencilTestEnable = VK_FALSE;
 
         VkGraphicsPipelineCreateInfo pipelineInfo{};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -1150,7 +1243,7 @@ namespace Antelope
         pipelineInfo.pViewportState = &viewportStateInfo;
         pipelineInfo.pRasterizationState = &rasterizationStateInfo;
         pipelineInfo.pMultisampleState = &multisampleStateInfo;
-        pipelineInfo.pDepthStencilState = nullptr;
+        pipelineInfo.pDepthStencilState = &depthStencilState;
         pipelineInfo.pColorBlendState = &colorBlending;
         pipelineInfo.pDynamicState = &dynamicStateInfo;
         pipelineInfo.layout = m_PipelineLayout;
@@ -1161,13 +1254,11 @@ namespace Antelope
         if (vkCreateGraphicsPipelines(m_Device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_GraphicsPipeline) != VK_SUCCESS) 
         {
             AE_ENGINE_CRITICAL("Failed to create Graphics Pipeline!");
-            return;
+            throw std::runtime_error("Failed to create Graphics Pipeline");
         }
 
         vkDestroyShaderModule(m_Device, fragShaderModule, nullptr);
         vkDestroyShaderModule(m_Device, vertShaderModule, nullptr);
-
-        AE_ENGINE_INFO("Vulkan Graphics Pipeline created successfully.");
     }
 
     void VulkanContext::CreateFramebuffers()
@@ -1176,13 +1267,16 @@ namespace Antelope
 
         for (size_t i = 0; i < m_SwapchainImageViews.size(); i++) 
         {
-            VkImageView attachments[] = { m_SwapchainImageViews[i] };
+            std::array<VkImageView, 2> attachments = {
+                m_SwapchainImageViews[i],
+                m_DepthImageView
+            };
 
             VkFramebufferCreateInfo framebufferInfo{};
             framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
             framebufferInfo.renderPass = m_RenderPass;
-            framebufferInfo.attachmentCount = 1;
-            framebufferInfo.pAttachments = attachments;
+            framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+            framebufferInfo.pAttachments = attachments.data();
             framebufferInfo.width = m_SwapchainExtent.width;
             framebufferInfo.height = m_SwapchainExtent.height;
             framebufferInfo.layers = 1;
@@ -1190,10 +1284,9 @@ namespace Antelope
             if (vkCreateFramebuffer(m_Device, &framebufferInfo, nullptr, &m_SwapchainFramebuffers[i]) != VK_SUCCESS) 
             {
                 AE_ENGINE_CRITICAL("Failed to create Framebuffer!");
-                return;
+                throw std::runtime_error("Failed to create Framebuffer");
             }
         }
-        AE_ENGINE_INFO("Vulkan Framebuffers created successfully.");
     }
 
     void VulkanContext::CreateCommandPool()
@@ -1208,27 +1301,25 @@ namespace Antelope
         if (vkCreateCommandPool(m_Device, &commandPoolInfo, nullptr, &m_CommandPool) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Command Pool!");
-            return;
+            throw std::runtime_error("Failed to create Command Pool");
         }
-        AE_ENGINE_TRACE("Vulkan Command Pool created successfully.");
     }
 
     void VulkanContext::CreateCommandBuffers()
     {
         m_CommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 
-        VkCommandBufferAllocateInfo commandBufferAllocationInfo {};
-        commandBufferAllocationInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        commandBufferAllocationInfo.commandPool = m_CommandPool;
-        commandBufferAllocationInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        commandBufferAllocationInfo.commandBufferCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+        VkCommandBufferAllocateInfo allocationInfo {};
+        allocationInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocationInfo.commandPool = m_CommandPool;
+        allocationInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocationInfo.commandBufferCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
-        if (vkAllocateCommandBuffers(m_Device, &commandBufferAllocationInfo, m_CommandBuffers.data()) != VK_SUCCESS)
+        if (vkAllocateCommandBuffers(m_Device, &allocationInfo, m_CommandBuffers.data()) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to allocate Command Buffers!");
-            return;
+            throw std::runtime_error("Failed to allocate Command Buffers");
         }
-        AE_ENGINE_TRACE("Vulkan Command Buffers allocated for {0} frames.", MAX_FRAMES_IN_FLIGHT);
     }
 
     void VulkanContext::CreateSyncObjects() 
@@ -1248,10 +1339,10 @@ namespace Antelope
             if (vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_ImageAvailableSemaphores[i]) != VK_SUCCESS ||
                 vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_RenderFinishedSemaphores[i]) != VK_SUCCESS ||
                 vkCreateFence(m_Device, &fenceInfo, nullptr, &m_InFlightFences[i]) != VK_SUCCESS) {
-                AE_ENGINE_ERROR("Failed to create synchronization objects for frame {0}", i);
+                AE_ENGINE_ERROR("Failed to create synchronization objects for frame {0}!", i);
+                throw std::runtime_error("Failed to create synchronization objects");
             }
         }
-        AE_ENGINE_TRACE("Vulkan Synchronization Objects created for {0} frames.", MAX_FRAMES_IN_FLIGHT);
     }
 
     void VulkanContext::CreateVertexBuffer()
@@ -1288,15 +1379,11 @@ namespace Antelope
         if(vmaCreateBuffer(m_Allocator, &vertexBufferInfo, &vertexAllocInfo, &m_VertexBuffer, &m_VertexBufferAllocation, nullptr) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create device local vertex buffer!");
-            return;
+            throw std::runtime_error("Failed to create device local vertex buffer");
         }
-        AE_ENGINE_TRACE("Device local vertex buffer created. Size: {0} bytes.", bufferSize);
 
         CopyBuffer(stagingBuffer, m_VertexBuffer, bufferSize);
-        AE_ENGINE_TRACE("Data copied from staging buffer to vertex buffer.");
-
         vmaDestroyBuffer(m_Allocator, stagingBuffer, stagingBufferAllocation);
-        AE_ENGINE_TRACE("Staging buffer destroyed.");
     }
 
     void VulkanContext::CreateIndexBuffer()
@@ -1329,15 +1416,10 @@ namespace Antelope
         if(vmaCreateBuffer(m_Allocator, &indexBufferInfo, &indexAllocInfo, &m_IndexBuffer, &m_IndexBufferAllocation, nullptr) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create device local index buffer!");
-            return;
+            throw std::runtime_error("Failed to create device local index buffer");
         }
-        AE_ENGINE_TRACE("Device local index buffer created. Size: {0} bytes.", bufferSize);
-
         CopyBuffer(stagingBuffer, m_IndexBuffer, bufferSize);
-        AE_ENGINE_TRACE("Data copied from staging buffer to index buffer.");
-
         vmaDestroyBuffer(m_Allocator, stagingBuffer, stagingBufferAllocation);
-        AE_ENGINE_TRACE("Index staging buffer destroyed.");
     }
 
     void VulkanContext::CreateUniformBuffers()
@@ -1358,20 +1440,19 @@ namespace Antelope
 
             VmaAllocationCreateInfo allocationInfo {};
             allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
-            allocationInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                                   VMA_ALLOCATION_CREATE_MAPPED_BIT;
+            allocationInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT 
+                                 | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
             VmaAllocationInfo allocationResult;
 
             if (vmaCreateBuffer(m_Allocator, &uniformBufferInfo, &allocationInfo, &m_UniformBuffers[i], &m_UniformBuffersAllocations[i], &allocationResult) != VK_SUCCESS) 
             {
                 AE_ENGINE_CRITICAL("Failed to create Uniform Buffer for frame {0}!", i);
-                return;
+                throw std::runtime_error("Failed to create Uniform Buffers");
             }
 
             m_UniformBuffersMapped[i] = allocationResult.pMappedData;
         }
-        AE_ENGINE_TRACE("Uniform buffers created and mapped for {0} frames. Total size: {1} bytes.", MAX_FRAMES_IN_FLIGHT, bufferSize * MAX_FRAMES_IN_FLIGHT);
     }
 
     void VulkanContext::CreateDescriptorPool()
@@ -1389,9 +1470,8 @@ namespace Antelope
         if (vkCreateDescriptorPool(m_Device, &descriptorPoolInfo, nullptr, &m_DescriptorPool) != VK_SUCCESS) 
         {
             AE_ENGINE_CRITICAL("Failed to create Descriptor Pool!");
-            return;
+            throw std::runtime_error("Failed to create Descriptor Pool");
         }
-        AE_ENGINE_TRACE("Descriptor pool created.");
     }
 
     void VulkanContext::CreateDescriptorSets()
@@ -1409,7 +1489,7 @@ namespace Antelope
         if (vkAllocateDescriptorSets(m_Device, &decriptorSetallocationInfo, m_DescriptorSets.data()) != VK_SUCCESS) 
         {
             AE_ENGINE_CRITICAL("Failed to allocate Descriptor Sets!");
-            return;
+            throw std::runtime_error("Failed to allocate Descriptor Sets");
         }
 
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
@@ -1430,6 +1510,52 @@ namespace Antelope
 
             vkUpdateDescriptorSets(m_Device, 1, &descriptorWriteSet, 0, nullptr);
         }
-        AE_ENGINE_TRACE("Descriptor sets allocated and bound.");
     }
+
+    void VulkanContext::CreateDepthResources() 
+    {
+        m_DepthFormat = FindDepthFormat();
+
+        VkImageCreateInfo imageInfo {};
+        imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        imageInfo.imageType = VK_IMAGE_TYPE_2D;
+        imageInfo.extent.width = m_SwapchainExtent.width;
+        imageInfo.extent.height = m_SwapchainExtent.height;
+        imageInfo.extent.depth = 1;
+        imageInfo.mipLevels = 1;
+        imageInfo.arrayLayers = 1;
+        imageInfo.format = m_DepthFormat;
+        imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VmaAllocationCreateInfo allocationInfo {};
+        allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        allocationInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+
+        if(vmaCreateImage(m_Allocator, &imageInfo, &allocationInfo, &m_DepthImage, &m_DepthImageAllocation, nullptr) != VK_SUCCESS)
+        {
+            AE_CLIENT_CRITICAL("Failed to create depth image!");
+            throw std::runtime_error("Failed to create depth image");
+        }
+
+        VkImageViewCreateInfo viewInfo {};
+        viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        viewInfo.image = m_DepthImage;
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        viewInfo.format = m_DepthFormat;
+        viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        viewInfo.subresourceRange.baseMipLevel = 0;
+        viewInfo.subresourceRange.levelCount = 1;
+        viewInfo.subresourceRange.baseArrayLayer = 0;
+        viewInfo.subresourceRange.layerCount = 1;
+
+        if (vkCreateImageView(m_Device, &viewInfo, nullptr, &m_DepthImageView) != VK_SUCCESS)
+        {
+            AE_CLIENT_CRITICAL("Failed to create depth image view!");
+            throw std::runtime_error("Failed to create depth image view");
+        }
+        }
 }
