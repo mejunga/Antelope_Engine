@@ -31,7 +31,8 @@ namespace Antelope
 
             void OnUpdate();
             bool ShouldClose() const;
-            
+
+            inline bool IsResizing() const { return m_Data.IsResizing; }
             inline uint32_t GetWidth() const { return m_Data.Width; }
             inline uint32_t GetHeight() const { return m_Data.Height; }
             inline GLFWwindow* GetNativeWindow() const { return m_Window; }

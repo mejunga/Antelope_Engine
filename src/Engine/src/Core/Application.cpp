@@ -67,6 +67,11 @@ namespace Antelope
         while(m_Running)
         {
             m_Window->OnUpdate();
+
+            if(m_Window->IsResizing() || m_Window->GetWidth() == 0 || m_Window->GetHeight() == 0)
+            {
+                continue;
+            }
             
             if(m_HighLevelRenderer)
             {

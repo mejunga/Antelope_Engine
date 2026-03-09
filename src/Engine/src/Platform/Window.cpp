@@ -26,6 +26,8 @@ namespace Antelope
         {
             m_Data.IsResizing = false;
             AE_ENGINE_INFO("Window resized to: {0}x{1}", m_Data.Width, m_Data.Height);
+            
+            Application::Get().OnWindowResize(m_Data.Width, m_Data.Height); 
         }
     }
 
@@ -86,8 +88,6 @@ namespace Antelope
             data->Height = height;
             data->LastResizeTime = glfwGetTime();
             data->IsResizing = true;
-
-            Application::Get().OnWindowResize(width, height);
         });
     }
 }
