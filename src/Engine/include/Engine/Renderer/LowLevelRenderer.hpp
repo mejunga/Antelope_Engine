@@ -13,13 +13,27 @@
 #include <memory>
 #include <string>
 
-
 namespace Antelope
 {
-    struct Vertex
+    struct VertexPosition
     {
-        glm::vec3 pos;
-        glm::vec3 color;
+        alignas(16) glm::vec3 pos;
+    };
+
+    struct VertexColor
+    {
+        alignas(16) glm::vec3 color;
+    };
+
+    struct VertexNormal
+    {
+        alignas(16) glm::vec3 normal;
+    };
+
+    struct Face
+    {
+        uint32_t v0, v1, v2;
+        uint32_t normalIndex;
     };
 
     struct UniformBufferObject
@@ -40,9 +54,6 @@ namespace Antelope
         private:
             static std::vector<char> ReadFile(const std::string& fileName);
             VkShaderModule CreateShaderModule(const std::vector<char>& code);
-            static VkVertexInputBindingDescription GetBindingDescription();
-            static std::array<VkVertexInputAttributeDescription, 2> GetAttributeDescriptions();
-
             void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize bufferSize);
             void CreateStagingBuffer(const void* data, VkDeviceSize size, VkBuffer& outBuffer, VmaAllocation& outAllocation);
             void UpdateUniformBuffer(uint32_t currentImage);
@@ -52,8 +63,7 @@ namespace Antelope
             void CreateCommandPool();
             void CreateCommandBuffers();
             void CreateSyncObjects();
-            void CreateVertexBuffer();
-            void CreateIndexBuffer();
+            void CreateStorageBuffers(); 
             void CreateUniformBuffers();
             void CreateDescriptorPool();
             void CreateDescriptorSets();
@@ -66,14 +76,18 @@ namespace Antelope
             VkPipeline m_GraphicsPipeline { VK_NULL_HANDLE };
             VkCommandPool m_CommandPool { VK_NULL_HANDLE };
             VkDescriptorPool m_DescriptorPool { VK_NULL_HANDLE };
-            VkBuffer m_VertexBuffer { VK_NULL_HANDLE };
-            VmaAllocation m_VertexBufferAllocation { VK_NULL_HANDLE };
-            VkBuffer m_IndexBuffer { VK_NULL_HANDLE };
-            VmaAllocation m_IndexBufferAllocation { VK_NULL_HANDLE };
+            VkBuffer m_PosBuffer { VK_NULL_HANDLE };
+            VmaAllocation m_PosBufferAllocation { VK_NULL_HANDLE };
+            VkBuffer m_ColorBuffer { VK_NULL_HANDLE };
+            VmaAllocation m_ColorBufferAllocation { VK_NULL_HANDLE };
+            VkBuffer m_NormalBuffer { VK_NULL_HANDLE };
+            VmaAllocation m_NormalBufferAllocation { VK_NULL_HANDLE };
+            VkBuffer m_FaceBuffer { VK_NULL_HANDLE };
+            VmaAllocation m_FaceBufferAllocation { VK_NULL_HANDLE };
 
             const int MAX_FRAMES_IN_FLIGHT = 3;
             uint32_t m_CurrentFrame = 0;
-            
+
             std::vector<VkSemaphore> m_ImageAvailableSemaphores;
             std::vector<VkSemaphore> m_RenderFinishedSemaphores;
             std::vector<VkFence> m_InFlightFences;

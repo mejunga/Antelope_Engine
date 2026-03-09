@@ -5,6 +5,7 @@
 #include <fstream>
 #include <chrono>
 
+
 namespace Antelope
 {
     LowLevelRenderer::LowLevelRenderer(std::shared_ptr<VulkanContext> context, std::shared_ptr<SwapChain> swapChain)
@@ -20,10 +21,8 @@ namespace Antelope
         AE_ENGINE_TRACE("Command Buffers allocated for {0} frames.", MAX_FRAMES_IN_FLIGHT);
         CreateSyncObjects();
         AE_ENGINE_TRACE("Synchronization Objects created for {0} frames.", MAX_FRAMES_IN_FLIGHT);
-        CreateVertexBuffer();
-        AE_ENGINE_TRACE("Device local vertex buffer created and uploaded to GPU.");
-        CreateIndexBuffer();
-        AE_ENGINE_TRACE("Device local index buffer created and uploaded to GPU.");
+        CreateStorageBuffers();
+        AE_ENGINE_TRACE("SSBO Storage Buffers created and uploaded to GPU.");
         CreateUniformBuffers();
         AE_ENGINE_TRACE("Uniform buffers created and mapped for {0} frames.", MAX_FRAMES_IN_FLIGHT);
         CreateDescriptorPool();
@@ -42,7 +41,7 @@ namespace Antelope
         if(m_DescriptorPool != VK_NULL_HANDLE) 
         {
             vkDestroyDescriptorPool(m_Context->GetDevice(), m_DescriptorPool, nullptr);
-            AE_ENGINE_TRACE("Vulkan Descriptor Pool destroyed.");
+            AE_ENGINE_TRACE("Descriptor Pool destroyed.");
         }
 
         if(!m_UniformBuffers.empty()) 
@@ -57,19 +56,28 @@ namespace Antelope
             m_UniformBuffers.clear();
             m_UniformBuffersAllocations.clear();
             m_UniformBuffersMapped.clear();
-            AE_ENGINE_TRACE("Vulkan Uniform Buffers destroyed.");
+            AE_ENGINE_TRACE("Uniform Buffers destroyed.");
         }
 
-        if(m_IndexBuffer != VK_NULL_HANDLE) 
-        {
-            vmaDestroyBuffer(m_Context->GetAllocator(), m_IndexBuffer, m_IndexBufferAllocation);
-            AE_ENGINE_TRACE("Vulkan Index Buffer destroyed.");
+        if(m_PosBuffer != VK_NULL_HANDLE)
+        { 
+            vmaDestroyBuffer(m_Context->GetAllocator(), m_PosBuffer, m_PosBufferAllocation);
         }
 
-        if(m_VertexBuffer != VK_NULL_HANDLE) 
+        if(m_ColorBuffer != VK_NULL_HANDLE)
         {
-            vmaDestroyBuffer(m_Context->GetAllocator(), m_VertexBuffer, m_VertexBufferAllocation);
-            AE_ENGINE_TRACE("Vulkan Vertex Buffer destroyed.");
+            vmaDestroyBuffer(m_Context->GetAllocator(), m_ColorBuffer, m_ColorBufferAllocation);
+        }
+
+        if(m_NormalBuffer != VK_NULL_HANDLE)
+        {
+            vmaDestroyBuffer(m_Context->GetAllocator(), m_NormalBuffer, m_NormalBufferAllocation);
+        }
+        
+        if(m_FaceBuffer != VK_NULL_HANDLE)
+        {
+            vmaDestroyBuffer(m_Context->GetAllocator(), m_FaceBuffer, m_FaceBufferAllocation);
+            AE_ENGINE_TRACE("SSBO Storage Buffer destroyed.");
         }
 
         if(!m_InFlightFences.empty()) 
@@ -79,7 +87,7 @@ namespace Antelope
                 vkDestroyFence(m_Context->GetDevice(), m_InFlightFences[i], nullptr);
             }
             m_InFlightFences.clear();
-            AE_ENGINE_TRACE("Vulkan In-Flight Fences destroyed.");
+            AE_ENGINE_TRACE("In-Flight Fences destroyed.");
         }
 
         if(!m_RenderFinishedSemaphores.empty()) 
@@ -89,7 +97,7 @@ namespace Antelope
                 vkDestroySemaphore(m_Context->GetDevice(), m_RenderFinishedSemaphores[i], nullptr);
             }
             m_RenderFinishedSemaphores.clear();
-            AE_ENGINE_TRACE("Vulkan Render Finished Semaphores destroyed.");
+            AE_ENGINE_TRACE("Render Finished Semaphores destroyed.");
         }
 
         if(!m_ImageAvailableSemaphores.empty()) 
@@ -99,31 +107,31 @@ namespace Antelope
                 vkDestroySemaphore(m_Context->GetDevice(), m_ImageAvailableSemaphores[i], nullptr);
             }
             m_ImageAvailableSemaphores.clear();
-            AE_ENGINE_TRACE("Vulkan Image Available Semaphores destroyed.");
+            AE_ENGINE_TRACE("Image Available Semaphores destroyed.");
         }
 
         if(m_CommandPool != VK_NULL_HANDLE)
         {
             vkDestroyCommandPool(m_Context->GetDevice(), m_CommandPool, nullptr);
-            AE_ENGINE_TRACE("Vulkan Command Pool destroyed.");
+            AE_ENGINE_TRACE("Command Pool destroyed.");
         }
 
         if(m_GraphicsPipeline != VK_NULL_HANDLE) 
         {
             vkDestroyPipeline(m_Context->GetDevice(), m_GraphicsPipeline, nullptr);
-            AE_ENGINE_TRACE("Vulkan Graphics Pipeline destroyed.");
+            AE_ENGINE_TRACE("Graphics Pipeline destroyed.");
         }
         
         if(m_PipelineLayout != VK_NULL_HANDLE) 
         {
             vkDestroyPipelineLayout(m_Context->GetDevice(), m_PipelineLayout, nullptr);
-            AE_ENGINE_TRACE("Vulkan Pipeline Layout destroyed.");
+            AE_ENGINE_TRACE("Pipeline Layout destroyed.");
         }
 
         if(m_DescriptorSetLayout != VK_NULL_HANDLE) 
         {
             vkDestroyDescriptorSetLayout(m_Context->GetDevice(), m_DescriptorSetLayout, nullptr);
-            AE_ENGINE_TRACE("Vulkan Descriptor Set Layout destroyed.");
+            AE_ENGINE_TRACE("Descriptor Set Layout destroyed.");
         }
     }
 
@@ -189,14 +197,8 @@ namespace Antelope
         scissor.offset = {0, 0};
         scissor.extent = m_SwapChain->GetExtent();
         vkCmdSetScissor(m_CommandBuffers[m_CurrentFrame], 0, 1, &scissor);
-
-        VkBuffer vertexBuffers[] = { m_VertexBuffer };
-        VkDeviceSize offsets[] = { 0 };
-
-        vkCmdBindVertexBuffers(m_CommandBuffers[m_CurrentFrame], 0, 1, vertexBuffers, offsets);
-        vkCmdBindIndexBuffer(m_CommandBuffers[m_CurrentFrame], m_IndexBuffer, 0, VK_INDEX_TYPE_UINT16);
         vkCmdBindDescriptorSets(m_CommandBuffers[m_CurrentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, m_PipelineLayout, 0, 1, &m_DescriptorSets[m_CurrentFrame], 0, nullptr);
-        vkCmdDrawIndexed(m_CommandBuffers[m_CurrentFrame], 36, 1, 0, 0, 0);
+        vkCmdDraw(m_CommandBuffers[m_CurrentFrame], 24, 1, 0, 0);
         vkCmdEndRenderPass(m_CommandBuffers[m_CurrentFrame]);
 
         if(vkEndCommandBuffer(m_CommandBuffers[m_CurrentFrame]) != VK_SUCCESS) 
@@ -289,29 +291,6 @@ namespace Antelope
         return shaderModule;
     }
 
-    VkVertexInputBindingDescription LowLevelRenderer::GetBindingDescription()
-    {
-        VkVertexInputBindingDescription bindingDescription {};
-        bindingDescription.binding = 0;
-        bindingDescription.stride = sizeof(Vertex);
-        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-        return bindingDescription;
-    }
-
-    std::array<VkVertexInputAttributeDescription, 2> LowLevelRenderer::GetAttributeDescriptions()
-    {
-        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions;
-        attributeDescriptions[0].binding = 0;
-        attributeDescriptions[0].location = 0;
-        attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[0].offset = offsetof(Vertex, pos);
-        attributeDescriptions[1].binding = 0;
-        attributeDescriptions[1].location = 1;
-        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[1].offset = offsetof(Vertex, color);
-        return attributeDescriptions;
-    }
-
     void LowLevelRenderer::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize bufferSize)
     {
         VkCommandBufferAllocateInfo allocationInfo {};
@@ -374,7 +353,7 @@ namespace Antelope
 
         UniformBufferObject ubo {};
         ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        ubo.view = glm::lookAt(glm::vec3(2.0f, 0.5f, 2.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
         ubo.proj = glm::perspective(glm::radians(45.0f), m_SwapChain->GetExtent().width / (float)m_SwapChain->GetExtent().height, 0.1f, 10.0f);
         ubo.proj[1][1] *= -1;
 
@@ -383,17 +362,24 @@ namespace Antelope
 
     void LowLevelRenderer::CreateDescriptorSetLayout()
     {
-        VkDescriptorSetLayoutBinding uboLayoutBinding {};
-        uboLayoutBinding.binding = 0;
-        uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        uboLayoutBinding.descriptorCount = 1; 
-        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; 
-        uboLayoutBinding.pImmutableSamplers = nullptr;
+        std::array<VkDescriptorSetLayoutBinding, 5> bindings{};
+
+        bindings[0].binding = 0; 
+        bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; 
+        bindings[0].descriptorCount = 1; 
+        bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+        for(int i = 1; i <= 4; i++) {
+            bindings[i].binding = i; 
+            bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; 
+            bindings[i].descriptorCount = 1; 
+            bindings[i].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        }
 
         VkDescriptorSetLayoutCreateInfo layoutInfo {};
         layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layoutInfo.bindingCount = 1;
-        layoutInfo.pBindings = &uboLayoutBinding;
+        layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+        layoutInfo.pBindings = bindings.data();
 
         if(vkCreateDescriptorSetLayout(m_Context->GetDevice(), &layoutInfo, nullptr, &m_DescriptorSetLayout) != VK_SUCCESS)
         {
@@ -424,15 +410,12 @@ namespace Antelope
 
         VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
-        auto bindingDescription = GetBindingDescription();
-        auto attributeDescriptions = GetAttributeDescriptions();
-
         VkPipelineVertexInputStateCreateInfo vertexInputStateInfo {};
         vertexInputStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertexInputStateInfo.vertexBindingDescriptionCount = 1;
-        vertexInputStateInfo.pVertexBindingDescriptions = &bindingDescription;
-        vertexInputStateInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-        vertexInputStateInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+        vertexInputStateInfo.vertexBindingDescriptionCount = 0;
+        vertexInputStateInfo.pVertexBindingDescriptions = nullptr;
+        vertexInputStateInfo.vertexAttributeDescriptionCount = 0;
+        vertexInputStateInfo.pVertexAttributeDescriptions = nullptr;
 
         VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateInfo {};
         inputAssemblyStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -584,80 +567,77 @@ namespace Antelope
         }
     }
 
-    void LowLevelRenderer::CreateVertexBuffer()
+    void LowLevelRenderer::CreateStorageBuffers()
     {
-        const std::array<Vertex, 8> vertices = 
-        {{
-            {{-0.5f, -0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}},
-            {{ 0.5f, -0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}},
-            {{ 0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-            {{-0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-            
-            {{-0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}},
-            {{ 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},
-            {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}},
-            {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}}
+        std::array<VertexPosition, 6> positions = {{
+            {{ 0.0f, -0.6f,  0.0f}},
+            {{ 0.0f,  0.6f,  0.0f}},
+            {{ 0.5f,  0.0f,  0.0f}},
+            {{-0.5f,  0.0f,  0.0f}},
+            {{ 0.0f,  0.0f,  0.5f}},
+            {{ 0.0f,  0.0f, -0.5f}}
         }};
 
-        VkDeviceSize bufferSize = sizeof(Vertex) * vertices.size();
+        std::array<VertexColor, 6> colors = {{
+            {{1.0f, 0.0f, 0.0f}},
+            {{0.0f, 1.0f, 1.0f}},
+            {{0.0f, 1.0f, 0.0f}},
+            {{1.0f, 0.0f, 1.0f}},
+            {{0.0f, 0.0f, 1.0f}},
+            {{1.0f, 1.0f, 0.0f}}
+        }};
 
-        VkBuffer stagingBuffer;
-        VmaAllocation stagingBufferAllocation;
-        CreateStagingBuffer(vertices.data(), bufferSize, stagingBuffer, stagingBufferAllocation);
+        float n = 0.57735f;
+        std::array<VertexNormal, 8> normals = {{
+            {{ n, -n,  n}},
+            {{ n, -n, -n}},
+            {{-n, -n, -n}},
+            {{-n, -n,  n}},
+            {{ n,  n,  n}},
+            {{ n,  n, -n}},
+            {{-n,  n, -n}},
+            {{-n,  n,  n}}
+        }};
 
-        VkBufferCreateInfo vertexBufferInfo {};
-        vertexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        vertexBufferInfo.size = bufferSize;
-        vertexBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-        vertexBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        std::array<Face, 8> faces = {{
+            {0, 2, 4, 0},
+            {0, 5, 2, 1},
+            {0, 3, 5, 2},
+            {0, 4, 3, 3},
+            {1, 4, 2, 4},
+            {1, 2, 5, 5},
+            {1, 5, 3, 6},
+            {1, 3, 4, 7}
+        }};
 
-        VmaAllocationCreateInfo vertexAllocInfo {};
-        vertexAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-
-        if(vmaCreateBuffer(m_Context->GetAllocator(), &vertexBufferInfo, &vertexAllocInfo, &m_VertexBuffer, &m_VertexBufferAllocation, nullptr) != VK_SUCCESS)
+        auto createSSBO = [&](const void* data, VkDeviceSize size, VkBuffer& outBuffer, VmaAllocation& outAllocation) 
         {
-            AE_ENGINE_CRITICAL("Failed to create device local vertex buffer!");
-            throw std::runtime_error("Failed to create device local vertex buffer");
-        }
+            VkBuffer stagingBuffer; 
+            VmaAllocation stagingBufferAllocation;
+            CreateStagingBuffer(data, size, stagingBuffer, stagingBufferAllocation);
 
-        CopyBuffer(stagingBuffer, m_VertexBuffer, bufferSize);
-        vmaDestroyBuffer(m_Context->GetAllocator(), stagingBuffer, stagingBufferAllocation);
-    }
+            VkBufferCreateInfo bufferInfo {}; 
+            bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            bufferInfo.size = size; 
+            bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+            
+            VmaAllocationCreateInfo allocationInfo {}; 
+            allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
+            
+            if (vmaCreateBuffer(m_Context->GetAllocator(), &bufferInfo, &allocationInfo, &outBuffer, &outAllocation, nullptr) != VK_SUCCESS)
+            {
+                AE_ENGINE_CRITICAL("Failed to create SSBO buffer!");
+                throw std::runtime_error("Failed to create SSBO buffer");
+            }
 
-    void LowLevelRenderer::CreateIndexBuffer()
-    {
-        const std::array<uint16_t, 36> indices = 
-        {
-            0, 1, 2, 2, 3, 0,
-            4, 5, 6, 6, 7, 4,
-            0, 1, 5, 5, 4, 0,
-            2, 3, 7, 7, 6, 2,
-            1, 2, 6, 6, 5, 1,
-            3, 0, 4, 4, 7, 3
+            CopyBuffer(stagingBuffer, outBuffer, size);
+            vmaDestroyBuffer(m_Context->GetAllocator(), stagingBuffer, stagingBufferAllocation);
         };
 
-        VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
-
-        VkBuffer stagingBuffer;
-        VmaAllocation stagingBufferAllocation;
-        CreateStagingBuffer(indices.data(), bufferSize, stagingBuffer, stagingBufferAllocation);
-
-        VkBufferCreateInfo indexBufferInfo {};
-        indexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        indexBufferInfo.size = bufferSize;
-        indexBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-        indexBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-        VmaAllocationCreateInfo indexAllocInfo {};
-        indexAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-
-        if(vmaCreateBuffer(m_Context->GetAllocator(), &indexBufferInfo, &indexAllocInfo, &m_IndexBuffer, &m_IndexBufferAllocation, nullptr) != VK_SUCCESS)
-        {
-            AE_ENGINE_CRITICAL("Failed to create device local index buffer!");
-            throw std::runtime_error("Failed to create device local index buffer");
-        }
-        CopyBuffer(stagingBuffer, m_IndexBuffer, bufferSize);
-        vmaDestroyBuffer(m_Context->GetAllocator(), stagingBuffer, stagingBufferAllocation);
+        createSSBO(positions.data(), sizeof(VertexPosition) * positions.size(), m_PosBuffer, m_PosBufferAllocation);
+        createSSBO(colors.data(), sizeof(VertexColor) * colors.size(), m_ColorBuffer, m_ColorBufferAllocation);
+        createSSBO(normals.data(), sizeof(VertexNormal) * normals.size(), m_NormalBuffer, m_NormalBufferAllocation);
+        createSSBO(faces.data(), sizeof(Face) * faces.size(), m_FaceBuffer, m_FaceBufferAllocation);
     }
 
     void LowLevelRenderer::CreateUniformBuffers()
@@ -695,14 +675,17 @@ namespace Antelope
 
     void LowLevelRenderer::CreateDescriptorPool()
     {
-        VkDescriptorPoolSize descriptorPoolSize {};
-        descriptorPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptorPoolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+        std::array<VkDescriptorPoolSize, 2> poolSizes {};
+        poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+        
+        poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 4);
 
         VkDescriptorPoolCreateInfo descriptorPoolInfo {};
         descriptorPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        descriptorPoolInfo.poolSizeCount = 1;
-        descriptorPoolInfo.pPoolSizes = &descriptorPoolSize;
+        descriptorPoolInfo.poolSizeCount = 2;
+        descriptorPoolInfo.pPoolSizes = poolSizes.data();
         descriptorPoolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
         if(vkCreateDescriptorPool(m_Context->GetDevice(), &descriptorPoolInfo, nullptr, &m_DescriptorPool) != VK_SUCCESS) 
@@ -732,21 +715,27 @@ namespace Antelope
 
         for(size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
         {
-            VkDescriptorBufferInfo descriptorBufferInfo {};
-            descriptorBufferInfo.buffer = m_UniformBuffers[i];
-            descriptorBufferInfo.offset = 0;
-            descriptorBufferInfo.range = sizeof(UniformBufferObject);
+            VkDescriptorBufferInfo uboInfo { m_UniformBuffers[i], 0, sizeof(UniformBufferObject) };
+            VkDescriptorBufferInfo posInfo { m_PosBuffer, 0, VK_WHOLE_SIZE };
+            VkDescriptorBufferInfo colInfo { m_ColorBuffer, 0, VK_WHOLE_SIZE };
+            VkDescriptorBufferInfo normInfo { m_NormalBuffer, 0, VK_WHOLE_SIZE };
+            VkDescriptorBufferInfo faceInfo { m_FaceBuffer, 0, VK_WHOLE_SIZE };
 
-            VkWriteDescriptorSet descriptorWriteSet {};
-            descriptorWriteSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            descriptorWriteSet.dstSet = m_DescriptorSets[i];
-            descriptorWriteSet.dstBinding = 0;
-            descriptorWriteSet.dstArrayElement = 0;
-            descriptorWriteSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            descriptorWriteSet.descriptorCount = 1;
-            descriptorWriteSet.pBufferInfo = &descriptorBufferInfo;
+            std::array<VkWriteDescriptorSet, 5> writes{};
+            for(int j=0; j<5; j++) {
+                writes[j].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                writes[j].dstSet = m_DescriptorSets[i];
+                writes[j].dstBinding = j;
+                writes[j].dstArrayElement = 0;
+                writes[j].descriptorCount = 1;
+            }
+            writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; writes[0].pBufferInfo = &uboInfo;
+            writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; writes[1].pBufferInfo = &posInfo;
+            writes[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; writes[2].pBufferInfo = &colInfo;
+            writes[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; writes[3].pBufferInfo = &normInfo;
+            writes[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; writes[4].pBufferInfo = &faceInfo;
 
-            vkUpdateDescriptorSets(m_Context->GetDevice(), 1, &descriptorWriteSet, 0, nullptr);
+            vkUpdateDescriptorSets(m_Context->GetDevice(), static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
         }
     }
 }

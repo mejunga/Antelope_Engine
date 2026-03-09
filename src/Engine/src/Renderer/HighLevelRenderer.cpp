@@ -1,6 +1,7 @@
 #include <Engine/Renderer/HighLevelRenderer.hpp>
 #include <Engine/Debug/Log.hpp>
 
+
 namespace Antelope
 {
     HighLevelRenderer::HighLevelRenderer(std::shared_ptr<LowLevelRenderer> lowLevelRenderer) 
