@@ -1,4 +1,5 @@
 #include <Engine/Renderer/SwapChain.hpp>
+#include <Engine/Renderer/VulkanContext.hpp>
 #include <Engine/Debug/Log.hpp>
 
 #include <GLFW/glfw3.h>

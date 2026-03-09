@@ -1,7 +1,5 @@
 #pragma once
 
-#include "VulkanContext.hpp"
-
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 
@@ -9,8 +7,12 @@
 #include <memory>
 
 
+struct GLFWwindow;
+
 namespace Antelope
 {
+    class VulkanContext;
+    
     class SwapChain
     {
         public:

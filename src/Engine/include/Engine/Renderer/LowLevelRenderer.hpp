@@ -1,8 +1,9 @@
 #pragma once
 
-#include "VulkanContext.hpp"
-#include "SwapChain.hpp"
+#include <Engine/Renderer/Mesh.hpp>
 
+#include <vulkan/vulkan.h>
+#include <vk_mem_alloc.h>
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
@@ -15,32 +16,18 @@
 
 namespace Antelope
 {
-    struct VertexPosition
-    {
-        alignas(16) glm::vec3 pos;
-    };
+    class VulkanContext;
+    class SwapChain;
+    struct UniformBufferObject;
 
-    struct VertexColor
-    {
-        alignas(16) glm::vec3 color;
-    };
-
-    struct VertexNormal
-    {
-        alignas(16) glm::vec3 normal;
-    };
-
-    struct Face
-    {
-        uint32_t v0, v1, v2;
-        uint32_t normalIndex;
-    };
-
-    struct UniformBufferObject
+    struct PushConstantData
     {
         glm::mat4 model;
-        glm::mat4 view;
-        glm::mat4 proj;
+        
+        uint32_t posOffset;
+        uint32_t colorOffset;
+        uint32_t normalOffset;
+        uint32_t faceOffset;
     };
 
     class LowLevelRenderer
@@ -49,14 +36,15 @@ namespace Antelope
             LowLevelRenderer(std::shared_ptr<VulkanContext> context, std::shared_ptr<SwapChain> swapChain);
             ~LowLevelRenderer();
 
-            void DrawFrame();
+            void DrawFrame(const UniformBufferObject& cameraData, const std::vector<RenderCommand>& renderList);
+            MeshHandle UploadMesh(const MeshData& meshData);
 
         private:
             static std::vector<char> ReadFile(const std::string& fileName);
             VkShaderModule CreateShaderModule(const std::vector<char>& code);
             void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize bufferSize);
             void CreateStagingBuffer(const void* data, VkDeviceSize size, VkBuffer& outBuffer, VmaAllocation& outAllocation);
-            void UpdateUniformBuffer(uint32_t currentImage);
+            void UpdateUniformBuffer(uint32_t currentImage, const UniformBufferObject& cameraData);
 
             void CreateDescriptorSetLayout();
             void CreateGraphicsPipeline();
@@ -87,6 +75,10 @@ namespace Antelope
 
             const int MAX_FRAMES_IN_FLIGHT = 3;
             uint32_t m_CurrentFrame = 0;
+            uint32_t m_CurrentPosOffset = 0;
+            uint32_t m_CurrentColorOffset = 0;
+            uint32_t m_CurrentNormalOffset = 0;
+            uint32_t m_CurrentFaceOffset = 0;
 
             std::vector<VkSemaphore> m_ImageAvailableSemaphores;
             std::vector<VkSemaphore> m_RenderFinishedSemaphores;

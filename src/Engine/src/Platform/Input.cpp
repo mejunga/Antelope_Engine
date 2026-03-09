@@ -1,5 +1,6 @@
 #include <Engine/Platform/Input.hpp>
 #include <Engine/Core/Application.hpp>
+#include <Engine/Platform/Window.hpp>
 
 #include <GLFW/glfw3.h>
 

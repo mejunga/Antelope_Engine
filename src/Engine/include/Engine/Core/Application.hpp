@@ -1,16 +1,18 @@
 #pragma once
 
-#include <Engine/Platform/Window.hpp>
-#include <Engine/Renderer/VulkanContext.hpp>
-#include <Engine/Renderer/SwapChain.hpp>
-#include <Engine/Renderer/LowLevelRenderer.hpp>
-#include <Engine/Renderer/HighLevelRenderer.hpp>
+#include <Engine/Renderer/Mesh.hpp>
 
 #include <memory>
 
 
 namespace Antelope
 {
+    class VulkanContext;
+    class SwapChain;
+    class LowLevelRenderer;
+    class HighLevelRenderer;
+    class Window;
+    
     class Application
     {
         public:
@@ -21,15 +23,9 @@ namespace Antelope
             Application& operator=(const Application&) = delete;
 
             void Run();
-            void OnWindowResize(int width, int height) 
-            {
-                if(m_SwapChain)
-                {
-                    m_SwapChain->SetFramebufferResized(true);
-                }
-            }
+            void OnWindowResize(int width, int height);
 
-            inline Window& GetWindow() { return *m_Window; }
+            inline Window& GetWindow() const { return *m_Window; }
             inline static Application& Get() { return *s_Instance; }
             inline std::shared_ptr<VulkanContext> GetVulkanContext() const { return m_VulkanContext; }
             inline std::shared_ptr<SwapChain> GetSwapChain() const { return m_SwapChain; }

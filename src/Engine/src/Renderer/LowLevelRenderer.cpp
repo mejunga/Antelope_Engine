@@ -1,5 +1,8 @@
 #include <Engine/Renderer/LowLevelRenderer.hpp>
+#include <Engine/Renderer/VulkanContext.hpp>
+#include <Engine/Renderer/SwapChain.hpp>
 #include <Engine/Debug/Log.hpp>
+#include <Engine/Renderer/Camera.hpp>
 
 #include <stdexcept>
 #include <fstream>
@@ -135,7 +138,7 @@ namespace Antelope
         }
     }
 
-    void LowLevelRenderer::DrawFrame()
+    void LowLevelRenderer::DrawFrame(const UniformBufferObject& cameraData, const std::vector<RenderCommand>& renderList)
     {
         vkWaitForFences(m_Context->GetDevice(), 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
 
@@ -155,7 +158,7 @@ namespace Antelope
         }
 
         vkResetFences(m_Context->GetDevice(), 1, &m_InFlightFences[m_CurrentFrame]);
-        UpdateUniformBuffer(m_CurrentFrame);
+        UpdateUniformBuffer(m_CurrentFrame, cameraData);
         vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
 
         VkCommandBufferBeginInfo commandBufferInfo {};
@@ -198,7 +201,29 @@ namespace Antelope
         scissor.extent = m_SwapChain->GetExtent();
         vkCmdSetScissor(m_CommandBuffers[m_CurrentFrame], 0, 1, &scissor);
         vkCmdBindDescriptorSets(m_CommandBuffers[m_CurrentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, m_PipelineLayout, 0, 1, &m_DescriptorSets[m_CurrentFrame], 0, nullptr);
-        vkCmdDraw(m_CommandBuffers[m_CurrentFrame], 24, 1, 0, 0);
+        
+        for(const auto& command : renderList) 
+        {
+            PushConstantData pushData {};
+            pushData.model = command.transform;
+            pushData.posOffset    = command.mesh.posOffset;
+            pushData.colorOffset  = command.mesh.colorOffset;
+            pushData.normalOffset = command.mesh.normalOffset;
+            pushData.faceOffset   = command.mesh.faceOffset;
+            
+            vkCmdPushConstants(
+                m_CommandBuffers[m_CurrentFrame],
+                m_PipelineLayout,
+                VK_SHADER_STAGE_VERTEX_BIT,
+                0,
+                sizeof(PushConstantData),
+                &pushData
+            );
+            
+            uint32_t vertexCount = command.mesh.faceCount * 3;
+            vkCmdDraw(m_CommandBuffers[m_CurrentFrame], vertexCount, 1, 0, 0);
+        }
+
         vkCmdEndRenderPass(m_CommandBuffers[m_CurrentFrame]);
 
         if(vkEndCommandBuffer(m_CommandBuffers[m_CurrentFrame]) != VK_SUCCESS) 
@@ -253,6 +278,76 @@ namespace Antelope
         
         vkQueueWaitIdle(m_Context->GetPresentQueue());
         m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+    }
+
+    MeshHandle LowLevelRenderer::UploadMesh(const MeshData& meshData)
+    {
+        MeshHandle handle {};
+        
+        handle.posOffset    = m_CurrentPosOffset;
+        handle.colorOffset  = m_CurrentColorOffset;
+        handle.normalOffset = m_CurrentNormalOffset;
+        handle.faceOffset   = m_CurrentFaceOffset;
+        handle.faceCount    = static_cast<uint32_t>(meshData.faces.size());
+
+        auto uploadToBuffer = [&](const void* data, VkDeviceSize size, VkBuffer dstBuffer, VkDeviceSize offset) 
+        {
+            if (size == 0) return;
+
+            VkBuffer stagingBuffer; 
+            VmaAllocation stagingBufferAllocation;
+            CreateStagingBuffer(data, size, stagingBuffer, stagingBufferAllocation);
+
+            VkCommandBufferAllocateInfo allocInfo {};
+            allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            allocInfo.commandPool = m_CommandPool;
+            allocInfo.commandBufferCount = 1;
+
+            VkCommandBuffer commandBuffer;
+            vkAllocateCommandBuffers(m_Context->GetDevice(), &allocInfo, &commandBuffer);
+
+            VkCommandBufferBeginInfo beginInfo {};
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+            vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+            VkBufferCopy copyRegion {};
+            copyRegion.srcOffset = 0;
+            copyRegion.dstOffset = offset;
+            copyRegion.size = size;
+            vkCmdCopyBuffer(commandBuffer, stagingBuffer, dstBuffer, 1, &copyRegion);
+
+            vkEndCommandBuffer(commandBuffer);
+
+            VkSubmitInfo submitInfo {};
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &commandBuffer;
+
+            vkQueueSubmit(m_Context->GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+            vkQueueWaitIdle(m_Context->GetGraphicsQueue());
+
+            vkFreeCommandBuffers(m_Context->GetDevice(), m_CommandPool, 1, &commandBuffer);
+            vmaDestroyBuffer(m_Context->GetAllocator(), stagingBuffer, stagingBufferAllocation);
+        };
+
+        VkDeviceSize posSize    = sizeof(VertexPosition) * meshData.positions.size();
+        VkDeviceSize colorSize  = sizeof(VertexColor)    * meshData.colors.size();
+        VkDeviceSize normalSize = sizeof(VertexNormal)   * meshData.normals.size();
+        VkDeviceSize faceSize   = sizeof(Face)           * meshData.faces.size();
+
+        uploadToBuffer(meshData.positions.data(), posSize, m_PosBuffer, m_CurrentPosOffset * sizeof(VertexPosition));
+        uploadToBuffer(meshData.colors.data(), colorSize, m_ColorBuffer, m_CurrentColorOffset * sizeof(VertexColor));
+        uploadToBuffer(meshData.normals.data(), normalSize, m_NormalBuffer, m_CurrentNormalOffset * sizeof(VertexNormal));
+        uploadToBuffer(meshData.faces.data(), faceSize, m_FaceBuffer, m_CurrentFaceOffset * sizeof(Face));
+
+        m_CurrentPosOffset    += meshData.positions.size();
+        m_CurrentColorOffset  += meshData.colors.size();
+        m_CurrentNormalOffset += meshData.normals.size();
+        m_CurrentFaceOffset   += meshData.faces.size();
+
+        return handle;
     }
 
     std::vector<char> LowLevelRenderer::ReadFile(const std::string& fileName)
@@ -345,19 +440,9 @@ namespace Antelope
         vmaCopyMemoryToAllocation(m_Context->GetAllocator(), data, outAllocation, 0, bufferSize);
     }
 
-    void LowLevelRenderer::UpdateUniformBuffer(uint32_t currentImage)
+    void LowLevelRenderer::UpdateUniformBuffer(uint32_t currentImage, const UniformBufferObject& cameraData)
     {
-        static auto startTime = std::chrono::high_resolution_clock::now();
-        auto currentTime = std::chrono::high_resolution_clock::now();
-        float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
-        UniformBufferObject ubo {};
-        ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        ubo.view = glm::lookAt(glm::vec3(2.0f, 0.5f, 2.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        ubo.proj = glm::perspective(glm::radians(45.0f), m_SwapChain->GetExtent().width / (float)m_SwapChain->GetExtent().height, 0.1f, 10.0f);
-        ubo.proj[1][1] *= -1;
-
-        memcpy(m_UniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+        memcpy(m_UniformBuffersMapped[currentImage], &cameraData, sizeof(cameraData));
     }
 
     void LowLevelRenderer::CreateDescriptorSetLayout()
@@ -440,7 +525,7 @@ namespace Antelope
         rasterizationStateInfo.polygonMode = VK_POLYGON_MODE_FILL;
         rasterizationStateInfo.lineWidth = 1.0f;
         rasterizationStateInfo.cullMode = VK_CULL_MODE_BACK_BIT;
-        rasterizationStateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+        rasterizationStateInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
         rasterizationStateInfo.depthBiasEnable = VK_FALSE;
 
         VkPipelineMultisampleStateCreateInfo multisampleStateInfo {};
@@ -461,11 +546,17 @@ namespace Antelope
         colorBlending.attachmentCount = 1;
         colorBlending.pAttachments = &colorBlendAttachmentStateInfo;
 
+        VkPushConstantRange pushConstantRange{};
+        pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        pushConstantRange.offset = 0;
+        pushConstantRange.size = sizeof(PushConstantData);
+
         VkPipelineLayoutCreateInfo pipelineLayoutInfo {};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = 1;
         pipelineLayoutInfo.pSetLayouts = &m_DescriptorSetLayout;
-        pipelineLayoutInfo.pushConstantRangeCount = 0;
+        pipelineLayoutInfo.pushConstantRangeCount = 1;
+        pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
         if(vkCreatePipelineLayout(m_Context->GetDevice(), &pipelineLayoutInfo, nullptr, &m_PipelineLayout) != VK_SUCCESS) 
         {
@@ -569,53 +660,10 @@ namespace Antelope
 
     void LowLevelRenderer::CreateStorageBuffers()
     {
-        std::array<VertexPosition, 6> positions = {{
-            {{ 0.0f, -0.6f,  0.0f}},
-            {{ 0.0f,  0.6f,  0.0f}},
-            {{ 0.5f,  0.0f,  0.0f}},
-            {{-0.5f,  0.0f,  0.0f}},
-            {{ 0.0f,  0.0f,  0.5f}},
-            {{ 0.0f,  0.0f, -0.5f}}
-        }};
+        const VkDeviceSize MEGA_BUFFER_SIZE = 10 * 1024 * 1024; 
 
-        std::array<VertexColor, 6> colors = {{
-            {{1.0f, 0.0f, 0.0f}},
-            {{0.0f, 1.0f, 1.0f}},
-            {{0.0f, 1.0f, 0.0f}},
-            {{1.0f, 0.0f, 1.0f}},
-            {{0.0f, 0.0f, 1.0f}},
-            {{1.0f, 1.0f, 0.0f}}
-        }};
-
-        float n = 0.57735f;
-        std::array<VertexNormal, 8> normals = {{
-            {{ n, -n,  n}},
-            {{ n, -n, -n}},
-            {{-n, -n, -n}},
-            {{-n, -n,  n}},
-            {{ n,  n,  n}},
-            {{ n,  n, -n}},
-            {{-n,  n, -n}},
-            {{-n,  n,  n}}
-        }};
-
-        std::array<Face, 8> faces = {{
-            {0, 2, 4, 0},
-            {0, 5, 2, 1},
-            {0, 3, 5, 2},
-            {0, 4, 3, 3},
-            {1, 4, 2, 4},
-            {1, 2, 5, 5},
-            {1, 5, 3, 6},
-            {1, 3, 4, 7}
-        }};
-
-        auto createSSBO = [&](const void* data, VkDeviceSize size, VkBuffer& outBuffer, VmaAllocation& outAllocation) 
+        auto createEmptySSBO = [&](VkDeviceSize size, VkBuffer& outBuffer, VmaAllocation& outAllocation) 
         {
-            VkBuffer stagingBuffer; 
-            VmaAllocation stagingBufferAllocation;
-            CreateStagingBuffer(data, size, stagingBuffer, stagingBufferAllocation);
-
             VkBufferCreateInfo bufferInfo {}; 
             bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
             bufferInfo.size = size; 
@@ -626,18 +674,15 @@ namespace Antelope
             
             if (vmaCreateBuffer(m_Context->GetAllocator(), &bufferInfo, &allocationInfo, &outBuffer, &outAllocation, nullptr) != VK_SUCCESS)
             {
-                AE_ENGINE_CRITICAL("Failed to create SSBO buffer!");
-                throw std::runtime_error("Failed to create SSBO buffer");
+                AE_ENGINE_CRITICAL("Failed to create Mega SSBO buffer!");
+                throw std::runtime_error("Failed to create Mega SSBO buffer");
             }
-
-            CopyBuffer(stagingBuffer, outBuffer, size);
-            vmaDestroyBuffer(m_Context->GetAllocator(), stagingBuffer, stagingBufferAllocation);
         };
 
-        createSSBO(positions.data(), sizeof(VertexPosition) * positions.size(), m_PosBuffer, m_PosBufferAllocation);
-        createSSBO(colors.data(), sizeof(VertexColor) * colors.size(), m_ColorBuffer, m_ColorBufferAllocation);
-        createSSBO(normals.data(), sizeof(VertexNormal) * normals.size(), m_NormalBuffer, m_NormalBufferAllocation);
-        createSSBO(faces.data(), sizeof(Face) * faces.size(), m_FaceBuffer, m_FaceBufferAllocation);
+        createEmptySSBO(MEGA_BUFFER_SIZE, m_PosBuffer, m_PosBufferAllocation);
+        createEmptySSBO(MEGA_BUFFER_SIZE, m_ColorBuffer, m_ColorBufferAllocation);
+        createEmptySSBO(MEGA_BUFFER_SIZE, m_NormalBuffer, m_NormalBufferAllocation);
+        createEmptySSBO(MEGA_BUFFER_SIZE, m_FaceBuffer, m_FaceBufferAllocation);
     }
 
     void LowLevelRenderer::CreateUniformBuffers()
