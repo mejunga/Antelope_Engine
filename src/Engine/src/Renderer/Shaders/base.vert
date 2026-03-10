@@ -1,55 +1,53 @@
 #version 450
 
-layout(binding = 0) uniform UniformBufferObject 
-{
+layout(binding = 0) uniform UniformBufferObject {
     mat4 view;
     mat4 proj;
 } ubo;
 
-layout(push_constant) uniform Push {
+struct VertexPosition { vec4 pos; };
+struct VertexColor    { vec4 color; };
+struct VertexNormal   { vec4 normal; };
+struct Face           { uvec4 data; }; 
+
+layout(std140, binding = 1) readonly buffer PosBuffer  { VertexPosition vertices[]; } posBuf;
+layout(std140, binding = 2) readonly buffer ColBuffer  { VertexColor colors[]; } colBuf;
+layout(std140, binding = 3) readonly buffer NormBuffer { VertexNormal normals[]; } normBuf;
+layout(std140, binding = 4) readonly buffer FaceBuffer { Face faces[]; } faceBuf;
+
+struct ObjectData {
     mat4 model;
     uint posOffset;
     uint colorOffset;
     uint normalOffset;
     uint faceOffset;
-} push;
-
-layout(std140, binding = 1) readonly buffer PosBuffer    { vec4 positions[]; };
-layout(std140, binding = 2) readonly buffer ColorBuffer  { vec4 colors[]; };
-layout(std140, binding = 3) readonly buffer NormalBuffer { vec4 normals[]; };
-
-struct Face 
-{
-    uint v0, v1, v2;
-    uint normalIndex;
 };
 
-layout(std140, binding = 4) readonly buffer FaceBuffer   { Face faces[]; };
+layout(std140, binding = 5) readonly buffer ObjectBuffer { ObjectData objects[]; } objBuf;
 
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec3 fragNormal;
-layout(location = 2) out vec3 fragPos;
 
 void main() 
 {
-    uint faceID = push.faceOffset + (gl_VertexIndex / 3);
-    uint vertexInFace = gl_VertexIndex % 3;
+    ObjectData obj = objBuf.objects[gl_InstanceIndex];
 
-    Face myFace = faces[faceID];
+    uint faceIndex = obj.faceOffset + (gl_VertexIndex / 3);
+    uint vertexOffsetInFace = gl_VertexIndex % 3;
 
-    uint posIndex;
-    if (vertexInFace == 0) posIndex = myFace.v0;
-    else if (vertexInFace == 1) posIndex = myFace.v1;
-    else posIndex = myFace.v2;
-
-    vec3 inPosition = positions[push.posOffset + posIndex].xyz;
-    vec3 inColor    = colors[push.colorOffset + posIndex].xyz;
-    vec3 inNormal   = normals[push.normalOffset + myFace.normalIndex].xyz;
-
-    vec4 worldPos = push.model * vec4(inPosition, 1.0);
-    gl_Position = ubo.proj * ubo.view * worldPos;
+    Face f = faceBuf.faces[faceIndex];
     
-    fragColor = inColor;
-    fragPos = worldPos.xyz;
-    fragNormal = mat3(push.model) * inNormal; 
+    uint vIndex;
+    if(vertexOffsetInFace == 0) vIndex = f.data.x;
+    else if(vertexOffsetInFace == 1) vIndex = f.data.y;
+    else vIndex = f.data.z;
+
+    vec3 position = posBuf.vertices[obj.posOffset + vIndex].pos.xyz;
+    vec3 color    = colBuf.colors[obj.colorOffset + vIndex].color.xyz;
+    vec3 normal   = normBuf.normals[obj.normalOffset + f.data.w].normal.xyz;
+
+    gl_Position = ubo.proj * ubo.view * obj.model * vec4(position, 1.0);
+    
+    fragColor = color;
+    fragNormal = mat3(obj.model) * normal; 
 }

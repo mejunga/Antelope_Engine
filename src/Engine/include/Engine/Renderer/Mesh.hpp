@@ -6,9 +6,20 @@
 
 namespace Antelope
 {
-    struct VertexPosition { alignas(16) glm::vec3 pos; };
-    struct VertexColor    { alignas(16) glm::vec3 color; };
-    struct VertexNormal   { alignas(16) glm::vec3 normal; };
+    struct VertexPosition
+    {
+        alignas(16) glm::vec3 pos;
+    };
+
+    struct VertexColor
+    {
+        alignas(16) glm::vec3 color;
+    };
+    
+    struct VertexNormal
+    {
+        alignas(16) glm::vec3 normal;
+    };
     
     struct Face 
     { 
@@ -37,5 +48,15 @@ namespace Antelope
     {
         glm::mat4 transform;
         MeshHandle mesh;
+    };
+
+    struct ObjectData
+    {
+        glm::mat4 model;
+        
+        uint32_t posOffset;
+        uint32_t colorOffset;
+        uint32_t normalOffset;
+        uint32_t faceOffset;
     };
 }

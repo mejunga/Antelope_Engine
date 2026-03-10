@@ -32,6 +32,9 @@ namespace Antelope
             inline std::shared_ptr<LowLevelRenderer> GetLowLevelRenderer() const { return m_LowLevelRenderer; }
 
         private:
+            void SetupMockData();
+
+        private:
             std::unique_ptr<Window> m_Window;
             std::shared_ptr<VulkanContext> m_VulkanContext;
             std::shared_ptr<SwapChain> m_SwapChain;
@@ -39,6 +42,23 @@ namespace Antelope
             std::shared_ptr<HighLevelRenderer> m_HighLevelRenderer;
             
             bool m_Running = true;
+            
+            int m_RenderState = 0;
+
+            float m_DebounceTimer = 0.0f;
+            const float DEBOUNCE_DELAY = 0.2f;
+            
+            MeshData m_DiamondMesh;
+            MeshData m_CubeMesh;
+            MeshData m_PyramidMesh;
+
+            bool m_IsDiamondUploaded = false;
+            bool m_IsCubeUploaded = false;
+            bool m_IsPyramidUploaded = false;
+
+            MeshHandle m_DiamondHandle {};
+            MeshHandle m_CubeHandle {};
+            MeshHandle m_PyramidHandle {};
 
             static Application *s_Instance;
     };

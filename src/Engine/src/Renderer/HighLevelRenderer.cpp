@@ -6,6 +6,7 @@ namespace Antelope
     HighLevelRenderer::HighLevelRenderer(std::shared_ptr<LowLevelRenderer> lowLevelRenderer)
         : m_LowLevelRenderer(lowLevelRenderer)
     {
+        m_RenderQueue.reserve(10000);
     }
 
     void HighLevelRenderer::BeginScene(const UniformBufferObject& cameraData)

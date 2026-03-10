@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <unordered_set>
 #include <vector>
 #include <array>
 #include <memory>
@@ -20,14 +21,13 @@ namespace Antelope
     class SwapChain;
     struct UniformBufferObject;
 
-    struct PushConstantData
+    struct PendingTransfer
     {
-        glm::mat4 model;
-        
+        VkFence fence;
+        VkCommandBuffer commandBuffer;
+        VkBuffer stagingBuffer;
+        VmaAllocation stagingAllocation;
         uint32_t posOffset;
-        uint32_t colorOffset;
-        uint32_t normalOffset;
-        uint32_t faceOffset;
     };
 
     class LowLevelRenderer
@@ -45,14 +45,18 @@ namespace Antelope
             void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize bufferSize);
             void CreateStagingBuffer(const void* data, VkDeviceSize size, VkBuffer& outBuffer, VmaAllocation& outAllocation);
             void UpdateUniformBuffer(uint32_t currentImage, const UniformBufferObject& cameraData);
+            void ProcessPendingTransfers();
 
             void CreateDescriptorSetLayout();
             void CreateGraphicsPipeline();
             void CreateCommandPool();
+            void CreateTransferCommandPool();
             void CreateCommandBuffers();
             void CreateSyncObjects();
             void CreateStorageBuffers(); 
             void CreateUniformBuffers();
+            void CreateObjectBuffers(); 
+            void CreateIndirectBuffers();
             void CreateDescriptorPool();
             void CreateDescriptorSets();
 
@@ -72,8 +76,10 @@ namespace Antelope
             VmaAllocation m_NormalBufferAllocation { VK_NULL_HANDLE };
             VkBuffer m_FaceBuffer { VK_NULL_HANDLE };
             VmaAllocation m_FaceBufferAllocation { VK_NULL_HANDLE };
-
+            VkCommandPool m_TransferCommandPool { VK_NULL_HANDLE };
+        
             const int MAX_FRAMES_IN_FLIGHT = 3;
+            const uint32_t MAX_OBJECTS = 10000;
             uint32_t m_CurrentFrame = 0;
             uint32_t m_CurrentPosOffset = 0;
             uint32_t m_CurrentColorOffset = 0;
@@ -88,5 +94,14 @@ namespace Antelope
             std::vector<VmaAllocation> m_UniformBuffersAllocations;
             std::vector<void*> m_UniformBuffersMapped;
             std::vector<VkDescriptorSet> m_DescriptorSets;
+            std::vector<VkBuffer> m_ObjectBuffers;
+            std::vector<VmaAllocation> m_ObjectBuffersAllocations;
+            std::vector<void*> m_ObjectBuffersMapped;
+            std::vector<VkBuffer> m_IndirectBuffers;
+            std::vector<VmaAllocation> m_IndirectBuffersAllocations;
+            std::vector<void*> m_IndirectBuffersMapped;
+            std::vector<PendingTransfer> m_PendingTransfers;
+            std::unordered_set<uint32_t> m_PendingMeshOffsets;
+
     };
 }

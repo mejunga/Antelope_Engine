@@ -139,23 +139,27 @@ namespace Antelope
         int i { 0 };
         for(const auto& queueFamily : queueFamilies)
         {
-            if(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-            {
+            if(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
                 indices.GraphicsFamily = i;
             }
 
             VkBool32 presentSupport { false };
             vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_Surface, &presentSupport);
-            
-            if(presentSupport)
-            {
+            if(presentSupport) {
                 indices.PresentFamily = i;
             }
 
-            if(indices.IsComplete()) { break; }
-        
+            if((queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT) && !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
+                indices.TransferFamily = i;
+            }
+
             i++;
         }
+
+        if (!indices.TransferFamily.has_value() && indices.GraphicsFamily.has_value()) {
+            indices.TransferFamily = indices.GraphicsFamily.value();
+        }
+
         return indices;
     }
 
@@ -255,6 +259,7 @@ namespace Antelope
                swapChainAdequate &&
                deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
                deviceFeatures.geometryShader;
+               deviceFeatures.multiDrawIndirect;
     }
 
     VKAPI_ATTR VkBool32 VKAPI_CALL VulkanContext::DebugCallback(
@@ -435,8 +440,8 @@ namespace Antelope
     {
         QueueFamilyIndices indices { FindQueueFamilies(m_PhysicalDevice) };
 
-        std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-        std::set<uint32_t> uniqueQueueFamilies { indices.GraphicsFamily.value(), indices.PresentFamily.value() };
+        std::vector<VkDeviceQueueCreateInfo> deviceQueueInfos;
+        std::set<uint32_t> uniqueQueueFamilies { indices.GraphicsFamily.value(), indices.PresentFamily.value(), indices.TransferFamily.value() };
 
         float queuePriority { 0.1f };
 
@@ -448,15 +453,16 @@ namespace Antelope
             deviceQueueInfo.queueCount = 1;
             deviceQueueInfo.pQueuePriorities = &queuePriority;
 
-            queueCreateInfos.push_back(deviceQueueInfo);
+            deviceQueueInfos.push_back(deviceQueueInfo);
         }
 
         VkPhysicalDeviceFeatures deviceFeatures {};
+        deviceFeatures.multiDrawIndirect = VK_TRUE;
 
         VkDeviceCreateInfo deviceInfo {};
         deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        deviceInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
-        deviceInfo.pQueueCreateInfos = queueCreateInfos.data();
+        deviceInfo.queueCreateInfoCount = static_cast<uint32_t>(deviceQueueInfos.size());
+        deviceInfo.pQueueCreateInfos = deviceQueueInfos.data();
         deviceInfo.pEnabledFeatures = &deviceFeatures;
         deviceInfo.enabledExtensionCount = static_cast<uint32_t>(m_DeviceExtensions.size());
         deviceInfo.ppEnabledExtensionNames = m_DeviceExtensions.data();
@@ -479,6 +485,7 @@ namespace Antelope
 
         vkGetDeviceQueue(m_Device, indices.GraphicsFamily.value(), 0, &m_GraphicsQueue);
         vkGetDeviceQueue(m_Device, indices.PresentFamily.value(), 0, &m_PresentQueue);
+        vkGetDeviceQueue(m_Device, indices.TransferFamily.value(), 0, &m_TransferQueue);
     }
 
     void VulkanContext::CreateMemoryAllocator()

@@ -13,7 +13,9 @@ namespace Antelope
     struct QueueFamilyIndices {
         std::optional<uint32_t> GraphicsFamily;
         std::optional<uint32_t> PresentFamily;
-        bool IsComplete() const { return GraphicsFamily.has_value() && PresentFamily.has_value(); }
+        std::optional<uint32_t> TransferFamily;
+
+        bool IsComplete() const { return GraphicsFamily.has_value() && PresentFamily.has_value() && TransferFamily.has_value(); }
     };
 
     struct SwapchainSupportDetails {
@@ -33,6 +35,7 @@ namespace Antelope
             VkSurfaceKHR GetSurface() const { return m_Surface; }
             VkQueue GetGraphicsQueue() const { return m_GraphicsQueue; }
             VkQueue GetPresentQueue() const { return m_PresentQueue; }
+            VkQueue GetTransferQueue() const { return m_TransferQueue; }
             VmaAllocator GetAllocator() const { return m_Allocator; }
             GLFWwindow* GetWindowHandle() const { return m_WindowHandle; }
             VkSampleCountFlagBits GetMsaaSamples() const { return m_MsaaSamples; }
@@ -68,6 +71,7 @@ namespace Antelope
             VkDevice m_Device { VK_NULL_HANDLE };
             VkQueue m_GraphicsQueue { VK_NULL_HANDLE };
             VkQueue m_PresentQueue { VK_NULL_HANDLE };
+            VkQueue m_TransferQueue { VK_NULL_HANDLE };
             VmaAllocator m_Allocator { VK_NULL_HANDLE };
 
             VkSampleCountFlagBits m_MsaaSamples { VK_SAMPLE_COUNT_1_BIT };
