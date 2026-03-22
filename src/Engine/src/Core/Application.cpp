@@ -17,7 +17,7 @@ namespace Antelope
 
     Application::Application() 
     {
-        if(s_Instance) 
+        if (s_Instance) 
         { 
             AE_ENGINE_ERROR("Application already exists!");
             return; 
@@ -28,74 +28,65 @@ namespace Antelope
         m_VulkanContext = std::make_shared<VulkanContext>(m_Window->GetNativeWindow());
         m_SwapChain = std::make_shared<SwapChain>(m_VulkanContext);
         m_LowLevelRenderer = std::make_shared<LowLevelRenderer>(m_VulkanContext, m_SwapChain);
-        m_HighLevelRenderer = std::make_shared<HighLevelRenderer>(m_LowLevelRenderer);
+        m_HighLevelRenderer = std::make_shared<HighLevelRenderer>(m_LowLevelRenderer);        
+        m_TextureManager = std::make_shared<TextureManager>(m_VulkanContext, m_LowLevelRenderer);
     }
 
     Application::~Application() {}
 
     void Application::SetupMockData()
     {
-        m_DiamondMesh.positions = {
-            {{ 0.0f,  0.6f,  0.0f}}, {{ 0.0f, -0.6f,  0.0f}},
-            {{ 0.5f,  0.0f,  0.0f}}, {{-0.5f,  0.0f,  0.0f}},
-            {{ 0.0f,  0.0f,  0.5f}}, {{ 0.0f,  0.0f, -0.5f}}
-        };
-        m_DiamondMesh.colors = {
-            {{1.0f, 0.0f, 0.0f}}, {{0.0f, 1.0f, 1.0f}},
-            {{0.0f, 1.0f, 0.0f}}, {{1.0f, 0.0f, 1.0f}},
-            {{0.0f, 0.0f, 1.0f}}, {{1.0f, 1.0f, 0.0f}}
-        };
-        float n = 0.57735f;
-        m_DiamondMesh.normals = {
-            {{ n, n,  n}}, {{ n, n, -n}}, {{-n, n, -n}}, {{-n, n,  n}},
-            {{ n, -n,  n}}, {{ n, -n, -n}}, {{-n, -n, -n}}, {{-n, -n,  n}}
-        };
-        m_DiamondMesh.faces = {
-            {0, 2, 4, 0}, {0, 5, 2, 1}, {0, 3, 5, 2}, {0, 4, 3, 3},
-            {1, 4, 2, 4}, {1, 2, 5, 5}, {1, 5, 3, 6}, {1, 3, 4, 7}
-        };
+        m_WoodTexID = m_TextureManager->LoadTexture("Assets/seamless_wood_texture.png");
+        m_StoneTexID = m_TextureManager->LoadTexture("Assets/seamless_stone_texture.png");    
+        m_LowLevelRenderer->UpdateTextureDescriptors(m_TextureManager->GetGlobalTextures());
 
         m_CubeMesh.positions = {
-            {{-0.5f, -0.5f, -0.5f}}, {{ 0.5f, -0.5f, -0.5f}}, {{ 0.5f,  0.5f, -0.5f}}, {{-0.5f,  0.5f, -0.5f}},
-            {{-0.5f, -0.5f,  0.5f}}, {{ 0.5f, -0.5f,  0.5f}}, {{ 0.5f,  0.5f,  0.5f}}, {{-0.5f,  0.5f,  0.5f}}
-        };
-        m_CubeMesh.colors = {
-            {{0.8f, 0.2f, 0.2f}}, {{0.2f, 0.8f, 0.2f}}, {{0.2f, 0.2f, 0.8f}}, {{0.8f, 0.8f, 0.2f}},
-            {{0.8f, 0.2f, 0.8f}}, {{0.2f, 0.8f, 0.8f}}, {{0.9f, 0.9f, 0.9f}}, {{0.1f, 0.1f, 0.1f}}
-        };
-        m_CubeMesh.normals = {
-            {{0,0,-1}}, {{0,0,1}}, {{-1,0,0}}, {{1,0,0}}, {{0,-1,0}}, {{0,1,0}}
-        };
-        m_CubeMesh.faces = {
-            {0, 1, 2, 0}, {2, 3, 0, 0}, {5, 4, 7, 1}, {7, 6, 5, 1},
-            {4, 0, 3, 2}, {3, 7, 4, 2}, {1, 5, 6, 3}, {6, 2, 1, 3},
-            {4, 5, 1, 4}, {1, 0, 4, 4}, {3, 2, 6, 5}, {6, 7, 3, 5}
+            {{-0.5f, -0.5f,  0.5f}}, {{ 0.5f, -0.5f,  0.5f}}, {{ 0.5f,  0.5f,  0.5f}}, {{-0.5f,  0.5f,  0.5f}},
+            {{ 0.5f, -0.5f, -0.5f}}, {{-0.5f, -0.5f, -0.5f}}, {{-0.5f,  0.5f, -0.5f}}, {{ 0.5f,  0.5f, -0.5f}},
+            {{-0.5f, -0.5f, -0.5f}}, {{-0.5f, -0.5f,  0.5f}}, {{-0.5f,  0.5f,  0.5f}}, {{-0.5f,  0.5f, -0.5f}},
+            {{ 0.5f, -0.5f,  0.5f}}, {{ 0.5f, -0.5f, -0.5f}}, {{ 0.5f,  0.5f, -0.5f}}, {{ 0.5f,  0.5f,  0.5f}},
+            {{-0.5f,  0.5f,  0.5f}}, {{ 0.5f,  0.5f,  0.5f}}, {{ 0.5f,  0.5f, -0.5f}}, {{-0.5f,  0.5f, -0.5f}},
+            {{-0.5f, -0.5f, -0.5f}}, {{ 0.5f, -0.5f, -0.5f}}, {{ 0.5f, -0.5f,  0.5f}}, {{-0.5f, -0.5f,  0.5f}}
         };
 
-        m_PyramidMesh.positions = {
-            {{ 0.0f,  0.5f,  0.0f}},
-            {{-0.5f, -0.5f, -0.5f}}, {{ 0.5f, -0.5f, -0.5f}}, 
-            {{ 0.5f, -0.5f,  0.5f}}, {{-0.5f, -0.5f,  0.5f}}
+        m_CubeMesh.colors.resize(24, {{1.0f, 1.0f, 1.0f}});
+
+        m_CubeMesh.normals = {
+            {{ 0,  0,  1}}, {{ 0,  0,  1}}, {{ 0,  0,  1}}, {{ 0,  0,  1}},
+            {{ 0,  0, -1}}, {{ 0,  0, -1}}, {{ 0,  0, -1}}, {{ 0,  0, -1}},
+            {{-1,  0,  0}}, {{-1,  0,  0}}, {{-1,  0,  0}}, {{-1,  0,  0}},
+            {{ 1,  0,  0}}, {{ 1,  0,  0}}, {{ 1,  0,  0}}, {{ 1,  0,  0}},
+            {{ 0,  1,  0}}, {{ 0,  1,  0}}, {{ 0,  1,  0}}, {{ 0,  1,  0}},
+            {{ 0, -1,  0}}, {{ 0, -1,  0}}, {{ 0, -1,  0}}, {{ 0, -1,  0}}
         };
-        m_PyramidMesh.colors = {
-            {{1.0f, 1.0f, 0.0f}}, {{0.5f, 0.0f, 0.5f}}, {{0.5f, 0.0f, 0.5f}}, {{0.5f, 0.0f, 0.5f}}, {{0.5f, 0.0f, 0.5f}}
+
+        m_CubeMesh.uvs = {
+            {{0.0f, 0.0f}}, {{1.0f, 0.0f}}, {{1.0f, 1.0f}}, {{0.0f, 1.0f}},
+            {{0.0f, 0.0f}}, {{1.0f, 0.0f}}, {{1.0f, 1.0f}}, {{0.0f, 1.0f}},
+            {{0.0f, 0.0f}}, {{1.0f, 0.0f}}, {{1.0f, 1.0f}}, {{0.0f, 1.0f}},
+            {{0.0f, 0.0f}}, {{1.0f, 0.0f}}, {{1.0f, 1.0f}}, {{0.0f, 1.0f}},
+            {{0.0f, 0.0f}}, {{1.0f, 0.0f}}, {{1.0f, 1.0f}}, {{0.0f, 1.0f}},
+            {{0.0f, 0.0f}}, {{1.0f, 0.0f}}, {{1.0f, 1.0f}}, {{0.0f, 1.0f}}
         };
-        m_PyramidMesh.normals = m_DiamondMesh.normals; 
-        m_PyramidMesh.faces = {
-            {0, 2, 1, 0}, {0, 3, 2, 1}, {0, 4, 3, 2}, {0, 1, 4, 3},
-            {1, 2, 3, 4}, {3, 4, 1, 5}
+
+        m_CubeMesh.faces = {
+            { 0,  1,  2, 0}, { 2,  3,  0, 0},
+            { 4,  5,  6, 4}, { 6,  7,  4, 4},
+            { 8,  9, 10, 8}, {10, 11,  8, 8},
+            {12, 13, 14,12}, {14, 15, 12,12},
+            {16, 17, 18,16}, {18, 19, 16,16},
+            {20, 21, 22,20}, {22, 23, 20,20}
         };
     }
 
     void Application::Run()
     {
         AE_ENGINE_INFO("Engine Core Loop Started.");
-        
         SetupMockData(); 
 
         auto lastTime = std::chrono::high_resolution_clock::now();
 
-        while(m_Running)
+        while (m_Running)
         {
             m_Window->OnUpdate();
 
@@ -107,36 +98,38 @@ namespace Antelope
                 m_DebounceTimer -= deltaTime;
             }
 
-            if(Input::IsKeyPressed(GLFW_KEY_A) && m_DebounceTimer <= 0.0f)
+            if (Input::IsKeyPressed(GLFW_KEY_A) && m_DebounceTimer <= 0.0f)
             {
-                m_RenderState = (m_RenderState + 1) % 5;
+                m_RenderState = (m_RenderState + 1) % 3;
                 m_DebounceTimer = DEBOUNCE_DELAY;
-                
                 AE_ENGINE_TRACE("A Key Pressed! Switching to State: {0}", m_RenderState);
 
-                if(m_RenderState == 1 && !m_IsDiamondUploaded) {
-                    AE_ENGINE_INFO("Uploading Diamond Mesh to GPU in background...");
-                    m_DiamondHandle = m_LowLevelRenderer->UploadMesh(m_DiamondMesh);
-                    m_IsDiamondUploaded = true;
+                if (m_IsCubeUploaded)
+                {
+                    AE_ENGINE_TRACE("GC: Freeing previous Cube Mesh from GPU...");
+                    m_LowLevelRenderer->FreeMesh(m_CubeHandle);
+                    m_IsCubeUploaded = false;
                 }
-                else if (m_RenderState == 2 && !m_IsCubeUploaded) {
-                    AE_ENGINE_INFO("Uploading Cube Mesh to GPU in background...");
+
+                if (m_RenderState == 1)
+                {
+                    AE_ENGINE_INFO("Uploading Cube Mesh (WOOD) to GPU...");
                     m_CubeHandle = m_LowLevelRenderer->UploadMesh(m_CubeMesh);
+                    m_CubeHandle.materialIndex = m_WoodTexID;
                     m_IsCubeUploaded = true;
                 }
-                else if (m_RenderState == 3 && !m_IsPyramidUploaded) {
-                    AE_ENGINE_INFO("Uploading Pyramid Mesh to GPU in background...");
-                    m_PyramidHandle = m_LowLevelRenderer->UploadMesh(m_PyramidMesh);
-                    m_IsPyramidUploaded = true;
+                else if (m_RenderState == 2)
+                {
+                    AE_ENGINE_INFO("Uploading Cube Mesh (STONE) to GPU...");
+                    m_CubeHandle = m_LowLevelRenderer->UploadMesh(m_CubeMesh);
+                    m_CubeHandle.materialIndex = m_StoneTexID;
+                    m_IsCubeUploaded = true;
                 }
             }
 
-            if(m_Window->IsResizing() || m_Window->GetWidth() == 0 || m_Window->GetHeight() == 0)
-            {
-                continue;
-            }
+            if (m_Window->IsResizing() || m_Window->GetWidth() == 0 || m_Window->GetHeight() == 0) { continue; }
             
-            if(m_HighLevelRenderer)
+            if (m_HighLevelRenderer)
             {
                 UniformBufferObject camera {};
                 camera.view = glm::lookAt(glm::vec3(0.0f, 2.25f, 5.0f), glm::vec3(0.0f, 0.75f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
@@ -150,46 +143,28 @@ namespace Antelope
                 static float time = 0.0f;
                 time += deltaTime;
 
-                if (m_RenderState == 1 || m_RenderState == 4) 
+                if (m_RenderState == 1 || m_RenderState == 2)
                 {
                     glm::mat4 t = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
-                    glm::mat4 r = glm::rotate(glm::mat4(1.0f), time, glm::vec3(0.0f, 1.0f, 0.0f));
-                    m_HighLevelRenderer->Submit(t * r, m_DiamondHandle);
-                }
-
-                if (m_RenderState == 2 || m_RenderState == 4) 
-                {
-                    glm::mat4 tLeft = glm::translate(glm::mat4(1.0f), glm::vec3(-2.0f, 0.0f, 0.0f));
-                    glm::mat4 tRight = glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 0.0f, 0.0f));
-                    glm::mat4 r = glm::rotate(glm::mat4(1.0f), -time, glm::vec3(0.0f, 1.0f, 0.0f));
-                    m_HighLevelRenderer->Submit(tLeft * r, m_CubeHandle);
-                    m_HighLevelRenderer->Submit(tRight * r, m_CubeHandle);
-                }
-
-                if (m_RenderState == 3 || m_RenderState == 4) 
-                {
-                    glm::mat4 t = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 2.0f, 0.0f));
-                    glm::mat4 r = glm::rotate(glm::mat4(1.0f), time * 1.5f, glm::vec3(1.0f, 1.0f, 0.0f));
-                    m_HighLevelRenderer->Submit(t * r, m_PyramidHandle);
+                    glm::mat4 r = glm::rotate(glm::mat4(1.0f), time, glm::vec3(0.5f, 1.0f, 0.2f));
+                    m_HighLevelRenderer->Submit(t * r, m_CubeHandle);
                 }
 
                 m_HighLevelRenderer->EndScene();
             }
 
-            if(m_Window->ShouldClose()) 
-            {
-                m_Running = false;
-            }
+            if (m_Window->ShouldClose()) { m_Running = false; }
         }
+
+        vkDeviceWaitIdle(m_VulkanContext->GetDevice());
+        
+        if (m_IsCubeUploaded) { m_LowLevelRenderer->FreeMesh(m_CubeHandle); }
         
         AE_ENGINE_INFO("Engine Core Loop Stopped.");
     }
 
     void Application::OnWindowResize(int width, int height) 
     {
-        if(m_SwapChain)
-        {
-            m_SwapChain->SetFramebufferResized(true);
-        }
+        if (m_SwapChain) { m_SwapChain->SetFramebufferResized(true); }
     }
 }

@@ -29,7 +29,7 @@ namespace Antelope
 
     SwapChain::~SwapChain()
     {
-        if(m_Swapchain != VK_NULL_HANDLE)
+        if (m_Swapchain != VK_NULL_HANDLE)
         {
             CleanupSwapchain();
             AE_ENGINE_TRACE("Depth resources destroyed.");
@@ -38,7 +38,7 @@ namespace Antelope
             AE_ENGINE_TRACE("Swapchain destroyed.");
         }
 
-        if(m_RenderPass != VK_NULL_HANDLE)
+        if (m_RenderPass != VK_NULL_HANDLE)
         {
             vkDestroyRenderPass(m_Context->GetDevice(), m_RenderPass, nullptr);
             AE_ENGINE_TRACE("Render Pass destroyed.");
@@ -50,13 +50,13 @@ namespace Antelope
         int width = 0, height = 0;
         glfwGetFramebufferSize(m_Context->GetWindowHandle(), &width, &height);
         
-        while(width == 0 || height == 0) 
+        while (width == 0 || height == 0) 
         {
             glfwGetFramebufferSize(m_Context->GetWindowHandle(), &width, &height);
             glfwWaitEvents();
         }
 
-        if(m_Context && m_Context->GetDevice() != VK_NULL_HANDLE)
+        if (m_Context && m_Context->GetDevice() != VK_NULL_HANDLE)
         {
             vkDeviceWaitIdle(m_Context->GetDevice());
         }
@@ -71,9 +71,9 @@ namespace Antelope
 
     VkSurfaceFormatKHR SwapChain::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
     {
-        for(const auto& availableFormat : availableFormats)
+        for (const auto& availableFormat : availableFormats)
         {
-            if(availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+            if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
             {
                 return availableFormat;
             }
@@ -84,9 +84,9 @@ namespace Antelope
 
     VkPresentModeKHR SwapChain::ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
     {
-        for(const auto& availablePresentMode : availablePresentModes)
+        for (const auto& availablePresentMode : availablePresentModes)
         {
-            if(availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
+            if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
             {
                 return availablePresentMode;
             }
@@ -97,7 +97,7 @@ namespace Antelope
 
     VkExtent2D SwapChain::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* windowHandle)
     {
-        if(capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) 
+        if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) 
         { 
             return capabilities.currentExtent; 
         }
@@ -123,31 +123,31 @@ namespace Antelope
 
     void SwapChain::CleanupSwapchain()
     {
-        if(m_ColorImageView != VK_NULL_HANDLE)
+        if (m_ColorImageView != VK_NULL_HANDLE)
         { 
             vkDestroyImageView(m_Context->GetDevice(), m_ColorImageView, nullptr); 
             m_ColorImageView = VK_NULL_HANDLE; 
         }
 
-        if(m_ColorImage != VK_NULL_HANDLE)
+        if (m_ColorImage != VK_NULL_HANDLE)
         {
             vmaDestroyImage(m_Context->GetAllocator(), m_ColorImage, m_ColorImageAllocation);
             m_ColorImage = VK_NULL_HANDLE;
         }
 
-        if(m_DepthImageView != VK_NULL_HANDLE) 
+        if (m_DepthImageView != VK_NULL_HANDLE) 
         {
             vkDestroyImageView(m_Context->GetDevice(), m_DepthImageView, nullptr);
             m_DepthImageView = VK_NULL_HANDLE;
         }
 
-        if(m_DepthImage != VK_NULL_HANDLE) 
+        if (m_DepthImage != VK_NULL_HANDLE) 
         {
             vmaDestroyImage(m_Context->GetAllocator(), m_DepthImage, m_DepthImageAllocation);
             m_DepthImage = VK_NULL_HANDLE;
         }
 
-        if(!m_SwapchainFramebuffers.empty()) 
+        if (!m_SwapchainFramebuffers.empty()) 
         {
             for (auto framebuffer : m_SwapchainFramebuffers) 
             {
@@ -156,7 +156,7 @@ namespace Antelope
             m_SwapchainFramebuffers.clear();
         }
 
-        if(!m_SwapchainImageViews.empty()) 
+        if (!m_SwapchainImageViews.empty()) 
         {
             for (auto imageView : m_SwapchainImageViews) 
             {
@@ -165,7 +165,7 @@ namespace Antelope
             m_SwapchainImageViews.clear(); 
         }
 
-        if(m_Swapchain != VK_NULL_HANDLE)
+        if (m_Swapchain != VK_NULL_HANDLE)
         {
             vkDestroySwapchainKHR(m_Context->GetDevice(), m_Swapchain, nullptr);
             m_Swapchain = VK_NULL_HANDLE;
@@ -180,7 +180,7 @@ namespace Antelope
         VkExtent2D extent = ChooseSwapExtent(swapchainSupport.Capabilities, m_Context->GetWindowHandle());
         uint32_t imageCount = swapchainSupport.Capabilities.minImageCount + 1;
 
-        if(swapchainSupport.Capabilities.maxImageCount > 0 && imageCount > swapchainSupport.Capabilities.maxImageCount)
+        if (swapchainSupport.Capabilities.maxImageCount > 0 && imageCount > swapchainSupport.Capabilities.maxImageCount)
         {
             imageCount = swapchainSupport.Capabilities.maxImageCount;
         }
@@ -198,7 +198,7 @@ namespace Antelope
         QueueFamilyIndices indices = m_Context->FindQueueFamilies(m_Context->GetPhysicalDevice());
         uint32_t queueFamilyIndices[] = { indices.GraphicsFamily.value(), indices.PresentFamily.value() };
 
-        if(indices.GraphicsFamily != indices.PresentFamily)
+        if (indices.GraphicsFamily != indices.PresentFamily)
         {
             swapchainInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
             swapchainInfo.queueFamilyIndexCount = 2;
@@ -217,7 +217,7 @@ namespace Antelope
         swapchainInfo.clipped = VK_TRUE;
         swapchainInfo.oldSwapchain = VK_NULL_HANDLE;
 
-        if(vkCreateSwapchainKHR(m_Context->GetDevice(), &swapchainInfo, nullptr, &m_Swapchain) != VK_SUCCESS)
+        if (vkCreateSwapchainKHR(m_Context->GetDevice(), &swapchainInfo, nullptr, &m_Swapchain) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Swapchain!");
             throw std::runtime_error("Failed to create Swapchain");
@@ -236,7 +236,7 @@ namespace Antelope
         uint32_t imageViewsSize = m_SwapchainImages.size();
         m_SwapchainImageViews.resize(imageViewsSize);
 
-        for(size_t i = 0; i < imageViewsSize; ++i)
+        for (size_t i = 0; i < imageViewsSize; ++i)
         {
             VkImageViewCreateInfo ImageViewInfo {};
             ImageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -253,7 +253,7 @@ namespace Antelope
             ImageViewInfo.subresourceRange.baseArrayLayer = 0;
             ImageViewInfo.subresourceRange.layerCount = 1;
 
-            if(vkCreateImageView(m_Context->GetDevice(), &ImageViewInfo, nullptr, &m_SwapchainImageViews[i]) != VK_SUCCESS)
+            if (vkCreateImageView(m_Context->GetDevice(), &ImageViewInfo, nullptr, &m_SwapchainImageViews[i]) != VK_SUCCESS)
             {
                 AE_ENGINE_CRITICAL("Failed to create Swapchain Image Views!");
                 throw std::runtime_error("Failed to create Swapchain Image Views");
@@ -284,7 +284,7 @@ namespace Antelope
         allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
         allocationInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
 
-        if(vmaCreateImage(m_Context->GetAllocator(), &imageInfo, &allocationInfo, &m_DepthImage, &m_DepthImageAllocation, nullptr) != VK_SUCCESS)
+        if (vmaCreateImage(m_Context->GetAllocator(), &imageInfo, &allocationInfo, &m_DepthImage, &m_DepthImageAllocation, nullptr) != VK_SUCCESS)
         {
             AE_CLIENT_CRITICAL("Failed to create depth image!");
             throw std::runtime_error("Failed to create depth image");
@@ -301,7 +301,7 @@ namespace Antelope
         viewInfo.subresourceRange.baseArrayLayer = 0;
         viewInfo.subresourceRange.layerCount = 1;
 
-        if(vkCreateImageView(m_Context->GetDevice(), &viewInfo, nullptr, &m_DepthImageView) != VK_SUCCESS)
+        if (vkCreateImageView(m_Context->GetDevice(), &viewInfo, nullptr, &m_DepthImageView) != VK_SUCCESS)
         {
             AE_CLIENT_CRITICAL("Failed to create depth image view!");
             throw std::runtime_error("Failed to create depth image view");
@@ -378,7 +378,7 @@ namespace Antelope
         renderPassInfo.dependencyCount = 1;
         renderPassInfo.pDependencies = &dependency;
 
-        if(vkCreateRenderPass(m_Context->GetDevice(), &renderPassInfo, nullptr, &m_RenderPass) != VK_SUCCESS)
+        if (vkCreateRenderPass(m_Context->GetDevice(), &renderPassInfo, nullptr, &m_RenderPass) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Render Pass!");
             throw std::runtime_error("Failed to create Render Pass");
@@ -389,7 +389,7 @@ namespace Antelope
     {
         m_SwapchainFramebuffers.resize(m_SwapchainImageViews.size());
 
-        for(size_t i = 0; i < m_SwapchainImageViews.size(); i++) 
+        for (size_t i = 0; i < m_SwapchainImageViews.size(); i++) 
         {
             std::array<VkImageView, 3> attachments = {
                 m_ColorImageView,
@@ -406,7 +406,7 @@ namespace Antelope
             framebufferInfo.height = m_SwapchainExtent.height;
             framebufferInfo.layers = 1;
 
-            if(vkCreateFramebuffer(m_Context->GetDevice(), &framebufferInfo, nullptr, &m_SwapchainFramebuffers[i]) != VK_SUCCESS) 
+            if (vkCreateFramebuffer(m_Context->GetDevice(), &framebufferInfo, nullptr, &m_SwapchainFramebuffers[i]) != VK_SUCCESS) 
             {
                 AE_ENGINE_CRITICAL("Failed to create Framebuffer!");
                 throw std::runtime_error("Failed to create Framebuffer");
@@ -416,7 +416,7 @@ namespace Antelope
 
     void SwapChain::CreateColorResources() 
     {
-        VkImageCreateInfo imageInfo{};
+        VkImageCreateInfo imageInfo {};
         imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         imageInfo.imageType = VK_IMAGE_TYPE_2D;
         imageInfo.extent.width = m_SwapchainExtent.width;
@@ -431,16 +431,16 @@ namespace Antelope
         imageInfo.samples = m_Context->GetMsaaSamples();
         imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-        VmaAllocationCreateInfo allocInfo{};
-        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        allocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+        VmaAllocationCreateInfo allocationInfo {};
+        allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        allocationInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
 
-        if (vmaCreateImage(m_Context->GetAllocator(), &imageInfo, &allocInfo, &m_ColorImage, &m_ColorImageAllocation, nullptr) != VK_SUCCESS) 
+        if (vmaCreateImage(m_Context->GetAllocator(), &imageInfo, &allocationInfo, &m_ColorImage, &m_ColorImageAllocation, nullptr) != VK_SUCCESS) 
         {
             throw std::runtime_error("Failed to create MSAA color image");
         }
 
-        VkImageViewCreateInfo viewInfo{};
+        VkImageViewCreateInfo viewInfo {};
         viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         viewInfo.image = m_ColorImage;
         viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;

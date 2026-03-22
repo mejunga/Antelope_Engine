@@ -12,3 +12,15 @@ target_link_libraries(AntelopeApp PRIVATE
 )
 
 set_target_properties(AntelopeApp PROPERTIES OUTPUT_NAME "AntelopeEngine")
+
+add_custom_command(TARGET AntelopeApp POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_SOURCE_DIR}/Assets"
+    "$<TARGET_FILE_DIR:AntelopeApp>/Assets"
+
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_BINARY_DIR}/bin/Shaders"
+    "$<TARGET_FILE_DIR:AntelopeApp>/Shaders"
+
+    COMMENT "Copying Assets and Shaders directories to output folder..."
+)

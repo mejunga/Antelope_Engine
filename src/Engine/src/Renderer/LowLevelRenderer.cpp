@@ -3,6 +3,7 @@
 #include <Engine/Renderer/SwapChain.hpp>
 #include <Engine/Debug/Log.hpp>
 #include <Engine/Renderer/Camera.hpp>
+#include <Engine/Renderer/TextureManager.hpp>
 
 #include <stdexcept>
 #include <fstream>
@@ -14,6 +15,8 @@ namespace Antelope
     LowLevelRenderer::LowLevelRenderer(std::shared_ptr<VulkanContext> context, std::shared_ptr<SwapChain> swapChain)
         : m_Context(context), m_SwapChain(swapChain)
     {
+        m_GpuAllocator = std::make_unique<GpuMemoryAllocator>(m_Context);
+
         CreateDescriptorSetLayout();
         AE_ENGINE_TRACE("Descriptor Set Layout created.");
         CreateGraphicsPipeline();
@@ -26,8 +29,6 @@ namespace Antelope
         AE_ENGINE_TRACE("Command Buffers allocated for {0} frames.", MAX_FRAMES_IN_FLIGHT);
         CreateSyncObjects();
         AE_ENGINE_TRACE("Synchronization Objects created for {0} frames.", MAX_FRAMES_IN_FLIGHT);
-        CreateStorageBuffers();
-        AE_ENGINE_TRACE("SSBO Storage Buffers created and uploaded to GPU.");
         CreateUniformBuffers();
         AE_ENGINE_TRACE("Uniform buffers created and mapped for {0} frames.", MAX_FRAMES_IN_FLIGHT);
         CreateObjectBuffers();
@@ -42,130 +43,129 @@ namespace Antelope
 
     LowLevelRenderer::~LowLevelRenderer()
     {
-        if(m_Context && m_Context->GetDevice() != VK_NULL_HANDLE) 
+        if (m_Context && m_Context->GetDevice() != VK_NULL_HANDLE) 
         {
             vkDeviceWaitIdle(m_Context->GetDevice());
         }
 
-        if(m_DescriptorPool != VK_NULL_HANDLE) 
+        for (auto& transfer : m_PendingTransfers)
+        {
+            vkDestroyFence(m_Context->GetDevice(), transfer.fence, nullptr);
+            vkFreeCommandBuffers(m_Context->GetDevice(), m_TransferCommandPool, 1, &transfer.commandBuffer);
+            vmaDestroyBuffer(m_Context->GetAllocator(), transfer.stagingBuffer, transfer.stagingAllocation);
+        }
+
+        m_PendingTransfers.clear();
+        m_PendingMeshOffsets.clear();
+
+        if (m_DescriptorPool != VK_NULL_HANDLE) 
         {
             vkDestroyDescriptorPool(m_Context->GetDevice(), m_DescriptorPool, nullptr);
             AE_ENGINE_TRACE("Descriptor Pool destroyed.");
         }
         
-        if(!m_IndirectBuffers.empty()) 
+        if (!m_IndirectBuffers.empty()) 
         {
-            for(size_t i = 0; i < m_IndirectBuffers.size(); i++) 
+            for (size_t i = 0; i < m_IndirectBuffers.size(); i++) 
             {
-                if(m_IndirectBuffers[i] != VK_NULL_HANDLE) 
+                if (m_IndirectBuffers[i] != VK_NULL_HANDLE) 
+                {
                     vmaDestroyBuffer(m_Context->GetAllocator(), m_IndirectBuffers[i], m_IndirectBuffersAllocations[i]);
+                }
             }
+
             m_IndirectBuffers.clear(); m_IndirectBuffersAllocations.clear(); m_IndirectBuffersMapped.clear();
             AE_ENGINE_TRACE("Indirect Buffers destroyed.");
         }
 
-        if(!m_ObjectBuffers.empty()) 
+        if (!m_ObjectBuffers.empty()) 
         {
-            for(size_t i = 0; i < m_ObjectBuffers.size(); i++) 
+            for (size_t i = 0; i < m_ObjectBuffers.size(); i++) 
             {
-                if(m_ObjectBuffers[i] != VK_NULL_HANDLE) 
+                if (m_ObjectBuffers[i] != VK_NULL_HANDLE) 
+                {
                     vmaDestroyBuffer(m_Context->GetAllocator(), m_ObjectBuffers[i], m_ObjectBuffersAllocations[i]);
+                }
             }
+
             m_ObjectBuffers.clear(); m_ObjectBuffersAllocations.clear(); m_ObjectBuffersMapped.clear();
             AE_ENGINE_TRACE("Object Buffers destroyed.");
         }
 
-        if(!m_UniformBuffers.empty()) 
+        if (!m_UniformBuffers.empty()) 
         {
-            for(size_t i = 0; i < m_UniformBuffers.size(); i++) 
+            for (size_t i = 0; i < m_UniformBuffers.size(); i++) 
             {
-                if(m_UniformBuffers[i] != VK_NULL_HANDLE) 
+                if (m_UniformBuffers[i] != VK_NULL_HANDLE) 
                 {
                     vmaDestroyBuffer(m_Context->GetAllocator(), m_UniformBuffers[i], m_UniformBuffersAllocations[i]);
                 }
             }
+
             m_UniformBuffers.clear();
             m_UniformBuffersAllocations.clear();
             m_UniformBuffersMapped.clear();
             AE_ENGINE_TRACE("Uniform Buffers destroyed.");
         }
 
-        if(m_PosBuffer != VK_NULL_HANDLE)
-        { 
-            vmaDestroyBuffer(m_Context->GetAllocator(), m_PosBuffer, m_PosBufferAllocation);
-        }
-
-        if(m_ColorBuffer != VK_NULL_HANDLE)
+        if (!m_InFlightFences.empty()) 
         {
-            vmaDestroyBuffer(m_Context->GetAllocator(), m_ColorBuffer, m_ColorBufferAllocation);
-        }
-
-        if(m_NormalBuffer != VK_NULL_HANDLE)
-        {
-            vmaDestroyBuffer(m_Context->GetAllocator(), m_NormalBuffer, m_NormalBufferAllocation);
-        }
-        
-        if(m_FaceBuffer != VK_NULL_HANDLE)
-        {
-            vmaDestroyBuffer(m_Context->GetAllocator(), m_FaceBuffer, m_FaceBufferAllocation);
-            AE_ENGINE_TRACE("SSBO Storage Buffer destroyed.");
-        }
-
-        if(!m_InFlightFences.empty()) 
-        {
-            for(size_t i = 0; i < m_InFlightFences.size(); i++) 
+            for (size_t i = 0; i < m_InFlightFences.size(); i++) 
             {
                 vkDestroyFence(m_Context->GetDevice(), m_InFlightFences[i], nullptr);
             }
+
             m_InFlightFences.clear();
             AE_ENGINE_TRACE("In-Flight Fences destroyed.");
         }
 
-        if(!m_RenderFinishedSemaphores.empty()) 
+        if (!m_RenderFinishedSemaphores.empty()) 
         {
-            for(size_t i = 0; i < m_RenderFinishedSemaphores.size(); i++) 
+            for (size_t i = 0; i < m_RenderFinishedSemaphores.size(); i++) 
             {
                 vkDestroySemaphore(m_Context->GetDevice(), m_RenderFinishedSemaphores[i], nullptr);
             }
+
             m_RenderFinishedSemaphores.clear();
             AE_ENGINE_TRACE("Render Finished Semaphores destroyed.");
         }
 
-        if(!m_ImageAvailableSemaphores.empty()) 
+        if (!m_ImageAvailableSemaphores.empty()) 
         {
-            for(size_t i = 0; i < m_ImageAvailableSemaphores.size(); i++) 
+            for (size_t i = 0; i < m_ImageAvailableSemaphores.size(); i++) 
             {
                 vkDestroySemaphore(m_Context->GetDevice(), m_ImageAvailableSemaphores[i], nullptr);
             }
+
             m_ImageAvailableSemaphores.clear();
             AE_ENGINE_TRACE("Image Available Semaphores destroyed.");
         }
 
-        if(m_TransferCommandPool != VK_NULL_HANDLE)
+        if (m_TransferCommandPool != VK_NULL_HANDLE)
         {
             vkDestroyCommandPool(m_Context->GetDevice(), m_TransferCommandPool, nullptr);
             AE_ENGINE_TRACE("Transfer Command Pool destroyed.");
         }
 
-        if(m_CommandPool != VK_NULL_HANDLE)
+        if (m_CommandPool != VK_NULL_HANDLE)
         {
             vkDestroyCommandPool(m_Context->GetDevice(), m_CommandPool, nullptr);
             AE_ENGINE_TRACE("Command Pool destroyed.");
         }
 
-        if(m_GraphicsPipeline != VK_NULL_HANDLE) 
+        if (m_GraphicsPipeline != VK_NULL_HANDLE) 
         {
             vkDestroyPipeline(m_Context->GetDevice(), m_GraphicsPipeline, nullptr);
             AE_ENGINE_TRACE("Graphics Pipeline destroyed.");
         }
         
-        if(m_PipelineLayout != VK_NULL_HANDLE) 
+        if (m_PipelineLayout != VK_NULL_HANDLE) 
         {
             vkDestroyPipelineLayout(m_Context->GetDevice(), m_PipelineLayout, nullptr);
             AE_ENGINE_TRACE("Pipeline Layout destroyed.");
         }
 
-        if(m_DescriptorSetLayout != VK_NULL_HANDLE) 
+        if (m_DescriptorSetLayout != VK_NULL_HANDLE) 
         {
             vkDestroyDescriptorSetLayout(m_Context->GetDevice(), m_DescriptorSetLayout, nullptr);
             AE_ENGINE_TRACE("Descriptor Set Layout destroyed.");
@@ -181,12 +181,12 @@ namespace Antelope
         VkResult result = vkAcquireNextImageKHR(m_Context->GetDevice(), m_SwapChain->GetSwapchain(), UINT64_MAX, 
                                                 m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
 
-        if(result == VK_ERROR_OUT_OF_DATE_KHR)
+        if (result == VK_ERROR_OUT_OF_DATE_KHR)
         {
             m_SwapChain->RecreateSwapchain();
             return; 
         }
-        else if(result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+        else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         {
             AE_ENGINE_ERROR("Failed to acquire swapchain image!");
             return;
@@ -199,7 +199,7 @@ namespace Antelope
         VkCommandBufferBeginInfo commandBufferInfo {};
         commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         
-        if(vkBeginCommandBuffer(m_CommandBuffers[m_CurrentFrame], &commandBufferInfo) != VK_SUCCESS) 
+        if (vkBeginCommandBuffer(m_CommandBuffers[m_CurrentFrame], &commandBufferInfo) != VK_SUCCESS) 
         {
             AE_ENGINE_ERROR("Failed to begin recording command buffer!");
             return;
@@ -242,23 +242,25 @@ namespace Antelope
 
         uint32_t objectCount = 0;
 
-        for(size_t i = 0; i < renderList.size(); i++) 
+        for (size_t i = 0; i < renderList.size(); i++) 
         {
             const auto& command = renderList[i];
 
-            if(m_PendingMeshOffsets.count(command.mesh.posOffset) > 0) { continue; }
+            if (m_PendingMeshOffsets.count(static_cast<uint32_t>(command.mesh.posAllocation.Offset)) > 0) { continue; }
 
-            if(objectCount >= MAX_OBJECTS)
+            if (objectCount >= MAX_OBJECTS)
             {
                 AE_ENGINE_WARN("MAX_OBJECTS limit reached! ({0}). Some objects will not be rendered.", MAX_OBJECTS);
                 break;
             }
 
             objectDataMap[objectCount].model = command.transform;
-            objectDataMap[objectCount].posOffset = command.mesh.posOffset;
-            objectDataMap[objectCount].colorOffset = command.mesh.colorOffset;
-            objectDataMap[objectCount].normalOffset = command.mesh.normalOffset;
-            objectDataMap[objectCount].faceOffset = command.mesh.faceOffset;
+            objectDataMap[objectCount].posOffset = static_cast<uint32_t>(command.mesh.posAllocation.Offset / sizeof(VertexPosition));
+            objectDataMap[objectCount].colorOffset = static_cast<uint32_t>(command.mesh.colorAllocation.Offset / sizeof(VertexColor));
+            objectDataMap[objectCount].normalOffset = static_cast<uint32_t>(command.mesh.normalAllocation.Offset / sizeof(VertexNormal));
+            objectDataMap[objectCount].faceOffset = static_cast<uint32_t>(command.mesh.faceAllocation.Offset / sizeof(Face));
+            objectDataMap[objectCount].uvOffset = static_cast<uint32_t>(command.mesh.uvAllocation.Offset / sizeof(VertexUV));
+            objectDataMap[objectCount].materialIndex = command.mesh.materialIndex;
 
             indirectCommandsMap[objectCount].vertexCount = command.mesh.faceCount * 3;
             indirectCommandsMap[objectCount].instanceCount = 1;
@@ -268,14 +270,14 @@ namespace Antelope
             objectCount++;
         }
 
-        if(objectCount > 0)
+        if (objectCount > 0)
         {
             vkCmdDrawIndirect(m_CommandBuffers[m_CurrentFrame], m_IndirectBuffers[m_CurrentFrame], 0, objectCount, sizeof(VkDrawIndirectCommand));
         }
 
         vkCmdEndRenderPass(m_CommandBuffers[m_CurrentFrame]);
 
-        if(vkEndCommandBuffer(m_CommandBuffers[m_CurrentFrame]) != VK_SUCCESS) 
+        if (vkEndCommandBuffer(m_CommandBuffers[m_CurrentFrame]) != VK_SUCCESS) 
         {
             AE_ENGINE_ERROR("Failed to record command buffer!");
             return;
@@ -297,7 +299,7 @@ namespace Antelope
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = signalSemaphores;
 
-        if(vkQueueSubmit(m_Context->GetGraphicsQueue(), 1, &submitInfo, m_InFlightFences[m_CurrentFrame]) != VK_SUCCESS) 
+        if (vkQueueSubmit(m_Context->GetGraphicsQueue(), 1, &submitInfo, m_InFlightFences[m_CurrentFrame]) != VK_SUCCESS) 
         {
             AE_ENGINE_ERROR("Failed to submit draw command buffer!");
             return;
@@ -315,12 +317,12 @@ namespace Antelope
 
         result = vkQueuePresentKHR(m_Context->GetPresentQueue(), &presentInfo);
 
-        if(result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_SwapChain->IsFramebufferResized())
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_SwapChain->IsFramebufferResized())
         {
             m_SwapChain->SetFramebufferResized(false);
             m_SwapChain->RecreateSwapchain();
         }
-        else if(result != VK_SUCCESS)
+        else if (result != VK_SUCCESS)
         {
             AE_ENGINE_ERROR("Failed to present swapchain image!");
         }
@@ -331,65 +333,79 @@ namespace Antelope
 
     MeshHandle LowLevelRenderer::UploadMesh(const MeshData& meshData)
     {
-        MeshHandle handle {};
-        handle.posOffset    = m_CurrentPosOffset;
-        handle.colorOffset  = m_CurrentColorOffset;
-        handle.normalOffset = m_CurrentNormalOffset;
-        handle.faceOffset   = m_CurrentFaceOffset;
-        handle.faceCount    = static_cast<uint32_t>(meshData.faces.size());
-
-        VkDeviceSize posSize    = sizeof(VertexPosition) * meshData.positions.size();
+       VkDeviceSize posSize    = sizeof(VertexPosition) * meshData.positions.size();
         VkDeviceSize colorSize  = sizeof(VertexColor)    * meshData.colors.size();
         VkDeviceSize normalSize = sizeof(VertexNormal)   * meshData.normals.size();
+        VkDeviceSize uvSize     = sizeof(VertexUV)       * meshData.uvs.size();
         VkDeviceSize faceSize   = sizeof(Face)           * meshData.faces.size();
-        VkDeviceSize totalSize  = posSize + colorSize + normalSize + faceSize;
+        VkDeviceSize totalSize  = posSize + colorSize + normalSize + faceSize + uvSize;
 
-        if (totalSize == 0) return handle;
+        MeshHandle handle {};
+
+        if (totalSize == 0) { return handle; }
+
+        handle.posAllocation = m_GpuAllocator->AllocatePosition(posSize);
+        handle.colorAllocation = m_GpuAllocator->AllocateColor(colorSize);
+        handle.normalAllocation = m_GpuAllocator->AllocateNormal(normalSize);
+        handle.uvAllocation     = m_GpuAllocator->AllocateUV(uvSize);
+        handle.faceAllocation = m_GpuAllocator->AllocateFace(faceSize);
+        handle.faceCount = static_cast<uint32_t>(meshData.faces.size());
 
         std::vector<char> combinedData(totalSize);
         size_t offset = 0;
-        memcpy(combinedData.data() + offset, meshData.positions.data(), posSize); offset += posSize;
-        memcpy(combinedData.data() + offset, meshData.colors.data(), colorSize); offset += colorSize;
-        memcpy(combinedData.data() + offset, meshData.normals.data(), normalSize); offset += normalSize;
-        memcpy(combinedData.data() + offset, meshData.faces.data(), faceSize);
+
+        if (posSize > 0) { memcpy(combinedData.data() + offset, meshData.positions.data(), posSize); offset += posSize; }
+        if (colorSize > 0) { memcpy(combinedData.data() + offset, meshData.colors.data(), colorSize); offset += colorSize; }
+        if (normalSize > 0) { memcpy(combinedData.data() + offset, meshData.normals.data(), normalSize); offset += normalSize; }
+        if (uvSize > 0) { memcpy(combinedData.data() + offset, meshData.uvs.data(), uvSize); offset += uvSize; }
+        if (faceSize > 0) { memcpy(combinedData.data() + offset, meshData.faces.data(), faceSize); }
 
         VkBuffer stagingBuffer; 
-        VmaAllocation stagingAlloc;
-        CreateStagingBuffer(combinedData.data(), totalSize, stagingBuffer, stagingAlloc);
+        VmaAllocation stagingAllocation;
+        CreateStagingBuffer(combinedData.data(), totalSize, stagingBuffer, stagingAllocation);
 
-        VkCommandBufferAllocateInfo allocInfo {};
-        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandPool = m_TransferCommandPool;
-        allocInfo.commandBufferCount = 1;
+        VkCommandBufferAllocateInfo allocationInfo {};
+        allocationInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocationInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocationInfo.commandPool = m_TransferCommandPool;
+        allocationInfo.commandBufferCount = 1;
 
         VkCommandBuffer commandBuffer;
-        vkAllocateCommandBuffers(m_Context->GetDevice(), &allocInfo, &commandBuffer);
+        vkAllocateCommandBuffers(m_Context->GetDevice(), &allocationInfo, &commandBuffer);
 
         VkCommandBufferBeginInfo beginInfo {};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         vkBeginCommandBuffer(commandBuffer, &beginInfo);
 
-        VkBufferCopy copyRegion{};
+        VkBufferCopy copyRegion {};
         VkDeviceSize srcOffset = 0;
         
         auto addCopy = [&](VkBuffer dstBuf, VkDeviceSize dstOffset, VkDeviceSize size) {
-            copyRegion.srcOffset = srcOffset;
-            copyRegion.dstOffset = dstOffset;
-            copyRegion.size = size;
-            vkCmdCopyBuffer(commandBuffer, stagingBuffer, dstBuf, 1, &copyRegion);
-            srcOffset += size;
+            if (size > 0) {
+                copyRegion.srcOffset = srcOffset;
+                copyRegion.dstOffset = dstOffset;
+                copyRegion.size = size;
+                vkCmdCopyBuffer(commandBuffer, stagingBuffer, dstBuf, 1, &copyRegion);
+                srcOffset += size;
+            }
         };
 
-        addCopy(m_PosBuffer, m_CurrentPosOffset * sizeof(VertexPosition), posSize);
-        addCopy(m_ColorBuffer, m_CurrentColorOffset * sizeof(VertexColor), colorSize);
-        addCopy(m_NormalBuffer, m_CurrentNormalOffset * sizeof(VertexNormal), normalSize);
-        addCopy(m_FaceBuffer, m_CurrentFaceOffset * sizeof(Face), faceSize);
+        VkBuffer targetPosBuffer = m_GpuAllocator->GetPosBuffer()->GetBuffer(handle.posAllocation.PageIndex);
+        VkBuffer targetColBuffer = m_GpuAllocator->GetColorBuffer()->GetBuffer(handle.colorAllocation.PageIndex);
+        VkBuffer targetNormBuffer = m_GpuAllocator->GetNormalBuffer()->GetBuffer(handle.normalAllocation.PageIndex);
+        VkBuffer targetUvBuffer = m_GpuAllocator->GetUvBuffer()->GetBuffer(handle.uvAllocation.PageIndex);
+        VkBuffer targetFaceBuffer = m_GpuAllocator->GetFaceBuffer()->GetBuffer(handle.faceAllocation.PageIndex);
+
+        addCopy(targetPosBuffer, handle.posAllocation.Offset, posSize);
+        addCopy(targetColBuffer, handle.colorAllocation.Offset, colorSize);
+        addCopy(targetNormBuffer, handle.normalAllocation.Offset, normalSize);
+        addCopy(targetUvBuffer, handle.uvAllocation.Offset, uvSize);
+        addCopy(targetFaceBuffer, handle.faceAllocation.Offset, faceSize);
 
         vkEndCommandBuffer(commandBuffer);
 
-        VkFenceCreateInfo fenceInfo{};
+        VkFenceCreateInfo fenceInfo {};
         fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         VkFence transferFence;
         vkCreateFence(m_Context->GetDevice(), &fenceInfo, nullptr, &transferFence);
@@ -401,22 +417,53 @@ namespace Antelope
 
         vkQueueSubmit(m_Context->GetTransferQueue(), 1, &submitInfo, transferFence);
 
-        m_PendingTransfers.push_back({transferFence, commandBuffer, stagingBuffer, stagingAlloc, handle.posOffset});
-        m_PendingMeshOffsets.insert(handle.posOffset); 
-
-        m_CurrentPosOffset    += meshData.positions.size();
-        m_CurrentColorOffset  += meshData.colors.size();
-        m_CurrentNormalOffset += meshData.normals.size();
-        m_CurrentFaceOffset   += meshData.faces.size();
+        m_PendingTransfers.push_back({transferFence, commandBuffer, stagingBuffer, stagingAllocation, static_cast<uint32_t>(handle.posAllocation.Offset)});
+        m_PendingMeshOffsets.insert(static_cast<uint32_t>(handle.posAllocation.Offset)); 
 
         return handle;
+    }
+
+    void LowLevelRenderer::FreeMesh(const MeshHandle& handle)
+    {
+        m_GpuAllocator->FreePosition(handle.posAllocation);
+        m_GpuAllocator->FreeColor(handle.colorAllocation);
+        m_GpuAllocator->FreeNormal(handle.normalAllocation);
+        m_GpuAllocator->FreeUV(handle.uvAllocation);
+        m_GpuAllocator->FreeFace(handle.faceAllocation);
+        AE_ENGINE_TRACE("Mesh freed from GPU Buffers. Space reclaimed.");
+    }
+
+    void LowLevelRenderer::UpdateTextureDescriptors(const std::vector<Texture>& textures)
+    {
+        if (textures.empty()) return;
+
+        std::vector<VkDescriptorImageInfo> imageInfos;
+        for (const auto& tex : textures)
+        {
+            imageInfos.push_back({tex.Sampler, tex.ImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+        }
+
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+        {
+            VkWriteDescriptorSet descriptorWrite{};
+            descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrite.dstSet = m_DescriptorSets[i];
+            descriptorWrite.dstBinding = 7;
+            descriptorWrite.dstArrayElement = 0;
+            descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            descriptorWrite.descriptorCount = static_cast<uint32_t>(imageInfos.size());
+            descriptorWrite.pImageInfo = imageInfos.data();
+
+            vkUpdateDescriptorSets(m_Context->GetDevice(), 1, &descriptorWrite, 0, nullptr);
+        }
+        AE_ENGINE_INFO("Global Texture Descriptor Array updated. Count: {0}", textures.size());
     }
 
     std::vector<char> LowLevelRenderer::ReadFile(const std::string& fileName)
     {
         std::ifstream file(fileName, std::ios::ate | std::ios::binary);
         
-        if(!file.is_open())
+        if (!file.is_open())
         {
             AE_ENGINE_CRITICAL("Failed to open file: {0}", fileName);
             throw std::runtime_error("Failed to open file");
@@ -441,10 +488,11 @@ namespace Antelope
 
         VkShaderModule shaderModule;
         
-        if(vkCreateShaderModule(m_Context->GetDevice(), &shaderModuleInfo, nullptr, &shaderModule) != VK_SUCCESS)
+        if (vkCreateShaderModule(m_Context->GetDevice(), &shaderModuleInfo, nullptr, &shaderModule) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Shader Module!");
         }
+
         return shaderModule;
     }
 
@@ -493,7 +541,7 @@ namespace Antelope
         allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
         allocationInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 
-        if(vmaCreateBuffer(m_Context->GetAllocator(), &stagingBufferInfo, &allocationInfo, &outBuffer, &outAllocation, nullptr) != VK_SUCCESS)
+        if (vmaCreateBuffer(m_Context->GetAllocator(), &stagingBufferInfo, &allocationInfo, &outBuffer, &outAllocation, nullptr) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create staging buffer! Size: {0} bytes.", bufferSize);
             throw std::runtime_error("Failed to create staging buffer");
@@ -509,26 +557,48 @@ namespace Antelope
 
     void LowLevelRenderer::CreateDescriptorSetLayout()
     {
-        std::array<VkDescriptorSetLayoutBinding, 6> bindings{};
+        std::array<VkDescriptorSetLayoutBinding, 8> bindings {};
 
         bindings[0].binding = 0; 
         bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; 
         bindings[0].descriptorCount = 1; 
         bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-        for(int i = 1; i <= 5; i++) {
+        for (int i = 1; i <= 6; i++)
+        {
             bindings[i].binding = i; 
             bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; 
             bindings[i].descriptorCount = 1; 
-            bindings[i].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+            bindings[i].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
         }
+
+        bindings[7].binding = 7;
+        bindings[7].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        bindings[7].descriptorCount = 1024;
+        bindings[7].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+        std::array<VkDescriptorBindingFlags, 8> bindingFlags {};
+
+        for (int i = 0; i < 7; i++)
+        {
+            bindingFlags[i] = 0;
+        }
+
+        bindingFlags[7] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+
+        VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo {};
+        flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+        flagsInfo.bindingCount = static_cast<uint32_t>(bindingFlags.size());
+        flagsInfo.pBindingFlags = bindingFlags.data();
 
         VkDescriptorSetLayoutCreateInfo layoutInfo {};
         layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layoutInfo.pNext = &flagsInfo;
         layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
         layoutInfo.pBindings = bindings.data();
+        layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
-        if(vkCreateDescriptorSetLayout(m_Context->GetDevice(), &layoutInfo, nullptr, &m_DescriptorSetLayout) != VK_SUCCESS)
+        if (vkCreateDescriptorSetLayout(m_Context->GetDevice(), &layoutInfo, nullptr, &m_DescriptorSetLayout) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Descriptor Set Layout!");
             throw std::runtime_error("Failed to create Descriptor Set Layout");
@@ -537,9 +607,9 @@ namespace Antelope
 
     void LowLevelRenderer::ProcessPendingTransfers()
     {
-        for(auto it = m_PendingTransfers.begin(); it != m_PendingTransfers.end(); ) 
+        for (auto it = m_PendingTransfers.begin(); it != m_PendingTransfers.end(); ) 
         {
-            if(vkGetFenceStatus(m_Context->GetDevice(), it->fence) == VK_SUCCESS) 
+            if (vkGetFenceStatus(m_Context->GetDevice(), it->fence) == VK_SUCCESS) 
             {
                 vkDestroyFence(m_Context->GetDevice(), it->fence, nullptr);
                 vkFreeCommandBuffers(m_Context->GetDevice(), m_TransferCommandPool, 1, &it->commandBuffer);
@@ -548,7 +618,7 @@ namespace Antelope
                 m_PendingMeshOffsets.erase(it->posOffset); 
                 
                 it = m_PendingTransfers.erase(it);
-            } 
+            }
             else 
             {
                 ++it;
@@ -608,7 +678,7 @@ namespace Antelope
         rasterizationStateInfo.polygonMode = VK_POLYGON_MODE_FILL;
         rasterizationStateInfo.lineWidth = 1.0f;
         rasterizationStateInfo.cullMode = VK_CULL_MODE_BACK_BIT;
-        rasterizationStateInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        rasterizationStateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         rasterizationStateInfo.depthBiasEnable = VK_FALSE;
 
         VkPipelineMultisampleStateCreateInfo multisampleStateInfo {};
@@ -636,7 +706,7 @@ namespace Antelope
         pipelineLayoutInfo.pushConstantRangeCount = 0;
         pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
-        if(vkCreatePipelineLayout(m_Context->GetDevice(), &pipelineLayoutInfo, nullptr, &m_PipelineLayout) != VK_SUCCESS) 
+        if (vkCreatePipelineLayout(m_Context->GetDevice(), &pipelineLayoutInfo, nullptr, &m_PipelineLayout) != VK_SUCCESS) 
         {
             AE_ENGINE_CRITICAL("Failed to create Pipeline Layout!");
             throw std::runtime_error("Failed to create Pipeline Layout");
@@ -667,7 +737,7 @@ namespace Antelope
         pipelineInfo.subpass = 0;
         pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 
-        if(vkCreateGraphicsPipelines(m_Context->GetDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_GraphicsPipeline) != VK_SUCCESS) 
+        if (vkCreateGraphicsPipelines(m_Context->GetDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_GraphicsPipeline) != VK_SUCCESS) 
         {
             AE_ENGINE_CRITICAL("Failed to create Graphics Pipeline!");
             throw std::runtime_error("Failed to create Graphics Pipeline");
@@ -686,7 +756,7 @@ namespace Antelope
         commandPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
         commandPoolInfo.queueFamilyIndex = queueFamilyIndices.GraphicsFamily.value();
 
-        if(vkCreateCommandPool(m_Context->GetDevice(), &commandPoolInfo, nullptr, &m_CommandPool) != VK_SUCCESS)
+        if (vkCreateCommandPool(m_Context->GetDevice(), &commandPoolInfo, nullptr, &m_CommandPool) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Command Pool!");
             throw std::runtime_error("Failed to create Command Pool");
@@ -703,7 +773,7 @@ namespace Antelope
         allocationInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         allocationInfo.commandBufferCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
-        if(vkAllocateCommandBuffers(m_Context->GetDevice(), &allocationInfo, m_CommandBuffers.data()) != VK_SUCCESS)
+        if (vkAllocateCommandBuffers(m_Context->GetDevice(), &allocationInfo, m_CommandBuffers.data()) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to allocate Command Buffers!");
             throw std::runtime_error("Failed to allocate Command Buffers");
@@ -725,42 +795,15 @@ namespace Antelope
 
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
         {
-            if(vkCreateSemaphore(m_Context->GetDevice(), &semaphoreInfo, nullptr, &m_ImageAvailableSemaphores[i]) != VK_SUCCESS ||
-               vkCreateSemaphore(m_Context->GetDevice(), &semaphoreInfo, nullptr, &m_RenderFinishedSemaphores[i]) != VK_SUCCESS ||
-               vkCreateFence(m_Context->GetDevice(), &fenceInfo, nullptr, &m_InFlightFences[i]) != VK_SUCCESS) 
+            if (vkCreateSemaphore(m_Context->GetDevice(), &semaphoreInfo, nullptr, &m_ImageAvailableSemaphores[i]) != VK_SUCCESS ||
+                vkCreateSemaphore(m_Context->GetDevice(), &semaphoreInfo, nullptr, &m_RenderFinishedSemaphores[i]) != VK_SUCCESS ||
+                vkCreateFence(m_Context->GetDevice(), &fenceInfo, nullptr, &m_InFlightFences[i]) != VK_SUCCESS) 
             {
                 AE_ENGINE_ERROR("Failed to create synchronization objects for frame {0}!", i);
                 throw std::runtime_error("Failed to create synchronization objects");
                 
             }
         }
-    }
-
-    void LowLevelRenderer::CreateStorageBuffers()
-    {
-        const VkDeviceSize MEGA_BUFFER_SIZE = 10 * 1024 * 1024; 
-
-        auto createEmptySSBO = [&](VkDeviceSize size, VkBuffer& outBuffer, VmaAllocation& outAllocation) 
-        {
-            VkBufferCreateInfo bufferInfo {}; 
-            bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-            bufferInfo.size = size; 
-            bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-            
-            VmaAllocationCreateInfo allocationInfo {}; 
-            allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
-            
-            if (vmaCreateBuffer(m_Context->GetAllocator(), &bufferInfo, &allocationInfo, &outBuffer, &outAllocation, nullptr) != VK_SUCCESS)
-            {
-                AE_ENGINE_CRITICAL("Failed to create Mega SSBO buffer!");
-                throw std::runtime_error("Failed to create Mega SSBO buffer");
-            }
-        };
-
-        createEmptySSBO(MEGA_BUFFER_SIZE, m_PosBuffer, m_PosBufferAllocation);
-        createEmptySSBO(MEGA_BUFFER_SIZE, m_ColorBuffer, m_ColorBufferAllocation);
-        createEmptySSBO(MEGA_BUFFER_SIZE, m_NormalBuffer, m_NormalBufferAllocation);
-        createEmptySSBO(MEGA_BUFFER_SIZE, m_FaceBuffer, m_FaceBufferAllocation);
     }
 
     void LowLevelRenderer::CreateUniformBuffers()
@@ -771,7 +814,7 @@ namespace Antelope
         m_UniformBuffersAllocations.resize(MAX_FRAMES_IN_FLIGHT);
         m_UniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
 
-        for(size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
         {
             VkBufferCreateInfo uniformBufferInfo {};
             uniformBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -786,7 +829,7 @@ namespace Antelope
 
             VmaAllocationInfo allocationResult;
 
-            if(vmaCreateBuffer(m_Context->GetAllocator(), &uniformBufferInfo, &allocationInfo, &m_UniformBuffers[i], &m_UniformBuffersAllocations[i], &allocationResult) != VK_SUCCESS) 
+            if (vmaCreateBuffer(m_Context->GetAllocator(), &uniformBufferInfo, &allocationInfo, &m_UniformBuffers[i], &m_UniformBuffersAllocations[i], &allocationResult) != VK_SUCCESS) 
             {
                 AE_ENGINE_CRITICAL("Failed to create Uniform Buffer for frame {0}!", i);
                 throw std::runtime_error("Failed to create Uniform Buffers");
@@ -804,7 +847,7 @@ namespace Antelope
         m_ObjectBuffersAllocations.resize(MAX_FRAMES_IN_FLIGHT);
         m_ObjectBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
 
-        for(size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
         {
             VkBufferCreateInfo bufferInfo {};
             bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -817,11 +860,13 @@ namespace Antelope
             allocationInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
             VmaAllocationInfo allocationResult;
-            if(vmaCreateBuffer(m_Context->GetAllocator(), &bufferInfo, &allocationInfo, &m_ObjectBuffers[i], &m_ObjectBuffersAllocations[i], &allocationResult) != VK_SUCCESS) 
+
+            if (vmaCreateBuffer(m_Context->GetAllocator(), &bufferInfo, &allocationInfo, &m_ObjectBuffers[i], &m_ObjectBuffersAllocations[i], &allocationResult) != VK_SUCCESS) 
             {
                 AE_ENGINE_CRITICAL("Failed to create Object Buffer for frame {0}!", i);
                 throw std::runtime_error("Failed to create Object Buffers");
             }
+
             m_ObjectBuffersMapped[i] = allocationResult.pMappedData;
         }
     }
@@ -847,31 +892,37 @@ namespace Antelope
             allocationInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
             VmaAllocationInfo allocationResult;
+
             if (vmaCreateBuffer(m_Context->GetAllocator(), &bufferInfo, &allocationInfo, &m_IndirectBuffers[i], &m_IndirectBuffersAllocations[i], &allocationResult) != VK_SUCCESS) 
             {
                 AE_ENGINE_CRITICAL("Failed to create Indirect Buffer for frame {0}!", i);
                 throw std::runtime_error("Failed to create Indirect Buffers");
             }
+
             m_IndirectBuffersMapped[i] = allocationResult.pMappedData;
         }
     }
 
     void LowLevelRenderer::CreateDescriptorPool()
     {
-        std::array<VkDescriptorPoolSize, 2> poolSizes {};
+        std::array<VkDescriptorPoolSize, 3> poolSizes {};
         poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
         
         poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 5);
+        poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 6);
+
+        poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        poolSizes[2].descriptorCount = 1024 * MAX_FRAMES_IN_FLIGHT;
 
         VkDescriptorPoolCreateInfo descriptorPoolInfo {};
         descriptorPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        descriptorPoolInfo.poolSizeCount = 2;
+        descriptorPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT; 
+        descriptorPoolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
         descriptorPoolInfo.pPoolSizes = poolSizes.data();
         descriptorPoolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
-        if(vkCreateDescriptorPool(m_Context->GetDevice(), &descriptorPoolInfo, nullptr, &m_DescriptorPool) != VK_SUCCESS) 
+        if (vkCreateDescriptorPool(m_Context->GetDevice(), &descriptorPoolInfo, nullptr, &m_DescriptorPool) != VK_SUCCESS) 
         {
             AE_ENGINE_CRITICAL("Failed to create Descriptor Pool!");
             throw std::runtime_error("Failed to create Descriptor Pool");
@@ -890,35 +941,40 @@ namespace Antelope
 
         m_DescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
         
-        if(vkAllocateDescriptorSets(m_Context->GetDevice(), &decriptorSetallocationInfo, m_DescriptorSets.data()) != VK_SUCCESS) 
+        if (vkAllocateDescriptorSets(m_Context->GetDevice(), &decriptorSetallocationInfo, m_DescriptorSets.data()) != VK_SUCCESS) 
         {
             AE_ENGINE_CRITICAL("Failed to allocate Descriptor Sets!");
             throw std::runtime_error("Failed to allocate Descriptor Sets");
         }
 
-        for(size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) 
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) 
         {
-            VkDescriptorBufferInfo uboInfo { m_UniformBuffers[i], 0, sizeof(UniformBufferObject) };
-            VkDescriptorBufferInfo posInfo { m_PosBuffer, 0, VK_WHOLE_SIZE };
-            VkDescriptorBufferInfo colInfo { m_ColorBuffer, 0, VK_WHOLE_SIZE };
-            VkDescriptorBufferInfo normInfo { m_NormalBuffer, 0, VK_WHOLE_SIZE };
-            VkDescriptorBufferInfo faceInfo { m_FaceBuffer, 0, VK_WHOLE_SIZE };
-            VkDescriptorBufferInfo objInfo { m_ObjectBuffers[i], 0, VK_WHOLE_SIZE };
+            VkDescriptorBufferInfo uboInfo  { m_UniformBuffers[i], 0, sizeof(UniformBufferObject) };
+            VkDescriptorBufferInfo posInfo  { m_GpuAllocator->GetPosBuffer()->GetBuffer(0), 0, VK_WHOLE_SIZE };
+            VkDescriptorBufferInfo colInfo  { m_GpuAllocator->GetColorBuffer()->GetBuffer(0), 0, VK_WHOLE_SIZE };
+            VkDescriptorBufferInfo normInfo { m_GpuAllocator->GetNormalBuffer()->GetBuffer(0), 0, VK_WHOLE_SIZE };
+            VkDescriptorBufferInfo faceInfo { m_GpuAllocator->GetFaceBuffer()->GetBuffer(0), 0, VK_WHOLE_SIZE };
+            VkDescriptorBufferInfo uvInfo   { m_GpuAllocator->GetUvBuffer()->GetBuffer(0), 0, VK_WHOLE_SIZE };
+            VkDescriptorBufferInfo objInfo  { m_ObjectBuffers[i], 0, VK_WHOLE_SIZE };
 
-            std::array<VkWriteDescriptorSet, 6> writes{};
-            for(int j = 0; j < 6; ++j) {
+            std::array<VkWriteDescriptorSet, 7> writes {};
+
+            for (int j = 0; j < 7; ++j)
+            {
                 writes[j].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 writes[j].dstSet = m_DescriptorSets[i];
                 writes[j].dstBinding = j;
                 writes[j].dstArrayElement = 0;
                 writes[j].descriptorCount = 1;
             }
+
             writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; writes[0].pBufferInfo = &uboInfo;
             writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; writes[1].pBufferInfo = &posInfo;
             writes[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; writes[2].pBufferInfo = &colInfo;
             writes[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; writes[3].pBufferInfo = &normInfo;
             writes[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; writes[4].pBufferInfo = &faceInfo;
-            writes[5].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; writes[5].pBufferInfo = &objInfo;
+            writes[5].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; writes[5].pBufferInfo = &uvInfo;
+            writes[6].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; writes[6].pBufferInfo = &objInfo;
 
             vkUpdateDescriptorSets(m_Context->GetDevice(), static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
         }
@@ -928,12 +984,12 @@ namespace Antelope
     {
         QueueFamilyIndices queueFamilyIndices = m_Context->FindQueueFamilies(m_Context->GetPhysicalDevice());
 
-        VkCommandPoolCreateInfo poolInfo{};
+        VkCommandPoolCreateInfo poolInfo {};
         poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
         poolInfo.queueFamilyIndex = queueFamilyIndices.TransferFamily.value(); 
 
-        if(vkCreateCommandPool(m_Context->GetDevice(), &poolInfo, nullptr, &m_TransferCommandPool) != VK_SUCCESS) {
+        if (vkCreateCommandPool(m_Context->GetDevice(), &poolInfo, nullptr, &m_TransferCommandPool) != VK_SUCCESS) {
             AE_ENGINE_CRITICAL("Failed to create Transfer Command Pool!");
             throw std::runtime_error("Failed to create Transfer Command Pool");
         }

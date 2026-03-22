@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Engine/Renderer/Mesh.hpp>
+#include <Engine/Renderer/TextureManager.hpp>
 
 #include <memory>
 
@@ -40,11 +41,12 @@ namespace Antelope
             std::shared_ptr<SwapChain> m_SwapChain;
             std::shared_ptr<LowLevelRenderer> m_LowLevelRenderer;
             std::shared_ptr<HighLevelRenderer> m_HighLevelRenderer;
-            
-            bool m_Running = true;
-            
-            int m_RenderState = 0;
+            std::shared_ptr<TextureManager> m_TextureManager;
 
+            uint32_t m_WoodTexID = 0;
+            uint32_t m_StoneTexID = 0;
+            bool m_Running = true;
+            int m_RenderState = 0;
             float m_DebounceTimer = 0.0f;
             const float DEBOUNCE_DELAY = 0.2f;
             

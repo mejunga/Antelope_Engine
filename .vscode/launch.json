@@ -8,7 +8,7 @@
             "program": "${workspaceFolder}/build/bin/Debug/AntelopeEngine.exe",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/build/bin",
+            "cwd": "${workspaceFolder}/build/bin/Debug",
             "environment": [],
             "preLaunchTask": "build-debug",
             "console": "integratedTerminal"

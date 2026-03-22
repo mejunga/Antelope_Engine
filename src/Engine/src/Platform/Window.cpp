@@ -22,6 +22,7 @@ namespace Antelope
     void Window::OnUpdate()
     {
         glfwPollEvents();
+
         if (m_Data.IsResizing && (glfwGetTime() - m_Data.LastResizeTime) > 0.15)
         {
             m_Data.IsResizing = false;
@@ -38,11 +39,12 @@ namespace Antelope
 
     void Window::Shutdown()
     {
-        if(m_Window) 
+        if (m_Window) 
         {
             glfwDestroyWindow(m_Window);
             AE_ENGINE_TRACE("Window destroyed");
         }
+
         glfwTerminate();
         s_GLFWInitialized = false;
     }
@@ -55,9 +57,9 @@ namespace Antelope
 
         AE_ENGINE_INFO("Creating window: {0} ({1}x{2})", props.Title, props.Width, props.Height);
 
-        if(!s_GLFWInitialized) 
+        if (!s_GLFWInitialized) 
         {
-            if(glfwInit() == GLFW_FALSE)
+            if (glfwInit() == GLFW_FALSE)
             {
                 AE_ENGINE_ERROR("Could not initialize GLFW!");
                 return;
@@ -72,7 +74,7 @@ namespace Antelope
 
         m_Window = glfwCreateWindow((int)m_Data.Width, (int)m_Data.Height, m_Data.Title.c_str(), nullptr, nullptr);
 
-        if(!m_Window)
+        if (!m_Window)
         {
             AE_ENGINE_ERROR("Failed to create GLFW window");
             return;

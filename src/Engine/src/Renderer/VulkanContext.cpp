@@ -23,7 +23,7 @@ namespace Antelope
     {
         auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
 
-        if(func != nullptr)
+        if (func != nullptr)
         {
             return(func(instance, pMessengerInfo, pAllocator, pMessenger));
         }
@@ -41,7 +41,7 @@ namespace Antelope
     {
         auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
 
-        if(func != nullptr)
+        if (func != nullptr)
         {
             func(instance, messenger, pAllocator);
         }
@@ -75,25 +75,25 @@ namespace Antelope
             AE_ENGINE_TRACE("VMA Allocator destroyed.");
         }
 
-        if(m_Device != VK_NULL_HANDLE)
+        if (m_Device != VK_NULL_HANDLE)
         {
             vkDestroyDevice(m_Device, nullptr);
             AE_ENGINE_TRACE("Vulkan Logical Device destroyed.");
         }
 
-        if(m_Surface != VK_NULL_HANDLE)
+        if (m_Surface != VK_NULL_HANDLE)
         {
             vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
             AE_ENGINE_TRACE("Vulkan Surface destroyed.");
         }
 
-        if(m_EnableValidationLayers && m_DebugMessenger != VK_NULL_HANDLE)
+        if (m_EnableValidationLayers && m_DebugMessenger != VK_NULL_HANDLE)
         {
             DestroyDebugUtilsMessengerEXT(m_Instance, m_DebugMessenger, nullptr);
             AE_ENGINE_TRACE("Vulkan Debug Messenger destroyed.");
         }
 
-        if(m_Instance != VK_NULL_HANDLE)
+        if (m_Instance != VK_NULL_HANDLE)
         {
             vkDestroyInstance(m_Instance, nullptr);
             AE_ENGINE_TRACE("Vulkan Instance destroyed.");
@@ -108,7 +108,7 @@ namespace Antelope
         uint32_t formatCount;
         vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_Surface, &formatCount, nullptr);
 
-        if(formatCount != 0)
+        if (formatCount != 0)
         {
             details.Formats.resize(formatCount);
             vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_Surface, &formatCount, details.Formats.data());
@@ -117,7 +117,7 @@ namespace Antelope
         uint32_t presentModeCount;
         vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_Surface, &presentModeCount, nullptr);
 
-        if(presentModeCount != 0)
+        if (presentModeCount != 0)
         {
             details.PresentModes.resize(presentModeCount);
             vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_Surface, &presentModeCount, details.PresentModes.data());
@@ -137,19 +137,21 @@ namespace Antelope
         vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
         int i { 0 };
-        for(const auto& queueFamily : queueFamilies)
+
+        for (const auto& queueFamily : queueFamilies)
         {
-            if(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+            if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
                 indices.GraphicsFamily = i;
             }
 
             VkBool32 presentSupport { false };
             vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_Surface, &presentSupport);
-            if(presentSupport) {
+
+            if (presentSupport) {
                 indices.PresentFamily = i;
             }
 
-            if((queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT) && !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
+            if ((queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT) && !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
                 indices.TransferFamily = i;
             }
 
@@ -170,8 +172,8 @@ namespace Antelope
             VkFormatProperties props;
             vkGetPhysicalDeviceFormatProperties(m_PhysicalDevice, format, &props);
 
-            if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) return format;
-            else if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) return format;
+            if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) { return format; }
+            else if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) { return format; }
         }
         
         AE_ENGINE_CRITICAL("Failed to find supported format!");
@@ -186,20 +188,20 @@ namespace Antelope
         std::vector<VkLayerProperties> availableLayers(layerCount);
         vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
     
-        for(const char* layerName : m_ValidationLayers)
+        for (const char* layerName : m_ValidationLayers)
         {
             bool layerFound { false };
 
-            for(const auto& layerProperties : availableLayers)
+            for (const auto& layerProperties : availableLayers)
             {
-                if(strcmp(layerName, layerProperties.layerName) == 0) 
+                if (strcmp(layerName, layerProperties.layerName) == 0) 
                 {
                     layerFound = true;
                     break;
                 }
             }
 
-            if(!layerFound)
+            if (!layerFound)
             {
                 return false;
             }
@@ -248,7 +250,7 @@ namespace Antelope
         bool extensionsSupported { CheckDeviceExtensionSupport(device) };
         bool swapChainAdequate { false };
 
-        if(extensionsSupported)
+        if (extensionsSupported)
         {
             SwapchainSupportDetails swapChainSupport { QuerySwapChainSupport(device) };
             swapChainAdequate = !swapChainSupport.Formats.empty() && !swapChainSupport.PresentModes.empty();
@@ -269,15 +271,15 @@ namespace Antelope
         void *pUserData
     )
     {
-        if(messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+        if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
         {
             AE_ENGINE_ERROR("VULKAN VALIDATION: {0}", pCallbackData->pMessage);
         }
-        else if(messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+        else if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
         {
             AE_ENGINE_WARN("VULKAN VALIDATION: {0}", pCallbackData->pMessage);
         }
-        else if(messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
+        else if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
         {
             AE_ENGINE_TRACE("VULKAN VALIDATION: {0}", pCallbackData->pMessage);
         }
@@ -304,7 +306,7 @@ namespace Antelope
 
     void VulkanContext::CreateInstance()
     {
-        if(m_EnableValidationLayers && !CheckValidationLayerSupport())
+        if (m_EnableValidationLayers && !CheckValidationLayerSupport())
         {
             AE_ENGINE_WARN("Validation layers requested, but not available! Proceeding without validation layers.");
             m_EnableValidationLayers = false;
@@ -322,7 +324,7 @@ namespace Antelope
         const char **glfwExtensions { glfwGetRequiredInstanceExtensions(&glfwExtensionCount) };
         std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
-        if(m_EnableValidationLayers)
+        if (m_EnableValidationLayers)
         {
             extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         }
@@ -335,7 +337,7 @@ namespace Antelope
 
         VkDebugUtilsMessengerCreateInfoEXT messengerInfo {};
 
-        if(m_EnableValidationLayers)
+        if (m_EnableValidationLayers)
         {
             instanceInfo.enabledLayerCount = static_cast<uint32_t>(m_ValidationLayers.size());
             instanceInfo.ppEnabledLayerNames = m_ValidationLayers.data();
@@ -360,7 +362,7 @@ namespace Antelope
 
         VkResult result { vkCreateInstance(&instanceInfo, nullptr, &m_Instance) };
 
-        if(result != VK_SUCCESS)
+        if (result != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Vulkan Instance! Error Code: {0}", (int)result);
             throw std::runtime_error("Failed to create Vulkan Instance");
@@ -369,7 +371,7 @@ namespace Antelope
 
     void VulkanContext::SetupDebugMessenger()
     {
-        if(!m_EnableValidationLayers) { return; }
+        if (!m_EnableValidationLayers) { return; }
 
         VkDebugUtilsMessengerCreateInfoEXT messengerInfo {};
         messengerInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -381,7 +383,7 @@ namespace Antelope
                                   | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
         messengerInfo.pfnUserCallback = DebugCallback;
 
-        if(CreateDebugUtilsMessengerEXT(m_Instance, &messengerInfo, nullptr, &m_DebugMessenger) != VK_SUCCESS)
+        if (CreateDebugUtilsMessengerEXT(m_Instance, &messengerInfo, nullptr, &m_DebugMessenger) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to setup debug messenger!");
             throw std::runtime_error("Failed to setup debug messenger");
@@ -390,7 +392,7 @@ namespace Antelope
 
     void VulkanContext::CreateSurface()
     {
-        if(glfwCreateWindowSurface(m_Instance, m_WindowHandle, nullptr, &m_Surface) != VK_SUCCESS)
+        if (glfwCreateWindowSurface(m_Instance, m_WindowHandle, nullptr, &m_Surface) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Window Surface!");
             throw std::runtime_error("Failed to create Window Surface");
@@ -402,7 +404,7 @@ namespace Antelope
         uint32_t deviceCount { 0 };
         vkEnumeratePhysicalDevices(m_Instance, &deviceCount, nullptr);
 
-        if(deviceCount == 0)
+        if (deviceCount == 0)
         {
             AE_ENGINE_CRITICAL("Failed to find GPUs with Vulkan support!");
             throw std::runtime_error("Failed to find GPUs with Vulkan support");
@@ -411,16 +413,16 @@ namespace Antelope
         std::vector<VkPhysicalDevice> devices(deviceCount);
         vkEnumeratePhysicalDevices(m_Instance, &deviceCount, devices.data());
 
-        for(const auto device : devices)
+        for (const auto device : devices)
         {
-            if(IsDeviceSuitable(device))
+            if (IsDeviceSuitable(device))
             {
                 m_PhysicalDevice = device;
                 break;
             }
         }
 
-        if(m_PhysicalDevice == VK_NULL_HANDLE)
+        if (m_PhysicalDevice == VK_NULL_HANDLE)
         {
             AE_ENGINE_CRITICAL("Failed to find a suitable GPU!");
             throw std::runtime_error("Failed to find a suitable GPU");
@@ -445,7 +447,7 @@ namespace Antelope
 
         float queuePriority { 0.1f };
 
-        for(uint32_t queueFamily : uniqueQueueFamilies)
+        for (uint32_t queueFamily : uniqueQueueFamilies)
         {
             VkDeviceQueueCreateInfo deviceQueueInfo {};
             deviceQueueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -456,18 +458,33 @@ namespace Antelope
             deviceQueueInfos.push_back(deviceQueueInfo);
         }
 
-        VkPhysicalDeviceFeatures deviceFeatures {};
-        deviceFeatures.multiDrawIndirect = VK_TRUE;
+        VkPhysicalDeviceVulkan12Features vulkan12Features {};
+        vulkan12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+        vulkan12Features.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+        vulkan12Features.descriptorBindingPartiallyBound = VK_TRUE;
+        vulkan12Features.descriptorBindingVariableDescriptorCount = VK_TRUE;
+        vulkan12Features.runtimeDescriptorArray = VK_TRUE;
+        vulkan12Features.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+
+        VkPhysicalDeviceFeatures2 deviceFeatures2 {};
+        deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        deviceFeatures2.pNext = &vulkan12Features;
+        deviceFeatures2.features.multiDrawIndirect = VK_TRUE;
+        deviceFeatures2.features.geometryShader = VK_TRUE;
+        deviceFeatures2.features.samplerAnisotropy = VK_TRUE;
 
         VkDeviceCreateInfo deviceInfo {};
         deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        
+        deviceInfo.pNext = &deviceFeatures2; 
+        deviceInfo.pEnabledFeatures = nullptr;
+
         deviceInfo.queueCreateInfoCount = static_cast<uint32_t>(deviceQueueInfos.size());
         deviceInfo.pQueueCreateInfos = deviceQueueInfos.data();
-        deviceInfo.pEnabledFeatures = &deviceFeatures;
         deviceInfo.enabledExtensionCount = static_cast<uint32_t>(m_DeviceExtensions.size());
         deviceInfo.ppEnabledExtensionNames = m_DeviceExtensions.data();
 
-        if(m_EnableValidationLayers)
+        if (m_EnableValidationLayers)
         {
             deviceInfo.enabledLayerCount = static_cast<uint32_t>(m_ValidationLayers.size());
             deviceInfo.ppEnabledLayerNames = m_ValidationLayers.data();
@@ -477,7 +494,7 @@ namespace Antelope
             deviceInfo.enabledLayerCount = 0;
         }
 
-        if(vkCreateDevice(m_PhysicalDevice, &deviceInfo, nullptr, &m_Device) != VK_SUCCESS)
+        if (vkCreateDevice(m_PhysicalDevice, &deviceInfo, nullptr, &m_Device) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Logical Device!");
             throw std::runtime_error("Failed to create Logical Device");
