@@ -2,6 +2,7 @@
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
+
 #include <vector>
 #include <optional>
 
@@ -10,7 +11,8 @@ struct GLFWwindow;
 
 namespace Antelope
 {
-    struct QueueFamilyIndices {
+    struct QueueFamilyIndices
+    {
         std::optional<uint32_t> GraphicsFamily;
         std::optional<uint32_t> PresentFamily;
         std::optional<uint32_t> TransferFamily;
@@ -18,7 +20,8 @@ namespace Antelope
         bool IsComplete() const { return GraphicsFamily.has_value() && PresentFamily.has_value() && TransferFamily.has_value(); }
     };
 
-    struct SwapchainSupportDetails {
+    struct SwapchainSupportDetails
+    {
         VkSurfaceCapabilitiesKHR Capabilities;
         std::vector<VkSurfaceFormatKHR> Formats;
         std::vector<VkPresentModeKHR> PresentModes;
@@ -30,6 +33,10 @@ namespace Antelope
             VulkanContext(GLFWwindow *windowHandle);
             ~VulkanContext();
 
+            SwapchainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
+            QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
+            VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
+            
             VkDevice GetDevice() const { return m_Device; }
             VkPhysicalDevice GetPhysicalDevice() const { return m_PhysicalDevice; }
             VkSurfaceKHR GetSurface() const { return m_Surface; }
@@ -39,10 +46,6 @@ namespace Antelope
             VmaAllocator GetAllocator() const { return m_Allocator; }
             GLFWwindow* GetWindowHandle() const { return m_WindowHandle; }
             VkSampleCountFlagBits GetMsaaSamples() const { return m_MsaaSamples; }
-
-            SwapchainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
-            QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
-            VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 
         private:
             bool CheckValidationLayerSupport();

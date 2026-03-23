@@ -19,8 +19,8 @@ add_custom_command(TARGET AntelopeApp POST_BUILD
     "$<TARGET_FILE_DIR:AntelopeApp>/Assets"
 
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${CMAKE_BINARY_DIR}/bin/Shaders"
-    "$<TARGET_FILE_DIR:AntelopeApp>/Shaders"
+    "${CMAKE_BINARY_DIR}/CompiledShaders"
+    "$<TARGET_FILE_DIR:AntelopeApp>/Assets/Shaders"
 
-    COMMENT "Copying Assets and Shaders directories to output folder..."
+    COMMENT "Copying Assets and Shaders directories to output directory..."
 )

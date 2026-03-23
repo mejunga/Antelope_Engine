@@ -4,9 +4,10 @@
 #include <Engine/Platform/Window.hpp>
 #include <Engine/Renderer/VulkanContext.hpp>
 #include <Engine/Renderer/SwapChain.hpp>
-#include <Engine/Renderer/LowLevelRenderer.hpp>
+#include <Engine/Renderer/Renderer.hpp>
 #include <Engine/Renderer/HighLevelRenderer.hpp>
 #include <Engine/Renderer/Camera.hpp>
+#include <Engine/Renderer/ModelLoader.hpp>
 
 #include <GLFW/glfw3.h>
 #include <chrono>
@@ -27,56 +28,24 @@ namespace Antelope
         m_Window = std::make_unique<Window>();
         m_VulkanContext = std::make_shared<VulkanContext>(m_Window->GetNativeWindow());
         m_SwapChain = std::make_shared<SwapChain>(m_VulkanContext);
-        m_LowLevelRenderer = std::make_shared<LowLevelRenderer>(m_VulkanContext, m_SwapChain);
-        m_HighLevelRenderer = std::make_shared<HighLevelRenderer>(m_LowLevelRenderer);        
-        m_TextureManager = std::make_shared<TextureManager>(m_VulkanContext, m_LowLevelRenderer);
+        m_Renderer = std::make_shared<Renderer>(m_VulkanContext, m_SwapChain);
+        m_HighLevelRenderer = std::make_shared<HighLevelRenderer>(m_Renderer);        
+        m_TextureManager = std::make_shared<TextureManager>(m_VulkanContext, m_Renderer);
+
+        m_World = std::make_shared<World>();
     }
 
     Application::~Application() {}
 
     void Application::SetupMockData()
     {
-        m_WoodTexID = m_TextureManager->LoadTexture("Assets/seamless_wood_texture.png");
-        m_StoneTexID = m_TextureManager->LoadTexture("Assets/seamless_stone_texture.png");    
-        m_LowLevelRenderer->UpdateTextureDescriptors(m_TextureManager->GetGlobalTextures());
+        m_BearTexID = m_TextureManager->LoadTexture("Assets/Bear.png");
+        m_BearMesh = ModelLoader::Load("Assets/Bear_DEMO.fbx");
 
-        m_CubeMesh.positions = {
-            {{-0.5f, -0.5f,  0.5f}}, {{ 0.5f, -0.5f,  0.5f}}, {{ 0.5f,  0.5f,  0.5f}}, {{-0.5f,  0.5f,  0.5f}},
-            {{ 0.5f, -0.5f, -0.5f}}, {{-0.5f, -0.5f, -0.5f}}, {{-0.5f,  0.5f, -0.5f}}, {{ 0.5f,  0.5f, -0.5f}},
-            {{-0.5f, -0.5f, -0.5f}}, {{-0.5f, -0.5f,  0.5f}}, {{-0.5f,  0.5f,  0.5f}}, {{-0.5f,  0.5f, -0.5f}},
-            {{ 0.5f, -0.5f,  0.5f}}, {{ 0.5f, -0.5f, -0.5f}}, {{ 0.5f,  0.5f, -0.5f}}, {{ 0.5f,  0.5f,  0.5f}},
-            {{-0.5f,  0.5f,  0.5f}}, {{ 0.5f,  0.5f,  0.5f}}, {{ 0.5f,  0.5f, -0.5f}}, {{-0.5f,  0.5f, -0.5f}},
-            {{-0.5f, -0.5f, -0.5f}}, {{ 0.5f, -0.5f, -0.5f}}, {{ 0.5f, -0.5f,  0.5f}}, {{-0.5f, -0.5f,  0.5f}}
-        };
+        m_GorillaTexID = m_TextureManager->LoadTexture("Assets/gorilla.png");
+        m_GorillaMesh = ModelLoader::Load("Assets/Gorilla_hd.fbx");
 
-        m_CubeMesh.colors.resize(24, {{1.0f, 1.0f, 1.0f}});
-
-        m_CubeMesh.normals = {
-            {{ 0,  0,  1}}, {{ 0,  0,  1}}, {{ 0,  0,  1}}, {{ 0,  0,  1}},
-            {{ 0,  0, -1}}, {{ 0,  0, -1}}, {{ 0,  0, -1}}, {{ 0,  0, -1}},
-            {{-1,  0,  0}}, {{-1,  0,  0}}, {{-1,  0,  0}}, {{-1,  0,  0}},
-            {{ 1,  0,  0}}, {{ 1,  0,  0}}, {{ 1,  0,  0}}, {{ 1,  0,  0}},
-            {{ 0,  1,  0}}, {{ 0,  1,  0}}, {{ 0,  1,  0}}, {{ 0,  1,  0}},
-            {{ 0, -1,  0}}, {{ 0, -1,  0}}, {{ 0, -1,  0}}, {{ 0, -1,  0}}
-        };
-
-        m_CubeMesh.uvs = {
-            {{0.0f, 0.0f}}, {{1.0f, 0.0f}}, {{1.0f, 1.0f}}, {{0.0f, 1.0f}},
-            {{0.0f, 0.0f}}, {{1.0f, 0.0f}}, {{1.0f, 1.0f}}, {{0.0f, 1.0f}},
-            {{0.0f, 0.0f}}, {{1.0f, 0.0f}}, {{1.0f, 1.0f}}, {{0.0f, 1.0f}},
-            {{0.0f, 0.0f}}, {{1.0f, 0.0f}}, {{1.0f, 1.0f}}, {{0.0f, 1.0f}},
-            {{0.0f, 0.0f}}, {{1.0f, 0.0f}}, {{1.0f, 1.0f}}, {{0.0f, 1.0f}},
-            {{0.0f, 0.0f}}, {{1.0f, 0.0f}}, {{1.0f, 1.0f}}, {{0.0f, 1.0f}}
-        };
-
-        m_CubeMesh.faces = {
-            { 0,  1,  2, 0}, { 2,  3,  0, 0},
-            { 4,  5,  6, 4}, { 6,  7,  4, 4},
-            { 8,  9, 10, 8}, {10, 11,  8, 8},
-            {12, 13, 14,12}, {14, 15, 12,12},
-            {16, 17, 18,16}, {18, 19, 16,16},
-            {20, 21, 22,20}, {22, 23, 20,20}
-        };
+        m_Renderer->UpdateTextureDescriptors(m_TextureManager->GetGlobalTextures());
     }
 
     void Application::Run()
@@ -94,7 +63,8 @@ namespace Antelope
             float deltaTime = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count();
             lastTime = currentTime;
 
-            if (m_DebounceTimer > 0.0f) {
+            if (m_DebounceTimer > 0.0f)
+            {
                 m_DebounceTimer -= deltaTime;
             }
 
@@ -104,26 +74,38 @@ namespace Antelope
                 m_DebounceTimer = DEBOUNCE_DELAY;
                 AE_ENGINE_TRACE("A Key Pressed! Switching to State: {0}", m_RenderState);
 
-                if (m_IsCubeUploaded)
+                if (m_ActiveEntity)
                 {
-                    AE_ENGINE_TRACE("GC: Freeing previous Cube Mesh from GPU...");
-                    m_LowLevelRenderer->FreeMesh(m_CubeHandle);
-                    m_IsCubeUploaded = false;
+                    auto& meshComponent = m_ActiveEntity.GetComponent<MeshComponent>();
+                    m_Renderer->FreeMesh(meshComponent.Handle);
+                    m_World->DestroyEntity(m_ActiveEntity);
+                    m_ActiveEntity = {};
                 }
 
-                if (m_RenderState == 1)
+                if (m_RenderState == 1) 
                 {
-                    AE_ENGINE_INFO("Uploading Cube Mesh (WOOD) to GPU...");
-                    m_CubeHandle = m_LowLevelRenderer->UploadMesh(m_CubeMesh);
-                    m_CubeHandle.materialIndex = m_WoodTexID;
-                    m_IsCubeUploaded = true;
+                    AE_ENGINE_INFO("Creating Bear Entity...");
+                    MeshHandle handle = m_Renderer->UploadMesh(m_BearMesh);
+                    handle.materialIndex = m_BearTexID;
+
+                    m_ActiveEntity = m_World->CreateEntity("Bear");
+                    m_ActiveEntity.AddComponent<MeshComponent>(handle);
+                    
+                    auto& transform = m_ActiveEntity.GetComponent<TransformComponent>();
+                    transform.Scale = glm::vec3(0.005f);
                 }
                 else if (m_RenderState == 2)
                 {
-                    AE_ENGINE_INFO("Uploading Cube Mesh (STONE) to GPU...");
-                    m_CubeHandle = m_LowLevelRenderer->UploadMesh(m_CubeMesh);
-                    m_CubeHandle.materialIndex = m_StoneTexID;
-                    m_IsCubeUploaded = true;
+                    AE_ENGINE_INFO("Creating Gorilla Entity...");
+                    MeshHandle handle = m_Renderer->UploadMesh(m_GorillaMesh);
+                    handle.materialIndex = m_GorillaTexID;
+
+                    m_ActiveEntity = m_World->CreateEntity("Gorilla");
+                    m_ActiveEntity.AddComponent<MeshComponent>(handle);
+                    
+                    auto& transform = m_ActiveEntity.GetComponent<TransformComponent>();
+                    transform.Translation = glm::vec3(0.0f, 0.0f, 0.0f);
+                    transform.Scale = glm::vec3(7.5f);;
                 }
             }
 
@@ -132,10 +114,10 @@ namespace Antelope
             if (m_HighLevelRenderer)
             {
                 UniformBufferObject camera {};
-                camera.view = glm::lookAt(glm::vec3(0.0f, 2.25f, 5.0f), glm::vec3(0.0f, 0.75f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+                camera.view = glm::lookAt(glm::vec3(0.0f, 7.5f, 20.0f), glm::vec3(0.0f, 2.5f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
                 
                 auto extent = m_SwapChain->GetExtent();
-                camera.proj = glm::perspective(glm::radians(45.0f), extent.width / (float)extent.height, 0.1f, 10.0f);
+                camera.proj = glm::perspective(glm::radians(45.0f), extent.width / (float)extent.height, 0.1f, 1000.0f);
                 camera.proj[1][1] *= -1;
 
                 m_HighLevelRenderer->BeginScene(camera);
@@ -143,11 +125,26 @@ namespace Antelope
                 static float time = 0.0f;
                 time += deltaTime;
 
-                if (m_RenderState == 1 || m_RenderState == 2)
+                auto view = m_World->GetRegistry().view<TagComponent, TransformComponent, MeshComponent>();
+
+                for (auto [entityID, tag, transform, meshComponent] : view.each()) 
                 {
-                    glm::mat4 t = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
-                    glm::mat4 r = glm::rotate(glm::mat4(1.0f), time, glm::vec3(0.5f, 1.0f, 0.2f));
-                    m_HighLevelRenderer->Submit(t * r, m_CubeHandle);
+                    if (tag.Tag == "Gorilla") 
+                    {
+                        transform.Rotation.x = 0.0f; 
+                        transform.Rotation.y = time * 4.0f;
+                        transform.Rotation.z = 0.0f;
+                        transform.Translation = glm::vec3(0.0f, 0.0f, 0.0f);
+                    }
+                    else if (tag.Tag == "Bear")
+                    {
+                        transform.Rotation.x = time * 0.2f;
+                        transform.Rotation.y = time;
+                        transform.Rotation.z = time * 0.1f;
+                        transform.Translation = glm::vec3(0.0f, 0.0f, 0.0f);
+                    }
+                    
+                    m_HighLevelRenderer->Submit(transform.GetTransform(), meshComponent.Handle);
                 }
 
                 m_HighLevelRenderer->EndScene();
@@ -158,7 +155,11 @@ namespace Antelope
 
         vkDeviceWaitIdle(m_VulkanContext->GetDevice());
         
-        if (m_IsCubeUploaded) { m_LowLevelRenderer->FreeMesh(m_CubeHandle); }
+        if (m_ActiveBearEntity) 
+        { 
+            auto& meshComponent = m_ActiveBearEntity.GetComponent<MeshComponent>();
+            m_Renderer->FreeMesh(meshComponent.Handle); 
+        }
         
         AE_ENGINE_INFO("Engine Core Loop Stopped.");
     }

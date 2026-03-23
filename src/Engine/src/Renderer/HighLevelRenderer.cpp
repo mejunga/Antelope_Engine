@@ -1,10 +1,11 @@
 #include <Engine/Renderer/HighLevelRenderer.hpp>
-#include <Engine/Renderer/LowLevelRenderer.hpp>
+#include <Engine/Renderer/Renderer.hpp>
+
 
 namespace Antelope
 {
-    HighLevelRenderer::HighLevelRenderer(std::shared_ptr<LowLevelRenderer> lowLevelRenderer)
-        : m_LowLevelRenderer(lowLevelRenderer)
+    HighLevelRenderer::HighLevelRenderer(std::shared_ptr<Renderer> lowLevelRenderer)
+        : m_Renderer(lowLevelRenderer)
     {
         m_RenderQueue.reserve(10000);
     }
@@ -22,6 +23,6 @@ namespace Antelope
 
     void HighLevelRenderer::EndScene()
     {
-        m_LowLevelRenderer->DrawFrame(m_CurrentCamera, m_RenderQueue);
+        m_Renderer->DrawFrame(m_CurrentCamera, m_RenderQueue);
     }
 }

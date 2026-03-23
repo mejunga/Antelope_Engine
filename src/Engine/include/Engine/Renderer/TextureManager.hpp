@@ -2,14 +2,16 @@
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
+
 #include <string>
 #include <vector>
 #include <memory>
 
+
 namespace Antelope
 {
     class VulkanContext;
-    class LowLevelRenderer;
+    class Renderer;
 
     struct Texture
     {
@@ -22,25 +24,25 @@ namespace Antelope
 
     class TextureManager
     {
-    public:
-        TextureManager(std::shared_ptr<VulkanContext> context, std::shared_ptr<LowLevelRenderer> renderer);
-        ~TextureManager();
+        public:
+            TextureManager(std::shared_ptr<VulkanContext> context, std::shared_ptr<Renderer> renderer);
+            ~TextureManager();
 
-        uint32_t LoadTexture(const std::string& filepath);
+            uint32_t LoadTexture(const std::string& filepath);
 
-        const std::vector<Texture>& GetGlobalTextures() const { return m_Textures; }
+            const std::vector<Texture>& GetGlobalTextures() const { return m_Textures; }
 
-    private:
-        void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memUsage, VkImage& image, VmaAllocation& allocation);
-        void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
-        void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
-        VkImageView CreateImageView(VkImage image, VkFormat format);
-        VkSampler CreateTextureSampler();
+        private:
+            void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memUsage, VkImage& image, VmaAllocation& allocation);
+            void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+            void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+            VkImageView CreateImageView(VkImage image, VkFormat format);
+            VkSampler CreateTextureSampler();
 
-    private:
-        std::shared_ptr<VulkanContext> m_Context;
-        std::shared_ptr<LowLevelRenderer> m_Renderer;
-        
-        std::vector<Texture> m_Textures;
+        private:
+            std::shared_ptr<VulkanContext> m_Context;
+            std::shared_ptr<Renderer> m_Renderer;
+            
+            std::vector<Texture> m_Textures;
     };
 }

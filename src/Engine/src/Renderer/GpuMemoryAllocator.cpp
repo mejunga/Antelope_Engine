@@ -4,6 +4,7 @@
 
 #include <stdexcept>
 
+
 namespace Antelope
 {
     PagedVirtualBuffer::PagedVirtualBuffer(std::shared_ptr<VulkanContext> context, VkDeviceSize pageSize, VkBufferUsageFlags usage, bool hostVisible, const std::string& name)

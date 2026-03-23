@@ -2,6 +2,9 @@
 
 #include <Engine/Renderer/Mesh.hpp>
 #include <Engine/Renderer/TextureManager.hpp>
+#include <Engine/ECS/World.hpp>
+#include <Engine/ECS/Entity.hpp>
+#include <Engine/ECS/BaseComponents.hpp>
 
 #include <memory>
 
@@ -10,7 +13,7 @@ namespace Antelope
 {
     class VulkanContext;
     class SwapChain;
-    class LowLevelRenderer;
+    class Renderer;
     class HighLevelRenderer;
     class Window;
     
@@ -30,7 +33,7 @@ namespace Antelope
             inline static Application& Get() { return *s_Instance; }
             inline std::shared_ptr<VulkanContext> GetVulkanContext() const { return m_VulkanContext; }
             inline std::shared_ptr<SwapChain> GetSwapChain() const { return m_SwapChain; }
-            inline std::shared_ptr<LowLevelRenderer> GetLowLevelRenderer() const { return m_LowLevelRenderer; }
+            inline std::shared_ptr<Renderer> GetRenderer() const { return m_Renderer; }
 
         private:
             void SetupMockData();
@@ -39,28 +42,21 @@ namespace Antelope
             std::unique_ptr<Window> m_Window;
             std::shared_ptr<VulkanContext> m_VulkanContext;
             std::shared_ptr<SwapChain> m_SwapChain;
-            std::shared_ptr<LowLevelRenderer> m_LowLevelRenderer;
+            std::shared_ptr<Renderer> m_Renderer;
             std::shared_ptr<HighLevelRenderer> m_HighLevelRenderer;
             std::shared_ptr<TextureManager> m_TextureManager;
+            std::shared_ptr<World> m_World;
 
-            uint32_t m_WoodTexID = 0;
-            uint32_t m_StoneTexID = 0;
+            Entity m_ActiveBearEntity; 
+            MeshData m_BearMesh;       
+            uint32_t m_BearTexID;
+            Entity m_ActiveEntity;
+            MeshData m_GorillaMesh;
+            uint32_t m_GorillaTexID;
             bool m_Running = true;
             int m_RenderState = 0;
             float m_DebounceTimer = 0.0f;
             const float DEBOUNCE_DELAY = 0.2f;
-            
-            MeshData m_DiamondMesh;
-            MeshData m_CubeMesh;
-            MeshData m_PyramidMesh;
-
-            bool m_IsDiamondUploaded = false;
-            bool m_IsCubeUploaded = false;
-            bool m_IsPyramidUploaded = false;
-
-            MeshHandle m_DiamondHandle {};
-            MeshHandle m_CubeHandle {};
-            MeshHandle m_PyramidHandle {};
 
             static Application *s_Instance;
     };

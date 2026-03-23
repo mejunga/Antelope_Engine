@@ -1,14 +1,16 @@
+#define STB_IMAGE_IMPLEMENTATION
+
 #include <Engine/Renderer/TextureManager.hpp>
 #include <Engine/Renderer/VulkanContext.hpp>
 #include <Engine/Debug/Log.hpp>
 
-#define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 #include <stdexcept>
 
+
 namespace Antelope
 {
-    TextureManager::TextureManager(std::shared_ptr<VulkanContext> context, std::shared_ptr<LowLevelRenderer> renderer)
+    TextureManager::TextureManager(std::shared_ptr<VulkanContext> context, std::shared_ptr<Renderer> renderer)
         : m_Context(context), m_Renderer(renderer)
     {
         AE_ENGINE_INFO("TextureManager initialized.");

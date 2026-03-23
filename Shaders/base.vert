@@ -51,9 +51,9 @@ void main()
     else vIndex = f.data.z;
 
     vec3 position = posBuf.vertices[obj.posOffset + vIndex].pos.xyz;
-    vec3 color    = colBuf.colors[obj.colorOffset + vIndex].color.xyz;
-    vec3 normal   = normBuf.normals[obj.normalOffset + f.data.w].normal.xyz;
-    vec2 uv       = uvBuf.uvs[obj.uvOffset + vIndex].uv;
+    vec3 color = colBuf.colors[obj.colorOffset + vIndex].color.xyz;
+    vec3 normal = normBuf.normals[obj.normalOffset + vIndex].normal.xyz;
+    vec2 uv = uvBuf.uvs[obj.uvOffset + vIndex].uv;
 
     gl_Position = ubo.proj * ubo.view * obj.model * vec4(position, 1.0);
     
