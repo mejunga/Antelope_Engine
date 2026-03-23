@@ -2,12 +2,11 @@
 #include <Engine/Debug/Log.hpp>
 #include <Engine/Platform/Input.hpp>
 #include <Engine/Platform/Window.hpp>
-#include <Engine/Renderer/VulkanContext.hpp>
-#include <Engine/Renderer/SwapChain.hpp>
-#include <Engine/Renderer/Renderer.hpp>
-#include <Engine/Renderer/HighLevelRenderer.hpp>
-#include <Engine/Renderer/Camera.hpp>
-#include <Engine/Renderer/ModelLoader.hpp>
+#include <Engine/Renderer/Vulkan/VulkanContext.hpp>
+#include <Engine/Renderer/Vulkan/SwapChain.hpp>
+#include <Engine/Renderer/Graphics/Renderer.hpp>
+#include <Engine/Renderer/Graphics/Camera.hpp>
+#include <Engine/AssetManager/ModelLoader.hpp>
 
 #include <GLFW/glfw3.h>
 #include <chrono>
@@ -16,7 +15,7 @@ namespace Antelope
 {
     Application *Application::s_Instance { nullptr };
 
-    Application::Application() 
+    Application::Application() : m_EditorCamera(glm::vec3(0.0f, 2.0f, 20.0f))
     {
         if (s_Instance) 
         { 
@@ -29,7 +28,6 @@ namespace Antelope
         m_VulkanContext = std::make_shared<VulkanContext>(m_Window->GetNativeWindow());
         m_SwapChain = std::make_shared<SwapChain>(m_VulkanContext);
         m_Renderer = std::make_shared<Renderer>(m_VulkanContext, m_SwapChain);
-        m_HighLevelRenderer = std::make_shared<HighLevelRenderer>(m_Renderer);        
         m_TextureManager = std::make_shared<TextureManager>(m_VulkanContext, m_Renderer);
 
         m_World = std::make_shared<World>();
@@ -68,11 +66,11 @@ namespace Antelope
                 m_DebounceTimer -= deltaTime;
             }
 
-            if (Input::IsKeyPressed(GLFW_KEY_A) && m_DebounceTimer <= 0.0f)
+            if (Input::IsKeyPressed(GLFW_KEY_SPACE) && m_DebounceTimer <= 0.0f)
             {
                 m_RenderState = (m_RenderState + 1) % 3;
                 m_DebounceTimer = DEBOUNCE_DELAY;
-                AE_ENGINE_TRACE("A Key Pressed! Switching to State: {0}", m_RenderState);
+                AE_ENGINE_TRACE("Space Key Pressed! Switching to State: {0}", m_RenderState);
 
                 if (m_ActiveEntity)
                 {
@@ -105,59 +103,23 @@ namespace Antelope
                     
                     auto& transform = m_ActiveEntity.GetComponent<TransformComponent>();
                     transform.Translation = glm::vec3(0.0f, 0.0f, 0.0f);
-                    transform.Scale = glm::vec3(7.5f);;
+                    transform.Scale = glm::vec3(7.5f);
                 }
             }
 
             if (m_Window->IsResizing() || m_Window->GetWidth() == 0 || m_Window->GetHeight() == 0) { continue; }
-            
-            if (m_HighLevelRenderer)
-            {
-                UniformBufferObject camera {};
-                camera.view = glm::lookAt(glm::vec3(0.0f, 7.5f, 20.0f), glm::vec3(0.0f, 2.5f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-                
-                auto extent = m_SwapChain->GetExtent();
-                camera.proj = glm::perspective(glm::radians(45.0f), extent.width / (float)extent.height, 0.1f, 1000.0f);
-                camera.proj[1][1] *= -1;
 
-                m_HighLevelRenderer->BeginScene(camera);
-
-                static float time = 0.0f;
-                time += deltaTime;
-
-                auto view = m_World->GetRegistry().view<TagComponent, TransformComponent, MeshComponent>();
-
-                for (auto [entityID, tag, transform, meshComponent] : view.each()) 
-                {
-                    if (tag.Tag == "Gorilla") 
-                    {
-                        transform.Rotation.x = 0.0f; 
-                        transform.Rotation.y = time * 4.0f;
-                        transform.Rotation.z = 0.0f;
-                        transform.Translation = glm::vec3(0.0f, 0.0f, 0.0f);
-                    }
-                    else if (tag.Tag == "Bear")
-                    {
-                        transform.Rotation.x = time * 0.2f;
-                        transform.Rotation.y = time;
-                        transform.Rotation.z = time * 0.1f;
-                        transform.Translation = glm::vec3(0.0f, 0.0f, 0.0f);
-                    }
-                    
-                    m_HighLevelRenderer->Submit(transform.GetTransform(), meshComponent.Handle);
-                }
-
-                m_HighLevelRenderer->EndScene();
-            }
+            m_EditorCamera.OnUpdate(deltaTime);
+            m_World->OnUpdateEditor(deltaTime, m_EditorCamera);
 
             if (m_Window->ShouldClose()) { m_Running = false; }
         }
 
         vkDeviceWaitIdle(m_VulkanContext->GetDevice());
         
-        if (m_ActiveBearEntity) 
+        if (m_ActiveEntity) 
         { 
-            auto& meshComponent = m_ActiveBearEntity.GetComponent<MeshComponent>();
+            auto& meshComponent = m_ActiveEntity.GetComponent<MeshComponent>();
             m_Renderer->FreeMesh(meshComponent.Handle); 
         }
         

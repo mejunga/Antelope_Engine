@@ -1,6 +1,6 @@
 #define VMA_IMPLEMENTATION
 
-#include <Engine/Renderer/VulkanContext.hpp>
+#include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 #include <Engine/Debug/Log.hpp>
 
 #include <GLFW/glfw3.h>

@@ -1,10 +1,11 @@
 #pragma once
 
-#include <Engine/Renderer/Mesh.hpp>
-#include <Engine/Renderer/TextureManager.hpp>
+#include <Engine/Renderer/Graphics/Mesh.hpp>
+#include <Engine/AssetManager/TextureManager.hpp>
 #include <Engine/ECS/World.hpp>
 #include <Engine/ECS/Entity.hpp>
 #include <Engine/ECS/BaseComponents.hpp>
+#include <Engine/Renderer/Graphics/Camera.hpp>
 
 #include <memory>
 
@@ -43,7 +44,6 @@ namespace Antelope
             std::shared_ptr<VulkanContext> m_VulkanContext;
             std::shared_ptr<SwapChain> m_SwapChain;
             std::shared_ptr<Renderer> m_Renderer;
-            std::shared_ptr<HighLevelRenderer> m_HighLevelRenderer;
             std::shared_ptr<TextureManager> m_TextureManager;
             std::shared_ptr<World> m_World;
 
@@ -57,6 +57,7 @@ namespace Antelope
             int m_RenderState = 0;
             float m_DebounceTimer = 0.0f;
             const float DEBOUNCE_DELAY = 0.2f;
+            EditorCamera m_EditorCamera;
 
             static Application *s_Instance;
     };

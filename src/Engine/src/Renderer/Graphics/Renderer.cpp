@@ -1,12 +1,12 @@
-#include <Engine/Renderer/Renderer.hpp>
-#include <Engine/Renderer/VulkanContext.hpp>
-#include <Engine/Renderer/SwapChain.hpp>
-#include <Engine/Renderer/Camera.hpp>
-#include <Engine/Renderer/TextureManager.hpp>
-#include <Engine/Renderer/VulkanBuffer.hpp>
-#include <Engine/Renderer/VulkanPipeline.hpp>
-#include <Engine/Renderer/VulkanDescriptor.hpp>
-#include <Engine/Renderer/GpuMemoryAllocator.hpp>
+#include <Engine/Renderer/Graphics/Renderer.hpp>
+#include <Engine/Renderer/Vulkan/VulkanContext.hpp>
+#include <Engine/Renderer/Vulkan/SwapChain.hpp>
+#include <Engine/Renderer/Graphics/Camera.hpp>
+#include <Engine/AssetManager/TextureManager.hpp>
+#include <Engine/Renderer/Vulkan/VulkanBuffer.hpp>
+#include <Engine/Renderer/Vulkan/VulkanPipeline.hpp>
+#include <Engine/Renderer/Vulkan/VulkanDescriptor.hpp>
+#include <Engine/Renderer/Vulkan/GpuMemoryAllocator.hpp>
 #include <Engine/Debug/Log.hpp>
 
 #include <stdexcept>

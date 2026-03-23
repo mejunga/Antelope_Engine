@@ -1,5 +1,5 @@
-#include <Engine/Renderer/VulkanPipeline.hpp>
-#include <Engine/Renderer/VulkanContext.hpp>
+#include <Engine/Renderer/Vulkan/VulkanPipeline.hpp>
+#include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 #include <Engine/Debug/Log.hpp>
 
 #include <fstream>

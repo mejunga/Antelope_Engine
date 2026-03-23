@@ -10,15 +10,12 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-# --- 1. SHADER DERLEME SİSTEMİ ---
 find_program(VULKAN_GLSLC_EXECUTABLE NAMES glslc HINTS $ENV{VULKAN_SDK}/bin)
 if(NOT VULKAN_GLSLC_EXECUTABLE)
     message(FATAL_ERROR "glslc not found! Please check your Vulkan SDK installation.")
 endif()
 
-# Ham shaderlar projede Shaders klasöründe duruyor
-set(SHADER_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Shaders")
-# Derlenmiş hallerini build klasörü içinde geçici bir yere alıyoruz
+set(SHADER_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Assets/Shaders")
 set(SHADER_BIN_DIR "${CMAKE_BINARY_DIR}/CompiledShaders")
 file(MAKE_DIRECTORY ${SHADER_BIN_DIR})
 

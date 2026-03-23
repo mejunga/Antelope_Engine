@@ -7,20 +7,24 @@
 namespace Antelope {
 
     class Entity;
+    class EditorCamera;
 
     class World {
-    public:
-        World();
-        ~World();
+        public:
+            World();
+            ~World();
 
-        Entity CreateEntity(const std::string& name = std::string());
-        void DestroyEntity(Entity entity);
+            Entity CreateEntity(const std::string& name = std::string());
+            void DestroyEntity(Entity entity);
 
-        entt::registry& GetRegistry() { return m_Registry; }
+            void OnUpdateRuntime(float deltaTime);
+            void OnUpdateEditor(float deltaTime, EditorCamera& camera);
 
-    private:
-        entt::registry m_Registry;
-        
-        friend class Entity;
+            entt::registry& GetRegistry() { return m_Registry; }
+
+        private:
+            entt::registry m_Registry;
+            
+            friend class Entity;
     };
 }

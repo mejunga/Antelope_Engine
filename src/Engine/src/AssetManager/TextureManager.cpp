@@ -1,7 +1,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 
-#include <Engine/Renderer/TextureManager.hpp>
-#include <Engine/Renderer/VulkanContext.hpp>
+#include <Engine/AssetManager/TextureManager.hpp>
+#include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 #include <Engine/Debug/Log.hpp>
 
 #include <stb_image.h>

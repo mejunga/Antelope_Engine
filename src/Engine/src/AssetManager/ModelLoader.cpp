@@ -1,4 +1,4 @@
-#include <Engine/Renderer/ModelLoader.hpp>
+#include <Engine/AssetManager/ModelLoader.hpp>
 #include <Engine/Debug/Log.hpp>
 
 #include <assimp/Importer.hpp>

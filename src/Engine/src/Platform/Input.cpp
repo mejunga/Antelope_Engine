@@ -20,4 +20,13 @@ namespace Antelope
         auto state { glfwGetMouseButton(window, button) };
         return state == GLFW_PRESS;
     }
+
+    void Input::GetMousePosition(float& x, float& y)
+    {
+        auto window { Application::Get().GetWindow().GetNativeWindow() };
+        double xpos, ypos;
+        glfwGetCursorPos(window, &xpos, &ypos);
+        x = static_cast<float>(xpos);
+        y = static_cast<float>(ypos);
+    }
 }

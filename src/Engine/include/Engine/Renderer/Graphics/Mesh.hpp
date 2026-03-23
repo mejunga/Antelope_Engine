@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Engine/Renderer/GpuMemoryAllocator.hpp>
+#include <Engine/Renderer/Vulkan/GpuMemoryAllocator.hpp>
 
 #include <glm/glm.hpp>
 

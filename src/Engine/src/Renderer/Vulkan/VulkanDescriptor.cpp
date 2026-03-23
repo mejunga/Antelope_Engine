@@ -1,5 +1,5 @@
-#include <Engine/Renderer/VulkanDescriptor.hpp>
-#include <Engine/Renderer/VulkanContext.hpp>
+#include <Engine/Renderer/Vulkan/VulkanDescriptor.hpp>
+#include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 
 #include <stdexcept>
 
