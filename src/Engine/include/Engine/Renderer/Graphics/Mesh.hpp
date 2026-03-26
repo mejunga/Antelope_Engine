@@ -27,7 +27,7 @@ namespace Antelope
     
     struct VertexUV
     {
-        alignas(16) glm::vec2 uv;
+        alignas(8) glm::vec2 uv;
     };
     
     struct Face 
@@ -47,6 +47,7 @@ namespace Antelope
 
     struct MeshHandle
     {
+        uint32_t MeshID { 0 };
         VirtualAllocation posAllocation;
         VirtualAllocation colorAllocation;
         VirtualAllocation normalAllocation;

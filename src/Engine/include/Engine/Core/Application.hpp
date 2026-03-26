@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Engine/Renderer/Graphics/Mesh.hpp>
+#include <Engine/Renderer/Graphics/Model.hpp>
 #include <Engine/Renderer/Graphics/Camera.hpp>
 #include <Engine/ECS/Entity.hpp>
 #include <Engine/ECS/BaseComponents.hpp>
@@ -47,17 +47,19 @@ namespace Antelope
             std::shared_ptr<TextureManager> m_TextureManager;
             std::shared_ptr<World> m_World;
 
-            Entity m_ActiveBearEntity; 
-            MeshData m_BearMesh;       
+            ModelData m_BearMesh;       
             uint32_t m_BearTexID;
-            Entity m_ActiveEntity;
-            MeshData m_GorillaMesh;
+            
+            ModelData m_GorillaMesh;
             uint32_t m_GorillaTexID;
+
             bool m_Running = true;
             int m_RenderState = 0;
             float m_DebounceTimer = 0.0f;
             const float DEBOUNCE_DELAY = 0.2f;
             EditorCamera m_EditorCamera;
+
+            std::vector<Entity> m_ActiveEntities;
 
             static Application *s_Instance;
     };

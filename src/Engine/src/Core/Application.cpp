@@ -73,38 +73,53 @@ namespace Antelope
                 m_DebounceTimer = DEBOUNCE_DELAY;
                 AE_ENGINE_TRACE("Space Key Pressed! Switching to State: {0}", m_RenderState);
 
-                if (m_ActiveEntity)
+                if (!m_ActiveEntities.empty())
                 {
-                    auto& meshComponent { m_ActiveEntity.GetComponent<MeshComponent>() };
-                    m_Renderer->FreeMesh(meshComponent.Handle);
-                    m_World->DestroyEntity(m_ActiveEntity);
-                    m_ActiveEntity = {};
+                    for (auto entity : m_ActiveEntities)
+                    {
+                        auto& meshComponent { entity.GetComponent<MeshComponent>() };
+                        m_Renderer->FreeMesh(meshComponent.Handle);
+                        m_World->DestroyEntity(entity);
+                    }
+                    m_ActiveEntities.clear();
                 }
 
                 if (m_RenderState == 1) 
                 {
-                    AE_ENGINE_INFO("Creating Bear Entity...");
-                    MeshHandle handle { m_Renderer->UploadMesh(m_BearMesh) };
-                    handle.materialIndex = m_BearTexID;
-
-                    m_ActiveEntity = m_World->CreateEntity("Bear");
-                    m_ActiveEntity.AddComponent<MeshComponent>(handle);
+                    AE_ENGINE_INFO("Creating Bear Entities...");
                     
-                    auto& transform { m_ActiveEntity.GetComponent<TransformComponent>() };
-                    transform.Scale = glm::vec3(0.005f);
+                    for (const auto& subMesh : m_BearMesh.SubMeshes)
+                    {
+                        MeshHandle handle { m_Renderer->UploadMesh(subMesh.Data) };
+                        handle.materialIndex = m_BearTexID;
+
+                        Entity entity { m_World->CreateEntity(subMesh.Name.empty() ? "BearPart" : subMesh.Name) };
+                        entity.AddComponent<MeshComponent>(handle);
+                        
+                        auto& transform { entity.GetComponent<TransformComponent>() };
+                        transform.Scale = glm::vec3(0.005f);
+                        
+                        m_ActiveEntities.push_back(entity);
+                    }
                 }
                 else if (m_RenderState == 2)
                 {
-                    AE_ENGINE_INFO("Creating Gorilla Entity...");
-                    MeshHandle handle { m_Renderer->UploadMesh(m_GorillaMesh) };
-                    handle.materialIndex = m_GorillaTexID;
-
-                    m_ActiveEntity = m_World->CreateEntity("Gorilla");
-                    m_ActiveEntity.AddComponent<MeshComponent>(handle);
+                    AE_ENGINE_INFO("Creating Gorilla Entities...");
                     
-                    auto& transform { m_ActiveEntity.GetComponent<TransformComponent>() };
-                    transform.Translation = glm::vec3(0.0f, 0.0f, 0.0f);
-                    transform.Scale = glm::vec3(7.5f);
+                    for (const auto& subMesh : m_GorillaMesh.SubMeshes)
+                    {
+                        MeshHandle handle { m_Renderer->UploadMesh(subMesh.Data) };
+                        handle.materialIndex = m_GorillaTexID;
+
+                        Entity entity { m_World->CreateEntity(subMesh.Name.empty() ? "GorillaPart" : subMesh.Name) };
+                        entity.AddComponent<MeshComponent>(handle);
+                        
+                        auto& transform { entity.GetComponent<TransformComponent>() };
+                        transform.Translation = glm::vec3(0.0f, 0.0f, 0.0f);
+                        transform.Scale = glm::vec3(7.5f);
+                        
+                        m_ActiveEntities.push_back(entity);
+                    }
                 }
             }
 
@@ -118,11 +133,13 @@ namespace Antelope
 
         vkDeviceWaitIdle(m_VulkanContext->GetDevice());
         
-        if (m_ActiveEntity) 
+        for (auto entity : m_ActiveEntities) 
         { 
-            auto& meshComponent { m_ActiveEntity.GetComponent<MeshComponent>() };
+            auto& meshComponent { entity.GetComponent<MeshComponent>() };
             m_Renderer->FreeMesh(meshComponent.Handle); 
         }
+
+        m_ActiveEntities.clear();
         
         AE_ENGINE_INFO("Engine Core Loop Stopped.");
     }

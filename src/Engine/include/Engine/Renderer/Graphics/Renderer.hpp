@@ -20,7 +20,7 @@ namespace Antelope
 {
     class VulkanContext;
     class VulkanBuffer;
-    class VulkanPipeline;
+    class Pipeline;
     class DescriptorAllocator;;
     class SwapChain;
     
@@ -29,11 +29,11 @@ namespace Antelope
 
     struct PendingTransfer
     {
-        VkFence fence;
-        VkCommandBuffer commandBuffer;
-        VkBuffer stagingBuffer;
-        VmaAllocation stagingAllocation;
-        uint32_t posOffset;
+        VkFence fence { VK_NULL_HANDLE };
+        VkCommandBuffer commandBuffer { VK_NULL_HANDLE };
+        VkBuffer stagingBuffer { VK_NULL_HANDLE };
+        VmaAllocation stagingAllocation { VK_NULL_HANDLE };
+        uint32_t meshID { 0 };
     };
 
     class Renderer
@@ -46,10 +46,12 @@ namespace Antelope
             MeshHandle UploadMesh(const MeshData& meshData);
             void FreeMesh(const MeshHandle& handle);
             void UpdateTextureDescriptors(const std::vector<Texture>& textures);
+            VkCommandBuffer BeginAsyncGraphicsCommand();
+            void EndAndSubmitAsyncGraphicsCommand(VkCommandBuffer cmd, VkBuffer stagingBuffer, VmaAllocation stagingAllocation);
+            void CreateStagingBuffer(const void* data, VkDeviceSize size, VkBuffer& outBuffer, VmaAllocation& outAllocation);
 
         private:
             void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize bufferSize);
-            void CreateStagingBuffer(const void* data, VkDeviceSize size, VkBuffer& outBuffer, VmaAllocation& outAllocation);
             void UpdateUniformBuffer(uint32_t currentImage, const UniformBufferObject& cameraData);
             void ProcessPendingTransfers();
             VkCommandBuffer BeginFrame();
@@ -73,7 +75,7 @@ namespace Antelope
             std::shared_ptr<VulkanContext> m_Context;
             std::shared_ptr<SwapChain> m_SwapChain;
             std::unique_ptr<GpuMemoryAllocator> m_GpuAllocator;
-            std::unique_ptr<VulkanPipeline> m_MainPipeline;
+            std::unique_ptr<Pipeline> m_MainPipeline;
             std::unique_ptr<DescriptorAllocator> m_GlobalDescriptorAllocator;
 
             VkDescriptorSetLayout m_DescriptorSetLayout { VK_NULL_HANDLE };
@@ -82,10 +84,11 @@ namespace Antelope
             VkDescriptorPool m_DescriptorPool { VK_NULL_HANDLE };
             VkCommandPool m_TransferCommandPool { VK_NULL_HANDLE };
         
-            const int MAX_FRAMES_IN_FLIGHT = 3;
+            static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 3;
             const uint32_t MAX_OBJECTS = 128000;
             uint32_t m_CurrentFrame = 0;
             uint32_t m_CurrentImageIndex = 0;
+            uint32_t m_NextMeshID = 1;
 
             std::vector<VkSemaphore> m_ImageAvailableSemaphores;
             std::vector<VkSemaphore> m_RenderFinishedSemaphores;
@@ -96,7 +99,9 @@ namespace Antelope
             std::vector<std::unique_ptr<VulkanBuffer>> m_IndirectBuffers;
             std::vector<VkDescriptorSet> m_DescriptorSets;
             std::vector<PendingTransfer> m_PendingTransfers;
-            std::unordered_set<uint32_t> m_PendingMeshOffsets;
+            std::unordered_set<uint32_t> m_PendingMeshIDs;
             std::vector<VkFence> m_ImagesInFlight;
+            std::vector<VkDescriptorImageInfo> m_GlobalImageInfos;
+            uint32_t m_LastUpdatedTextureCount[MAX_FRAMES_IN_FLIGHT] {};
     };
 }

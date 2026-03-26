@@ -1,23 +1,19 @@
 #version 450
 
-layout(binding = 0) uniform UniformBufferObject {
+layout(binding = 0) uniform UniformBufferObject
+{
     mat4 view;
     mat4 proj;
 } ubo;
 
 struct VertexPosition { vec4 pos; };
-struct VertexColor    { vec4 color; };
-struct VertexNormal   { vec4 normal; };
-struct VertexUV       { vec2 uv; vec2 padding; };
-struct Face           { uvec4 data; }; 
+struct VertexColor { vec4 color; };
+struct VertexNormal { vec4 normal; };
+struct VertexUV { vec2 uv; };
+struct Face { uvec4 data; }; 
 
-layout(std140, binding = 1) readonly buffer PosBuffer  { VertexPosition vertices[]; } posBuf;
-layout(std140, binding = 2) readonly buffer ColBuffer  { VertexColor colors[]; } colBuf;
-layout(std140, binding = 3) readonly buffer NormBuffer { VertexNormal normals[]; } normBuf;
-layout(std140, binding = 4) readonly buffer FaceBuffer { Face faces[]; } faceBuf;
-layout(std140, binding = 5) readonly buffer UvBuffer   { VertexUV uvs[]; } uvBuf;
-
-struct ObjectData {
+struct ObjectData
+{
     mat4 model;
     uint posOffset;
     uint colorOffset;
@@ -29,7 +25,12 @@ struct ObjectData {
     uint padding2;
 };
 
-layout(std140, binding = 6) readonly buffer ObjectBuffer { ObjectData objects[]; } objBuf;
+layout(std430, binding = 1) readonly buffer PosBuffer { VertexPosition vertices[]; } posBuf;
+layout(std430, binding = 2) readonly buffer ColBuffer { VertexColor colors[]; } colBuf;
+layout(std430, binding = 3) readonly buffer NormBuffer { VertexNormal normals[]; } normBuf;
+layout(std430, binding = 4) readonly buffer FaceBuffer { Face faces[]; } faceBuf;
+layout(std430, binding = 5) readonly buffer UvBuffer { VertexUV uvs[]; } uvBuf;
+layout(std430, binding = 6) readonly buffer ObjectBuffer { ObjectData objects[]; } objBuf;
 
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec3 fragNormal;
@@ -58,7 +59,8 @@ void main()
     gl_Position = ubo.proj * ubo.view * obj.model * vec4(position, 1.0);
     
     fragColor = color;
-    fragNormal = mat3(obj.model) * normal; 
+    mat3 normalMatrix = transpose(inverse(mat3(obj.model)));
+    fragNormal = normalMatrix * normal;
     fragUV = uv;
     fragMatID = obj.materialIndex;
 }

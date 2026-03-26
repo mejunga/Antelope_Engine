@@ -51,6 +51,7 @@ namespace Antelope
 
         std::vector<RenderCommand> renderList;
         auto view { m_Registry.view<TransformComponent, MeshComponent>() };
+        renderList.reserve(view.size_hint());
 
         for (auto [entityID, transform, meshComponent] : view.each()) 
         {

@@ -4,7 +4,7 @@
 #include <Engine/Renderer/Graphics/Camera.hpp>
 #include <Engine/AssetImport/TextureManager.hpp>
 #include <Engine/Renderer/Vulkan/VulkanBuffer.hpp>
-#include <Engine/Renderer/Vulkan/VulkanPipeline.hpp>
+#include <Engine/Renderer/Vulkan/Pipeline.hpp>
 #include <Engine/Renderer/Vulkan/VulkanDescriptor.hpp>
 #include <Engine/Renderer/Vulkan/GpuMemoryAllocator.hpp>
 #include <Engine/Debug/Log.hpp>
@@ -64,12 +64,13 @@ namespace Antelope
         for (auto& transfer : m_PendingTransfers)
         {
             vkDestroyFence(m_Context->GetDevice(), transfer.fence, nullptr);
-            vkFreeCommandBuffers(m_Context->GetDevice(), m_TransferCommandPool, 1, &transfer.commandBuffer);
+            VkCommandPool poolToUse = (transfer.meshID == 0) ? m_CommandPool : m_TransferCommandPool;
+            vkFreeCommandBuffers(m_Context->GetDevice(), poolToUse, 1, &transfer.commandBuffer);
             vmaDestroyBuffer(m_Context->GetAllocator(), transfer.stagingBuffer, transfer.stagingAllocation);
         }
 
         m_PendingTransfers.clear();
-        m_PendingMeshOffsets.clear();
+        m_PendingMeshIDs.clear();
 
         if (m_DescriptorPool != VK_NULL_HANDLE) 
         {
@@ -236,8 +237,9 @@ namespace Antelope
 
         vkQueueSubmit(m_Context->GetTransferQueue(), 1, &submitInfo, transferFence);
 
-        m_PendingTransfers.push_back({transferFence, commandBuffer, stagingBuffer, stagingAllocation, static_cast<uint32_t>(handle.posAllocation.Offset)});
-        m_PendingMeshOffsets.insert(static_cast<uint32_t>(handle.posAllocation.Offset)); 
+        handle.MeshID = m_NextMeshID++;
+        m_PendingTransfers.push_back({transferFence, commandBuffer, stagingBuffer, stagingAllocation, handle.MeshID});
+        m_PendingMeshIDs.insert(handle.MeshID);
 
         return handle;
     }
@@ -254,28 +256,76 @@ namespace Antelope
 
     void Renderer::UpdateTextureDescriptors(const std::vector<Texture>& textures)
     {
-        if (textures.empty()) return;
+        if (textures.empty()) { return; }
 
-        std::vector<VkDescriptorImageInfo> imageInfos;
+        m_GlobalImageInfos.clear();
+        m_GlobalImageInfos.reserve(textures.size());
+        
         for (const auto& tex : textures)
         {
-            imageInfos.push_back({tex.Sampler, tex.ImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+            m_GlobalImageInfos.push_back({tex.Sampler, tex.ImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
         }
 
-        for (size_t i { 0 }; i < MAX_FRAMES_IN_FLIGHT; ++i)
+        AE_ENGINE_INFO("Global texture array updated. Pending descriptor writes for in-flight frames.");
+    }
+
+    VkCommandBuffer Renderer::BeginAsyncGraphicsCommand()
+    {
+        VkCommandBufferAllocateInfo allocationInfo {};
+        allocationInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocationInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocationInfo.commandPool = m_CommandPool;
+        allocationInfo.commandBufferCount = 1;
+
+        VkCommandBuffer cmd;
+        vkAllocateCommandBuffers(m_Context->GetDevice(), &allocationInfo, &cmd);
+
+        VkCommandBufferBeginInfo beginInfo {};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vkBeginCommandBuffer(cmd, &beginInfo);
+        
+        return cmd;
+    }
+
+    void Renderer::EndAndSubmitAsyncGraphicsCommand(VkCommandBuffer cmd, VkBuffer stagingBuffer, VmaAllocation stagingAllocation)
+    {
+        vkEndCommandBuffer(cmd);
+
+        VkFenceCreateInfo fenceInfo {};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        VkFence fence;
+        vkCreateFence(m_Context->GetDevice(), &fenceInfo, nullptr, &fence);
+
+        VkSubmitInfo submitInfo {};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &cmd;
+
+        vkQueueSubmit(m_Context->GetGraphicsQueue(), 1, &submitInfo, fence);
+
+        m_PendingTransfers.push_back({fence, cmd, stagingBuffer, stagingAllocation, 0}); 
+    }
+
+    void Renderer::CreateStagingBuffer(const void* data, VkDeviceSize bufferSize, VkBuffer& outBuffer, VmaAllocation& outAllocation)
+    {
+        VkBufferCreateInfo stagingBufferInfo {};
+        stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        stagingBufferInfo.size = bufferSize;
+        stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT; 
+        stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VmaAllocationCreateInfo allocationInfo {};
+        allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        allocationInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+
+        if (vmaCreateBuffer(m_Context->GetAllocator(), &stagingBufferInfo, &allocationInfo, &outBuffer, &outAllocation, nullptr) != VK_SUCCESS)
         {
-            VkWriteDescriptorSet descriptorWrite {};
-            descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            descriptorWrite.dstSet = m_DescriptorSets[i];
-            descriptorWrite.dstBinding = 7;
-            descriptorWrite.dstArrayElement = 0;
-            descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            descriptorWrite.descriptorCount = static_cast<uint32_t>(imageInfos.size());
-            descriptorWrite.pImageInfo = imageInfos.data();
-
-            vkUpdateDescriptorSets(m_Context->GetDevice(), 1, &descriptorWrite, 0, nullptr);
+            AE_ENGINE_CRITICAL("Failed to create staging buffer! Size: {0} bytes.", bufferSize);
+            throw std::runtime_error("Failed to create staging buffer");
         }
-        AE_ENGINE_INFO("Global Texture Descriptor Array updated. Count: {0}", textures.size());
+
+        vmaCopyMemoryToAllocation(m_Context->GetAllocator(), data, outAllocation, 0, bufferSize);
     }
 
     void Renderer::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize bufferSize)
@@ -309,27 +359,6 @@ namespace Antelope
         vkQueueSubmit(m_Context->GetGraphicsQueue(), 1, &submitInfo,VK_NULL_HANDLE);
         vkQueueWaitIdle(m_Context->GetGraphicsQueue());
         vkFreeCommandBuffers(m_Context->GetDevice(), m_CommandPool, 1, &commandBuffer); 
-    }
-
-    void Renderer::CreateStagingBuffer(const void* data, VkDeviceSize bufferSize, VkBuffer& outBuffer, VmaAllocation& outAllocation)
-    {
-        VkBufferCreateInfo stagingBufferInfo {};
-        stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        stagingBufferInfo.size = bufferSize;
-        stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT; 
-        stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-        VmaAllocationCreateInfo allocationInfo {};
-        allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        allocationInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-
-        if (vmaCreateBuffer(m_Context->GetAllocator(), &stagingBufferInfo, &allocationInfo, &outBuffer, &outAllocation, nullptr) != VK_SUCCESS)
-        {
-            AE_ENGINE_CRITICAL("Failed to create staging buffer! Size: {0} bytes.", bufferSize);
-            throw std::runtime_error("Failed to create staging buffer");
-        }
-
-        vmaCopyMemoryToAllocation(m_Context->GetAllocator(), data, outAllocation, 0, bufferSize);
     }
 
     void Renderer::UpdateUniformBuffer(uint32_t currentImage, const UniformBufferObject& cameraData)
@@ -390,10 +419,16 @@ namespace Antelope
             if (vkGetFenceStatus(m_Context->GetDevice(), it->fence) == VK_SUCCESS) 
             {
                 vkDestroyFence(m_Context->GetDevice(), it->fence, nullptr);
-                vkFreeCommandBuffers(m_Context->GetDevice(), m_TransferCommandPool, 1, &it->commandBuffer);
+                
+                VkCommandPool poolToUse { (it->meshID == 0) ? m_CommandPool : m_TransferCommandPool };
+                vkFreeCommandBuffers(m_Context->GetDevice(), poolToUse, 1, &it->commandBuffer);
+                
                 vmaDestroyBuffer(m_Context->GetAllocator(), it->stagingBuffer, it->stagingAllocation);
                 
-                m_PendingMeshOffsets.erase(it->posOffset); 
+                if (it->meshID != 0) 
+                {
+                    m_PendingMeshIDs.erase(it->meshID); 
+                }
                 
                 it = m_PendingTransfers.erase(it);
             }
@@ -444,6 +479,25 @@ namespace Antelope
 
     void Renderer::DrawObjects(VkCommandBuffer cmd, const UniformBufferObject& cameraData, const std::vector<RenderCommand>& renderList)
     {
+        uint32_t currentGlobalTextureCount { static_cast<uint32_t>(m_GlobalImageInfos.size()) };
+
+        if (currentGlobalTextureCount > 0 && m_LastUpdatedTextureCount[m_CurrentFrame] < currentGlobalTextureCount)
+        {
+            VkWriteDescriptorSet descriptorWrite {};
+            descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrite.dstSet = m_DescriptorSets[m_CurrentFrame];
+            descriptorWrite.dstBinding = 7;
+            descriptorWrite.dstArrayElement = 0;
+            descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            descriptorWrite.descriptorCount = currentGlobalTextureCount;
+            descriptorWrite.pImageInfo = m_GlobalImageInfos.data();
+
+            vkUpdateDescriptorSets(m_Context->GetDevice(), 1, &descriptorWrite, 0, nullptr);
+            
+            m_LastUpdatedTextureCount[m_CurrentFrame] = currentGlobalTextureCount;
+            AE_ENGINE_TRACE("Descriptor Set for Frame {0} updated with {1} textures.", m_CurrentFrame, currentGlobalTextureCount);
+        }
+
         UpdateUniformBuffer(m_CurrentFrame, cameraData);
 
         VkRenderPassBeginInfo renderPassInfo {};
@@ -485,7 +539,13 @@ namespace Antelope
         {
             const auto& command { renderList[i] };
 
-            if (m_PendingMeshOffsets.count(static_cast<uint32_t>(command.mesh.posAllocation.Offset)) > 0) { continue; }
+            if (m_PendingMeshIDs.count(command.mesh.MeshID) > 0) { continue; }
+
+            if (objectCount >= MAX_OBJECTS)
+            {
+                AE_ENGINE_WARN("Maximum object limit ({0}) reached! Remaining objects will not be drawn.", MAX_OBJECTS);
+                break;
+            }
 
             objectDataMap[objectCount].model = command.transform;
             objectDataMap[objectCount].posOffset = static_cast<uint32_t>(command.mesh.posAllocation.Offset / sizeof(VertexPosition));
@@ -572,12 +632,12 @@ namespace Antelope
     void Renderer::CreateGraphicsPipeline()
     {
         PipelineConfigInfo pipelineConfig {};
-        VulkanPipeline::DefaultPipelineConfigInfo(pipelineConfig, m_Context);
+        Pipeline::DefaultPipelineConfigInfo(pipelineConfig, m_Context);
         
         pipelineConfig.pipelineLayout = m_PipelineLayout;
         pipelineConfig.renderPass = m_SwapChain->GetRenderPass();
         
-        m_MainPipeline = std::make_unique<VulkanPipeline>(
+        m_MainPipeline = std::make_unique<Pipeline>(
             m_Context,
             "Assets/Shaders/base.vert.spv",
             "Assets/Shaders/base.frag.spv",

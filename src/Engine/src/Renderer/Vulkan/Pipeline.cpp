@@ -1,4 +1,4 @@
-#include <Engine/Renderer/Vulkan/VulkanPipeline.hpp>
+#include <Engine/Renderer/Vulkan/Pipeline.hpp>
 #include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 #include <Engine/Debug/Log.hpp>
 
@@ -7,25 +7,25 @@
 
 namespace Antelope
 {
-    VulkanPipeline::VulkanPipeline(std::shared_ptr<VulkanContext> context, const std::string& vertFilepath, const std::string& fragFilepath, const PipelineConfigInfo& configInfo)
+    Pipeline::Pipeline(std::shared_ptr<VulkanContext> context, const std::string& vertFilepath, const std::string& fragFilepath, const PipelineConfigInfo& configInfo)
         : m_Context(context)
     {
         CreateGraphicsPipeline(vertFilepath, fragFilepath, configInfo);
     }
 
-    VulkanPipeline::~VulkanPipeline()
+    Pipeline::~Pipeline()
     {
         vkDestroyShaderModule(m_Context->GetDevice(), m_VertShaderModule, nullptr);
         vkDestroyShaderModule(m_Context->GetDevice(), m_FragShaderModule, nullptr);
         vkDestroyPipeline(m_Context->GetDevice(), m_GraphicsPipeline, nullptr);
     }
 
-    void VulkanPipeline::Bind(VkCommandBuffer commandBuffer)
+    void Pipeline::Bind(VkCommandBuffer commandBuffer)
     {
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicsPipeline);
     }
 
-    void VulkanPipeline::CreateGraphicsPipeline(const std::string& vertFilepath, const std::string& fragFilepath, const PipelineConfigInfo& configInfo)
+    void Pipeline::CreateGraphicsPipeline(const std::string& vertFilepath, const std::string& fragFilepath, const PipelineConfigInfo& configInfo)
     {
         auto vertCode { ReadFile(vertFilepath) };
         auto fragCode { ReadFile(fragFilepath) };
@@ -76,7 +76,7 @@ namespace Antelope
         }
     }
 
-    VkShaderModule VulkanPipeline::CreateShaderModule(const std::vector<char>& code)
+    VkShaderModule Pipeline::CreateShaderModule(const std::vector<char>& code)
     {
         VkShaderModuleCreateInfo createInfo {};
         createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -94,10 +94,16 @@ namespace Antelope
         return shaderModule;
     }
 
-    std::vector<char> VulkanPipeline::ReadFile(const std::string& filepath)
+    std::vector<char> Pipeline::ReadFile(const std::string& filepath)
     {
-        std::ifstream file(filepath, std::ios::ate | std::ios::binary);
-        if (!file.is_open()) throw std::runtime_error("Failed to open file: " + filepath);
+        std::ifstream file {filepath, std::ios::ate | std::ios::binary };
+
+        if (!file.is_open())
+        {
+            AE_ENGINE_CRITICAL("Failed to open file: {0}!", filepath);
+            throw std::runtime_error("Failed to open file: " + filepath);
+        }
+
         size_t fileSize { static_cast<size_t>(file.tellg()) };
         std::vector<char> buffer(fileSize);
         file.seekg(0);
@@ -106,7 +112,7 @@ namespace Antelope
         return buffer;
     }
 
-    void VulkanPipeline::DefaultPipelineConfigInfo(PipelineConfigInfo& configInfo, std::shared_ptr<VulkanContext> context)
+    void Pipeline::DefaultPipelineConfigInfo(PipelineConfigInfo& configInfo, std::shared_ptr<VulkanContext> context)
     {
         configInfo.inputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
         configInfo.inputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;

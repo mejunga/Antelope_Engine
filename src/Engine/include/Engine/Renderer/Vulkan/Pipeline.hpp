@@ -26,18 +26,18 @@ namespace Antelope
         uint32_t subpass = 0;
     };
 
-    class VulkanPipeline
+    class Pipeline
     {
         public:
-            VulkanPipeline(std::shared_ptr<VulkanContext> context,
+            Pipeline(std::shared_ptr<VulkanContext> context,
                            const std::string& vertFilepath,
                            const std::string& fragFilepath,
                            const PipelineConfigInfo& configInfo);
             
-            ~VulkanPipeline();
+            ~Pipeline();
 
-            VulkanPipeline(const VulkanPipeline&) = delete;
-            VulkanPipeline& operator=(const VulkanPipeline&) = delete;
+            Pipeline(const Pipeline&) = delete;
+            Pipeline& operator=(const Pipeline&) = delete;
 
             void Bind(VkCommandBuffer commandBuffer);
             static void DefaultPipelineConfigInfo(PipelineConfigInfo& configInfo, std::shared_ptr<VulkanContext> context);
