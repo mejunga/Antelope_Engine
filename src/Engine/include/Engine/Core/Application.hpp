@@ -1,11 +1,9 @@
 #pragma once
 
 #include <Engine/Renderer/Graphics/Mesh.hpp>
-#include <Engine/AssetManager/TextureManager.hpp>
-#include <Engine/ECS/World.hpp>
+#include <Engine/Renderer/Graphics/Camera.hpp>
 #include <Engine/ECS/Entity.hpp>
 #include <Engine/ECS/BaseComponents.hpp>
-#include <Engine/Renderer/Graphics/Camera.hpp>
 
 #include <memory>
 
@@ -17,6 +15,8 @@ namespace Antelope
     class Renderer;
     class HighLevelRenderer;
     class Window;
+    class TextureManager;
+    class World;
     
     class Application
     {

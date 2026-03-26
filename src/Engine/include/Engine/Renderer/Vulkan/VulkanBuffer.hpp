@@ -27,9 +27,11 @@ namespace Antelope
             
         private:
             std::shared_ptr<VulkanContext> m_Context;
-            VkBuffer m_Buffer = VK_NULL_HANDLE;
-            VmaAllocation m_Allocation = VK_NULL_HANDLE;
-            void* m_MappedData = nullptr;
+            void* m_MappedData { nullptr };
+
+            VkBuffer m_Buffer { VK_NULL_HANDLE };
+            VmaAllocation m_Allocation { VK_NULL_HANDLE };
+            
             VkDeviceSize m_BufferSize;
     };
 }

@@ -1,4 +1,4 @@
-#include <Engine/AssetManager/ModelLoader.hpp>
+#include <Engine/AssetImport/ModelLoader.hpp>
 #include <Engine/Debug/Log.hpp>
 
 #include <assimp/Importer.hpp>
@@ -6,15 +6,14 @@
 #include <assimp/postprocess.h>
 
 
-namespace Antelope {
-
+namespace Antelope
+{
     MeshData ModelLoader::Load(const std::string& filepath) 
     {
         Assimp::Importer importer;
-        const aiScene* scene = importer.ReadFile(filepath,
-            aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_JoinIdenticalVertices |
-            aiProcess_GenSmoothNormals | aiProcess_PreTransformVertices
-        );
+        const aiScene* scene { importer.ReadFile(filepath,
+                               aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_JoinIdenticalVertices |
+                               aiProcess_GenSmoothNormals | aiProcess_PreTransformVertices) };
 
         if (!scene || !scene->mRootNode)
         {
@@ -23,17 +22,17 @@ namespace Antelope {
         }
 
         MeshData combinedData;
-        glm::vec3 minBound(FLT_MAX);
-        glm::vec3 maxBound(-FLT_MAX);
+        glm::vec3 minBound { FLT_MAX };
+        glm::vec3 maxBound { -FLT_MAX };
 
-        for (unsigned int m = 0; m < scene->mNumMeshes; m++) 
+        for (unsigned int m { 0 }; m < scene->mNumMeshes; m++) 
         {
-            aiMesh* mesh = scene->mMeshes[m];
-            uint32_t vertexOffset = static_cast<uint32_t>(combinedData.positions.size());
+            aiMesh* mesh { scene->mMeshes[m] };
+            uint32_t vertexOffset { static_cast<uint32_t>(combinedData.positions.size()) };
 
-            for (unsigned int i = 0; i < mesh->mNumVertices; i++)
+            for (unsigned int i { 0 }; i < mesh->mNumVertices; i++)
             {
-                glm::vec3 pos = { mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z };
+                glm::vec3 pos { mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z };
                 
                 minBound = glm::min(minBound, pos);
                 maxBound = glm::max(maxBound, pos);
@@ -52,9 +51,9 @@ namespace Antelope {
                 }
             }
 
-            for (unsigned int i = 0; i < mesh->mNumFaces; i++)
+            for (unsigned int i { 0 }; i < mesh->mNumFaces; i++)
             {
-                aiFace face = mesh->mFaces[i];
+                aiFace face { mesh->mFaces[i] };
                 combinedData.faces.push_back({ 
                     face.mIndices[0] + vertexOffset, 
                     face.mIndices[1] + vertexOffset, 

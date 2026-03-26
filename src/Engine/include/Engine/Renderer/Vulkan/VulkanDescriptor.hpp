@@ -43,10 +43,12 @@ namespace Antelope
 
         private:
             std::shared_ptr<VulkanContext> m_Context;
+            
+            uint32_t m_SetsPerPool;
+
             std::vector<PoolSizeRatio> m_Ratios;
             std::vector<VkDescriptorPool> m_FullPools;
             std::vector<VkDescriptorPool> m_ReadyPools;
-            uint32_t m_SetsPerPool;
     };
 
     class DescriptorWriter

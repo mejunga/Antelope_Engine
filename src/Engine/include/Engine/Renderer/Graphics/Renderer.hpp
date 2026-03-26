@@ -97,5 +97,6 @@ namespace Antelope
             std::vector<VkDescriptorSet> m_DescriptorSets;
             std::vector<PendingTransfer> m_PendingTransfers;
             std::unordered_set<uint32_t> m_PendingMeshOffsets;
+            std::vector<VkFence> m_ImagesInFlight;
     };
 }

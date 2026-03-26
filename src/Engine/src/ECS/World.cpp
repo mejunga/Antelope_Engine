@@ -8,18 +8,18 @@
 
 #include <vector>
 
-namespace Antelope {
-
+namespace Antelope
+{
     World::World() {}
     World::~World() {}
 
     Entity World::CreateEntity(const std::string& name) 
     {
-        entt::entity handle = m_Registry.create();
-        Entity entity = { handle, this };
+        entt::entity handle { m_Registry.create() };
+        Entity entity { handle, this };
 
         entity.AddComponent<TransformComponent>();
-        auto& tag = entity.AddComponent<TagComponent>();
+        auto& tag { entity.AddComponent<TagComponent>() };
         tag.Tag = name.empty() ? "Entity" : name;
 
         return entity;
@@ -32,25 +32,25 @@ namespace Antelope {
 
     void World::OnUpdateRuntime(float deltaTime)
     {
-        // 31
+
     }
 
     void World::OnUpdateEditor(float deltaTime, EditorCamera& camera)
     {
-        auto renderer = Application::Get().GetRenderer();
-        if (!renderer) return;
+        auto renderer { Application::Get().GetRenderer() };
+        if (!renderer) { return; }
 
         UniformBufferObject cameraUBO {};
         cameraUBO.view = camera.GetViewMatrix();
         
-        auto extent = Application::Get().GetSwapChain()->GetExtent();
+        auto extent { Application::Get().GetSwapChain()->GetExtent() };
         cameraUBO.proj = camera.GetProjectionMatrix(
             static_cast<float>(extent.width), 
             static_cast<float>(extent.height)
         );
 
         std::vector<RenderCommand> renderList;
-        auto view = m_Registry.view<TransformComponent, MeshComponent>();
+        auto view { m_Registry.view<TransformComponent, MeshComponent>() };
 
         for (auto [entityID, transform, meshComponent] : view.each()) 
         {

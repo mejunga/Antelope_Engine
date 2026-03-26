@@ -5,31 +5,35 @@
 #include <fstream>
 #include <stdexcept>
 
-namespace Antelope {
-
+namespace Antelope
+{
     VulkanPipeline::VulkanPipeline(std::shared_ptr<VulkanContext> context, const std::string& vertFilepath, const std::string& fragFilepath, const PipelineConfigInfo& configInfo)
-        : m_Context(context) {
+        : m_Context(context)
+    {
         CreateGraphicsPipeline(vertFilepath, fragFilepath, configInfo);
     }
 
-    VulkanPipeline::~VulkanPipeline() {
+    VulkanPipeline::~VulkanPipeline()
+    {
         vkDestroyShaderModule(m_Context->GetDevice(), m_VertShaderModule, nullptr);
         vkDestroyShaderModule(m_Context->GetDevice(), m_FragShaderModule, nullptr);
         vkDestroyPipeline(m_Context->GetDevice(), m_GraphicsPipeline, nullptr);
     }
 
-    void VulkanPipeline::Bind(VkCommandBuffer commandBuffer) {
+    void VulkanPipeline::Bind(VkCommandBuffer commandBuffer)
+    {
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicsPipeline);
     }
 
-    void VulkanPipeline::CreateGraphicsPipeline(const std::string& vertFilepath, const std::string& fragFilepath, const PipelineConfigInfo& configInfo) {
-        auto vertCode = ReadFile(vertFilepath);
-        auto fragCode = ReadFile(fragFilepath);
+    void VulkanPipeline::CreateGraphicsPipeline(const std::string& vertFilepath, const std::string& fragFilepath, const PipelineConfigInfo& configInfo)
+    {
+        auto vertCode { ReadFile(vertFilepath) };
+        auto fragCode { ReadFile(fragFilepath) };
 
         m_VertShaderModule = CreateShaderModule(vertCode);
         m_FragShaderModule = CreateShaderModule(fragCode);
 
-        VkPipelineShaderStageCreateInfo shaderStages[2];
+        VkPipelineShaderStageCreateInfo shaderStages[2] {};
         shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
         shaderStages[0].module = m_VertShaderModule;
@@ -42,10 +46,10 @@ namespace Antelope {
         shaderStages[1].pName = "main";
         shaderStages[1].flags = 0; shaderStages[1].pNext = nullptr; shaderStages[1].pSpecializationInfo = nullptr;
 
-        VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+        VkPipelineVertexInputStateCreateInfo vertexInputInfo {};
         vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
-        VkGraphicsPipelineCreateInfo pipelineInfo{};
+        VkGraphicsPipelineCreateInfo pipelineInfo {};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
         pipelineInfo.stageCount = 2;
         pipelineInfo.pStages = shaderStages;
@@ -65,28 +69,36 @@ namespace Antelope {
         pipelineInfo.basePipelineIndex = -1;
         pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 
-        if (vkCreateGraphicsPipelines(m_Context->GetDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_GraphicsPipeline) != VK_SUCCESS) {
+        if (vkCreateGraphicsPipelines(m_Context->GetDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_GraphicsPipeline) != VK_SUCCESS)
+        {
+            AE_ENGINE_CRITICAL("Failed to create graphics pipeline!");
             throw std::runtime_error("Failed to create graphics pipeline");
         }
     }
 
-    VkShaderModule VulkanPipeline::CreateShaderModule(const std::vector<char>& code) {
-        VkShaderModuleCreateInfo createInfo{};
+    VkShaderModule VulkanPipeline::CreateShaderModule(const std::vector<char>& code)
+    {
+        VkShaderModuleCreateInfo createInfo {};
         createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         createInfo.codeSize = code.size();
         createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
 
         VkShaderModule shaderModule;
-        if (vkCreateShaderModule(m_Context->GetDevice(), &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
+
+        if (vkCreateShaderModule(m_Context->GetDevice(), &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
+        {
+            AE_ENGINE_CRITICAL("Failed to create shader module!");
             throw std::runtime_error("Failed to create shader module");
         }
+
         return shaderModule;
     }
 
-    std::vector<char> VulkanPipeline::ReadFile(const std::string& filepath) {
+    std::vector<char> VulkanPipeline::ReadFile(const std::string& filepath)
+    {
         std::ifstream file(filepath, std::ios::ate | std::ios::binary);
         if (!file.is_open()) throw std::runtime_error("Failed to open file: " + filepath);
-        size_t fileSize = static_cast<size_t>(file.tellg());
+        size_t fileSize { static_cast<size_t>(file.tellg()) };
         std::vector<char> buffer(fileSize);
         file.seekg(0);
         file.read(buffer.data(), fileSize);
@@ -94,7 +106,8 @@ namespace Antelope {
         return buffer;
     }
 
-    void VulkanPipeline::DefaultPipelineConfigInfo(PipelineConfigInfo& configInfo, std::shared_ptr<VulkanContext> context) {
+    void VulkanPipeline::DefaultPipelineConfigInfo(PipelineConfigInfo& configInfo, std::shared_ptr<VulkanContext> context)
+    {
         configInfo.inputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
         configInfo.inputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         configInfo.inputAssemblyInfo.primitiveRestartEnable = VK_FALSE;

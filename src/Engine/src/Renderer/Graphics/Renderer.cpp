@@ -2,7 +2,7 @@
 #include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 #include <Engine/Renderer/Vulkan/SwapChain.hpp>
 #include <Engine/Renderer/Graphics/Camera.hpp>
-#include <Engine/AssetManager/TextureManager.hpp>
+#include <Engine/AssetImport/TextureManager.hpp>
 #include <Engine/Renderer/Vulkan/VulkanBuffer.hpp>
 #include <Engine/Renderer/Vulkan/VulkanPipeline.hpp>
 #include <Engine/Renderer/Vulkan/VulkanDescriptor.hpp>
@@ -79,7 +79,7 @@ namespace Antelope
 
         if (!m_InFlightFences.empty()) 
         {
-            for (size_t i = 0; i < m_InFlightFences.size(); i++) 
+            for (size_t i { 0 }; i < m_InFlightFences.size(); i++) 
             {
                 vkDestroyFence(m_Context->GetDevice(), m_InFlightFences[i], nullptr);
             }
@@ -90,7 +90,7 @@ namespace Antelope
 
         if (!m_RenderFinishedSemaphores.empty()) 
         {
-            for (size_t i = 0; i < m_RenderFinishedSemaphores.size(); i++) 
+            for (size_t i { 0 }; i < m_RenderFinishedSemaphores.size(); i++) 
             {
                 vkDestroySemaphore(m_Context->GetDevice(), m_RenderFinishedSemaphores[i], nullptr);
             }
@@ -101,7 +101,7 @@ namespace Antelope
 
         if (!m_ImageAvailableSemaphores.empty()) 
         {
-            for (size_t i = 0; i < m_ImageAvailableSemaphores.size(); i++) 
+            for (size_t i { 0 }; i < m_ImageAvailableSemaphores.size(); i++) 
             {
                 vkDestroySemaphore(m_Context->GetDevice(), m_ImageAvailableSemaphores[i], nullptr);
             }
@@ -142,7 +142,7 @@ namespace Antelope
 
     void Renderer::DrawFrame(const UniformBufferObject& cameraData, const std::vector<RenderCommand>& renderList)
     {
-        VkCommandBuffer cmd = BeginFrame();
+        VkCommandBuffer cmd { BeginFrame() };
         if (cmd == VK_NULL_HANDLE) return;
         DrawObjects(cmd, cameraData, renderList);
         EndFrame(cmd);
@@ -150,12 +150,12 @@ namespace Antelope
 
     MeshHandle Renderer::UploadMesh(const MeshData& meshData)
     {
-       VkDeviceSize posSize    = sizeof(VertexPosition) * meshData.positions.size();
-        VkDeviceSize colorSize  = sizeof(VertexColor)    * meshData.colors.size();
-        VkDeviceSize normalSize = sizeof(VertexNormal)   * meshData.normals.size();
-        VkDeviceSize uvSize     = sizeof(VertexUV)       * meshData.uvs.size();
-        VkDeviceSize faceSize   = sizeof(Face)           * meshData.faces.size();
-        VkDeviceSize totalSize  = posSize + colorSize + normalSize + faceSize + uvSize;
+        VkDeviceSize posSize { sizeof(VertexPosition) * meshData.positions.size() };
+        VkDeviceSize colorSize { sizeof(VertexColor) * meshData.colors.size() };
+        VkDeviceSize normalSize { sizeof(VertexNormal) * meshData.normals.size() };
+        VkDeviceSize uvSize { sizeof(VertexUV) * meshData.uvs.size() };
+        VkDeviceSize faceSize { sizeof(Face) * meshData.faces.size() };
+        VkDeviceSize totalSize { posSize + colorSize + normalSize + faceSize + uvSize };
 
         MeshHandle handle {};
 
@@ -169,7 +169,7 @@ namespace Antelope
         handle.faceCount = static_cast<uint32_t>(meshData.faces.size());
 
         std::vector<char> combinedData(totalSize);
-        size_t offset = 0;
+        size_t offset { 0 };
 
         if (posSize > 0) { memcpy(combinedData.data() + offset, meshData.positions.data(), posSize); offset += posSize; }
         if (colorSize > 0) { memcpy(combinedData.data() + offset, meshData.colors.data(), colorSize); offset += colorSize; }
@@ -177,8 +177,8 @@ namespace Antelope
         if (uvSize > 0) { memcpy(combinedData.data() + offset, meshData.uvs.data(), uvSize); offset += uvSize; }
         if (faceSize > 0) { memcpy(combinedData.data() + offset, meshData.faces.data(), faceSize); }
 
-        VkBuffer stagingBuffer; 
-        VmaAllocation stagingAllocation;
+        VkBuffer stagingBuffer { VK_NULL_HANDLE }; 
+        VmaAllocation stagingAllocation { VK_NULL_HANDLE };
         CreateStagingBuffer(combinedData.data(), totalSize, stagingBuffer, stagingAllocation);
 
         VkCommandBufferAllocateInfo allocationInfo {};
@@ -187,7 +187,7 @@ namespace Antelope
         allocationInfo.commandPool = m_TransferCommandPool;
         allocationInfo.commandBufferCount = 1;
 
-        VkCommandBuffer commandBuffer;
+        VkCommandBuffer commandBuffer { VK_NULL_HANDLE };
         vkAllocateCommandBuffers(m_Context->GetDevice(), &allocationInfo, &commandBuffer);
 
         VkCommandBufferBeginInfo beginInfo {};
@@ -196,23 +196,25 @@ namespace Antelope
         vkBeginCommandBuffer(commandBuffer, &beginInfo);
 
         VkBufferCopy copyRegion {};
-        VkDeviceSize srcOffset = 0;
+        VkDeviceSize srcOffset { 0 };
         
-        auto addCopy = [&](VkBuffer dstBuf, VkDeviceSize dstOffset, VkDeviceSize size) {
-            if (size > 0) {
-                copyRegion.srcOffset = srcOffset;
-                copyRegion.dstOffset = dstOffset;
-                copyRegion.size = size;
-                vkCmdCopyBuffer(commandBuffer, stagingBuffer, dstBuf, 1, &copyRegion);
-                srcOffset += size;
-            }
-        };
+        auto addCopy { [&](VkBuffer dstBuf, VkDeviceSize dstOffset, VkDeviceSize size)
+            {
+                if (size > 0)
+                {
+                    copyRegion.srcOffset = srcOffset;
+                    copyRegion.dstOffset = dstOffset;
+                    copyRegion.size = size;
+                    vkCmdCopyBuffer(commandBuffer, stagingBuffer, dstBuf, 1, &copyRegion);
+                    srcOffset += size;
+                }
+            } };
 
-        VkBuffer targetPosBuffer = m_GpuAllocator->GetPosBuffer()->GetBuffer(handle.posAllocation.PageIndex);
-        VkBuffer targetColBuffer = m_GpuAllocator->GetColorBuffer()->GetBuffer(handle.colorAllocation.PageIndex);
-        VkBuffer targetNormBuffer = m_GpuAllocator->GetNormalBuffer()->GetBuffer(handle.normalAllocation.PageIndex);
-        VkBuffer targetUvBuffer = m_GpuAllocator->GetUvBuffer()->GetBuffer(handle.uvAllocation.PageIndex);
-        VkBuffer targetFaceBuffer = m_GpuAllocator->GetFaceBuffer()->GetBuffer(handle.faceAllocation.PageIndex);
+        VkBuffer targetPosBuffer { m_GpuAllocator->GetPosBuffer()->GetBuffer(handle.posAllocation.PageIndex) };
+        VkBuffer targetColBuffer { m_GpuAllocator->GetColorBuffer()->GetBuffer(handle.colorAllocation.PageIndex) };
+        VkBuffer targetNormBuffer { m_GpuAllocator->GetNormalBuffer()->GetBuffer(handle.normalAllocation.PageIndex) };
+        VkBuffer targetUvBuffer { m_GpuAllocator->GetUvBuffer()->GetBuffer(handle.uvAllocation.PageIndex) };
+        VkBuffer targetFaceBuffer { m_GpuAllocator->GetFaceBuffer()->GetBuffer(handle.faceAllocation.PageIndex) };
 
         addCopy(targetPosBuffer, handle.posAllocation.Offset, posSize);
         addCopy(targetColBuffer, handle.colorAllocation.Offset, colorSize);
@@ -224,7 +226,7 @@ namespace Antelope
 
         VkFenceCreateInfo fenceInfo {};
         fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        VkFence transferFence;
+        VkFence transferFence { VK_NULL_HANDLE };
         vkCreateFence(m_Context->GetDevice(), &fenceInfo, nullptr, &transferFence);
 
         VkSubmitInfo submitInfo {};
@@ -260,9 +262,9 @@ namespace Antelope
             imageInfos.push_back({tex.Sampler, tex.ImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
         }
 
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+        for (size_t i { 0 }; i < MAX_FRAMES_IN_FLIGHT; ++i)
         {
-            VkWriteDescriptorSet descriptorWrite{};
+            VkWriteDescriptorSet descriptorWrite {};
             descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             descriptorWrite.dstSet = m_DescriptorSets[i];
             descriptorWrite.dstBinding = 7;
@@ -341,7 +343,7 @@ namespace Antelope
         
         builder.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
         
-        for (int i = 1; i <= 6; ++i)
+        for (int i { 1 }; i <= 6; ++i)
         {
             builder.AddBinding(i, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
         }
@@ -349,10 +351,12 @@ namespace Antelope
         builder.AddBinding(7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1024);
 
         std::array<VkDescriptorBindingFlags, 8> bindingFlags {};
-        for (int i = 0; i < 7; i++) 
+
+        for (int i { 0 }; i < 7; ++i) 
         {
             bindingFlags[i] = 0;
         }
+        
         bindingFlags[7] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
 
         VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo {};
@@ -381,7 +385,7 @@ namespace Antelope
 
     void Renderer::ProcessPendingTransfers()
     {
-        for (auto it = m_PendingTransfers.begin(); it != m_PendingTransfers.end(); ) 
+        for (auto it { m_PendingTransfers.begin() }; it != m_PendingTransfers.end(); ) 
         {
             if (vkGetFenceStatus(m_Context->GetDevice(), it->fence) == VK_SUCCESS) 
             {
@@ -404,9 +408,7 @@ namespace Antelope
     {
         ProcessPendingTransfers();
         vkWaitForFences(m_Context->GetDevice(), 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
-
-        VkResult result = vkAcquireNextImageKHR(m_Context->GetDevice(), m_SwapChain->GetSwapchain(), UINT64_MAX, 
-                                                m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &m_CurrentImageIndex);
+        VkResult result { vkAcquireNextImageKHR(m_Context->GetDevice(), m_SwapChain->GetSwapchain(), UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &m_CurrentImageIndex) };
 
         if (result == VK_ERROR_OUT_OF_DATE_KHR)
         {
@@ -419,6 +421,12 @@ namespace Antelope
             return VK_NULL_HANDLE;
         }
 
+        if (m_ImagesInFlight[m_CurrentImageIndex] != VK_NULL_HANDLE) 
+        {
+            vkWaitForFences(m_Context->GetDevice(), 1, &m_ImagesInFlight[m_CurrentImageIndex], VK_TRUE, UINT64_MAX);
+        }
+        
+        m_ImagesInFlight[m_CurrentImageIndex] = m_InFlightFences[m_CurrentFrame];
         vkResetFences(m_Context->GetDevice(), 1, &m_InFlightFences[m_CurrentFrame]);
         vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
 
@@ -468,14 +476,15 @@ namespace Antelope
         
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_PipelineLayout, 0, 1, &m_DescriptorSets[m_CurrentFrame], 0, nullptr);
         
-        ObjectData* objectDataMap = static_cast<ObjectData*>(m_ObjectBuffers[m_CurrentFrame]->GetMappedMemory());
-        VkDrawIndirectCommand* indirectCommandsMap = static_cast<VkDrawIndirectCommand*>(m_IndirectBuffers[m_CurrentFrame]->GetMappedMemory());
+        ObjectData* objectDataMap { static_cast<ObjectData*>(m_ObjectBuffers[m_CurrentFrame]->GetMappedMemory()) };
+        VkDrawIndirectCommand* indirectCommandsMap { static_cast<VkDrawIndirectCommand*>(m_IndirectBuffers[m_CurrentFrame]->GetMappedMemory()) };
 
-        uint32_t objectCount = 0;
+        uint32_t objectCount { 0 };
 
-        for (size_t i = 0; i < renderList.size(); i++) 
+        for (size_t i { 0 }; i < renderList.size(); i++) 
         {
-            const auto& command = renderList[i];
+            const auto& command { renderList[i] };
+
             if (m_PendingMeshOffsets.count(static_cast<uint32_t>(command.mesh.posAllocation.Offset)) > 0) { continue; }
 
             objectDataMap[objectCount].model = command.transform;
@@ -493,7 +502,8 @@ namespace Antelope
             objectCount++;
         }
 
-        if (objectCount > 0) {
+        if (objectCount > 0)
+        {
             vkCmdDrawIndirect(cmd, m_IndirectBuffers[m_CurrentFrame]->GetBuffer(), 0, objectCount, sizeof(VkDrawIndirectCommand));
         }
 
@@ -502,54 +512,58 @@ namespace Antelope
 
     void Renderer::EndFrame(VkCommandBuffer cmd)
     {
-        if (vkEndCommandBuffer(cmd) != VK_SUCCESS) 
-        {
-            AE_ENGINE_ERROR("Failed to record command buffer!");
-            return;
-        }
+        if (vkEndCommandBuffer(cmd) != VK_SUCCESS) { return; }
 
         VkSubmitInfo submitInfo {};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-        VkSemaphore waitSemaphores[] = { m_ImageAvailableSemaphores[m_CurrentFrame] };
-        VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+        VkSemaphore waitSemaphores[] { m_ImageAvailableSemaphores[m_CurrentFrame] };
+        VkPipelineStageFlags waitStages[] { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
         submitInfo.waitSemaphoreCount = 1;
         submitInfo.pWaitSemaphores = waitSemaphores;
         submitInfo.pWaitDstStageMask = waitStages;
-
         submitInfo.commandBufferCount = 1;
         submitInfo.pCommandBuffers = &cmd;
 
-        VkSemaphore signalSemaphores[] = { m_RenderFinishedSemaphores[m_CurrentImageIndex] };
+        VkSemaphore signalSemaphores[] { m_RenderFinishedSemaphores[m_CurrentImageIndex] }; 
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = signalSemaphores;
 
-        if (vkQueueSubmit(m_Context->GetGraphicsQueue(), 1, &submitInfo, m_InFlightFences[m_CurrentFrame]) != VK_SUCCESS) 
-        {
-            AE_ENGINE_ERROR("Failed to submit draw command buffer!");
-            return;
-        }
+        if (vkQueueSubmit(m_Context->GetGraphicsQueue(), 1, &submitInfo, m_InFlightFences[m_CurrentFrame]) != VK_SUCCESS) { return; }
 
         VkPresentInfoKHR presentInfo {};
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         presentInfo.waitSemaphoreCount = 1;
-        presentInfo.pWaitSemaphores = signalSemaphores; 
-
-        VkSwapchainKHR swapchains[] {{ m_SwapChain->GetSwapchain() }};
+        presentInfo.pWaitSemaphores = signalSemaphores;
+        
+        VkSwapchainKHR swapchains[] { m_SwapChain->GetSwapchain() };
         presentInfo.swapchainCount = 1;
         presentInfo.pSwapchains = swapchains;
         presentInfo.pImageIndices = &m_CurrentImageIndex;
 
-        VkResult result = vkQueuePresentKHR(m_Context->GetPresentQueue(), &presentInfo);
+        VkResult result { vkQueuePresentKHR(m_Context->GetPresentQueue(), &presentInfo) };
 
         if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_SwapChain->IsFramebufferResized())
         {
             m_SwapChain->SetFramebufferResized(false);
             m_SwapChain->RecreateSwapchain();
-        }
-        else if (result != VK_SUCCESS)
-        {
-            AE_ENGINE_ERROR("Failed to present swapchain image!");
+            
+            uint32_t newImageCount { static_cast<uint32_t>(m_SwapChain->GetFramebuffers().size()) };
+            m_ImagesInFlight.assign(newImageCount, VK_NULL_HANDLE);
+
+            if (newImageCount > m_RenderFinishedSemaphores.size())
+            {
+                size_t oldSize { m_RenderFinishedSemaphores.size() };
+                m_RenderFinishedSemaphores.resize(newImageCount);
+                
+                VkSemaphoreCreateInfo semaphoreInfo {};
+                semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+                
+                for (size_t i { oldSize }; i < newImageCount; i++) 
+                {
+                    vkCreateSemaphore(m_Context->GetDevice(), &semaphoreInfo, nullptr, &m_RenderFinishedSemaphores[i]);
+                }
+            }
         }
         
         m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
@@ -606,11 +620,12 @@ namespace Antelope
 
     void Renderer::CreateSyncObjects() 
     {
+        uint32_t imageCount { static_cast<uint32_t>(m_SwapChain->GetFramebuffers().size()) };
+        
         m_ImageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-        m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
-
-        uint32_t imageCount = static_cast<uint32_t>(m_SwapChain->GetFramebuffers().size());
         m_RenderFinishedSemaphores.resize(imageCount);
+        m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+        m_ImagesInFlight.assign(imageCount, VK_NULL_HANDLE);
 
         VkSemaphoreCreateInfo semaphoreInfo {};
         semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -619,32 +634,32 @@ namespace Antelope
         fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
+        for (size_t i { 0 }; i < MAX_FRAMES_IN_FLIGHT; i++) 
         {
             if (vkCreateSemaphore(m_Context->GetDevice(), &semaphoreInfo, nullptr, &m_ImageAvailableSemaphores[i]) != VK_SUCCESS ||
                 vkCreateFence(m_Context->GetDevice(), &fenceInfo, nullptr, &m_InFlightFences[i]) != VK_SUCCESS) 
             {
-                AE_ENGINE_ERROR("Failed to create synchronization objects!");
-                throw std::runtime_error("Failed to create synchronization objects");
+                AE_ENGINE_ERROR("Failed to create frame synchronization objects!");
+                throw std::runtime_error("Failed to create frame synchronization objects");
             }
         }
 
-        for (size_t i = 0; i < imageCount; i++)
+        for (size_t i { 0 }; i < imageCount; i++) 
         {
-            if (vkCreateSemaphore(m_Context->GetDevice(), &semaphoreInfo, nullptr, &m_RenderFinishedSemaphores[i]) != VK_SUCCESS)
+            if (vkCreateSemaphore(m_Context->GetDevice(), &semaphoreInfo, nullptr, &m_RenderFinishedSemaphores[i]) != VK_SUCCESS) 
             {
-                AE_ENGINE_ERROR("Failed to create RenderFinished semaphores!");
-                throw std::runtime_error("Failed to create RenderFinished semaphores");
+                AE_ENGINE_ERROR("Failed to create render finished semaphores!");
+                throw std::runtime_error("Failed to create render finished semaphores");
             }
         }
     }
 
     void Renderer::CreateUniformBuffers()
     {
-        VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+        VkDeviceSize bufferSize { sizeof(UniformBufferObject) };
         m_UniformBuffers.reserve(MAX_FRAMES_IN_FLIGHT);
 
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
+        for (size_t i { 0 }; i < MAX_FRAMES_IN_FLIGHT; i++) 
         {
             m_UniformBuffers.push_back(std::make_unique<VulkanBuffer>(
                 m_Context, 
@@ -661,7 +676,7 @@ namespace Antelope
         VkDeviceSize bufferSize = sizeof(ObjectData) * MAX_OBJECTS;
         m_ObjectBuffers.reserve(MAX_FRAMES_IN_FLIGHT);
 
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
+        for (size_t i { 0 }; i < MAX_FRAMES_IN_FLIGHT; i++) 
         {
             m_ObjectBuffers.push_back(std::make_unique<VulkanBuffer>(
                 m_Context, 
@@ -675,10 +690,10 @@ namespace Antelope
 
     void Renderer::CreateIndirectBuffers()
     {
-        VkDeviceSize bufferSize = sizeof(VkDrawIndirectCommand) * MAX_OBJECTS;
+        VkDeviceSize bufferSize { sizeof(VkDrawIndirectCommand) * MAX_OBJECTS };
         m_IndirectBuffers.reserve(MAX_FRAMES_IN_FLIGHT);
 
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) 
+        for (size_t i { 0 }; i < MAX_FRAMES_IN_FLIGHT; ++i) 
         {
             m_IndirectBuffers.push_back(std::make_unique<VulkanBuffer>(
                 m_Context, 
@@ -720,7 +735,7 @@ namespace Antelope
     {
         m_DescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
 
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) 
+        for (size_t i { 0 }; i < MAX_FRAMES_IN_FLIGHT; ++i) 
         {
             m_DescriptorSets[i] = m_GlobalDescriptorAllocator->Allocate(m_DescriptorSetLayout);
 
@@ -738,7 +753,7 @@ namespace Antelope
 
     void Renderer::CreateTransferCommandPool()
     {
-        QueueFamilyIndices queueFamilyIndices = m_Context->FindQueueFamilies(m_Context->GetPhysicalDevice());
+        QueueFamilyIndices queueFamilyIndices { m_Context->FindQueueFamilies(m_Context->GetPhysicalDevice()) };
 
         VkCommandPoolCreateInfo poolInfo {};
         poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;

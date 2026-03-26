@@ -1,6 +1,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 
-#include <Engine/AssetManager/TextureManager.hpp>
+#include <Engine/AssetImport/TextureManager.hpp>
 #include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 #include <Engine/Debug/Log.hpp>
 
@@ -42,19 +42,19 @@ namespace Antelope
 
     uint32_t TextureManager::LoadTexture(const std::string& filepath)
     {
-        int textureWidth, textureHeight, textureChannels;
+        int textureWidth { 0 }, textureHeight { 0 }, textureChannels { 0 };
         
-        stbi_uc* pixels = stbi_load(filepath.c_str(), &textureWidth, &textureHeight, &textureChannels, STBI_rgb_alpha);
-        VkDeviceSize imageSize = textureWidth * textureHeight * 4;
+        stbi_uc* pixels { stbi_load(filepath.c_str(), &textureWidth, &textureHeight, &textureChannels, STBI_rgb_alpha) };
+        VkDeviceSize imageSize { static_cast<uint64_t>(textureWidth * textureHeight * 4) };
 
         if (!pixels)
         {
-            AE_ENGINE_ERROR("Failed to load texture image: {0}", filepath);
-            throw std::runtime_error("Failed to load texture image!");
+            AE_ENGINE_ERROR("Failed to load texture image: {0}!", filepath);
+            throw std::runtime_error("Failed to load texture image");
         }
 
-        VkBuffer stagingBuffer;
-        VmaAllocation stagingAllocation;
+        VkBuffer stagingBuffer { VK_NULL_HANDLE };
+        VmaAllocation stagingAllocation { VK_NULL_HANDLE };
 
         VkBufferCreateInfo bufferInfo {};
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -116,9 +116,15 @@ namespace Antelope
         allocationInfo.usage = memUsage;
         allocationInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
 
-        if (vmaCreateImage(m_Context->GetAllocator(), &imageInfo, &allocationInfo, &image, &allocation, nullptr) != VK_SUCCESS) {
+        if (vmaCreateImage(m_Context->GetAllocator(), &imageInfo, &allocationInfo, &image, &allocation, nullptr) != VK_SUCCESS) 
+        {
             AE_ENGINE_CRITICAL("Failed to create Vulkan image!");
-            throw std::runtime_error("Failed to create image");
+            throw std::runtime_error("Failed to create Vulkan image");
+        }
+        else
+        {
+            AE_ENGINE_CRITICAL("Unsupported layout transition!");
+            throw std::invalid_argument("Unsupported layout transition");
         }
     }
 

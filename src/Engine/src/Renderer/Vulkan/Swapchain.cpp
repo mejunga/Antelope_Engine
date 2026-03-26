@@ -47,7 +47,7 @@ namespace Antelope
 
     void SwapChain::RecreateSwapchain()
     {
-        int width = 0, height = 0;
+        int width { 0 }, height { 0 };
         glfwGetFramebufferSize(m_Context->GetWindowHandle(), &width, &height);
         
         while (width == 0 || height == 0) 
@@ -174,11 +174,11 @@ namespace Antelope
 
     void SwapChain::CreateSwapchain()
     {
-        SwapchainSupportDetails swapchainSupport = m_Context->QuerySwapChainSupport(m_Context->GetPhysicalDevice());
-        VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(swapchainSupport.Formats);
-        VkPresentModeKHR presentMode = ChooseSwapPresentMode(swapchainSupport.PresentModes);
-        VkExtent2D extent = ChooseSwapExtent(swapchainSupport.Capabilities, m_Context->GetWindowHandle());
-        uint32_t imageCount = swapchainSupport.Capabilities.minImageCount + 1;
+        SwapchainSupportDetails swapchainSupport { m_Context->QuerySwapChainSupport(m_Context->GetPhysicalDevice()) };
+        VkSurfaceFormatKHR surfaceFormat { ChooseSwapSurfaceFormat(swapchainSupport.Formats) };
+        VkPresentModeKHR presentMode { ChooseSwapPresentMode(swapchainSupport.PresentModes) };
+        VkExtent2D extent { ChooseSwapExtent(swapchainSupport.Capabilities, m_Context->GetWindowHandle()) };
+        uint32_t imageCount { swapchainSupport.Capabilities.minImageCount + 1 };
 
         if (swapchainSupport.Capabilities.maxImageCount > 0 && imageCount > swapchainSupport.Capabilities.maxImageCount)
         {
@@ -195,7 +195,7 @@ namespace Antelope
         swapchainInfo.imageArrayLayers = 1;
         swapchainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-        QueueFamilyIndices indices = m_Context->FindQueueFamilies(m_Context->GetPhysicalDevice());
+        QueueFamilyIndices indices { m_Context->FindQueueFamilies(m_Context->GetPhysicalDevice()) };
         uint32_t queueFamilyIndices[] = { indices.GraphicsFamily.value(), indices.PresentFamily.value() };
 
         if (indices.GraphicsFamily != indices.PresentFamily)
@@ -233,10 +233,10 @@ namespace Antelope
 
     void SwapChain::CreateImageViews()
     {
-        uint32_t imageViewsSize = m_SwapchainImages.size();
+        uint32_t imageViewsSize { static_cast<uint32_t>(m_SwapchainImages.size()) };
         m_SwapchainImageViews.resize(imageViewsSize);
 
-        for (size_t i = 0; i < imageViewsSize; ++i)
+        for (size_t i { 0 }; i < imageViewsSize; ++i)
         {
             VkImageViewCreateInfo ImageViewInfo {};
             ImageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -367,9 +367,9 @@ namespace Antelope
         dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
         dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
-        std::array<VkAttachmentDescription, 3> attachments = {colorAttachment, depthAttachment, colorAttachmentResolve};
+        std::array<VkAttachmentDescription, 3> attachments {colorAttachment, depthAttachment, colorAttachmentResolve};
 
-        VkRenderPassCreateInfo renderPassInfo{};
+        VkRenderPassCreateInfo renderPassInfo {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
         renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
         renderPassInfo.pAttachments = attachments.data();
@@ -389,9 +389,10 @@ namespace Antelope
     {
         m_SwapchainFramebuffers.resize(m_SwapchainImageViews.size());
 
-        for (size_t i = 0; i < m_SwapchainImageViews.size(); i++) 
+        for (size_t i { 0 }; i < m_SwapchainImageViews.size(); i++) 
         {
-            std::array<VkImageView, 3> attachments = {
+            std::array<VkImageView, 3> attachments
+            {
                 m_ColorImageView,
                 m_DepthImageView,
                 m_SwapchainImageViews[i]
@@ -437,6 +438,7 @@ namespace Antelope
 
         if (vmaCreateImage(m_Context->GetAllocator(), &imageInfo, &allocationInfo, &m_ColorImage, &m_ColorImageAllocation, nullptr) != VK_SUCCESS) 
         {
+            AE_ENGINE_CRITICAL("Failed to create MSAA color image!");
             throw std::runtime_error("Failed to create MSAA color image");
         }
 
@@ -453,6 +455,7 @@ namespace Antelope
 
         if (vkCreateImageView(m_Context->GetDevice(), &viewInfo, nullptr, &m_ColorImageView) != VK_SUCCESS) 
         {
+            AE_ENGINE_CRITICAL("Failed to create MSAA color image view!");
             throw std::runtime_error("Failed to create MSAA color image view");
         }
     }

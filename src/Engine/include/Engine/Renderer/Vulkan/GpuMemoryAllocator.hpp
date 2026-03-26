@@ -7,6 +7,7 @@
 #include <memory>
 #include <string>
 
+
 namespace Antelope
 {
     class VulkanContext;
@@ -44,6 +45,7 @@ namespace Antelope
 
         private:
             std::shared_ptr<VulkanContext> m_Context;
+
             VkDeviceSize m_PageSize;
             VkBufferUsageFlags m_Usage;
             bool m_HostVisible;

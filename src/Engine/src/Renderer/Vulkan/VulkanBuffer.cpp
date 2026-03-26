@@ -11,18 +11,18 @@ namespace Antelope
     VulkanBuffer::VulkanBuffer(std::shared_ptr<VulkanContext> context, VkDeviceSize size, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage, VmaAllocationCreateFlags flags)
         : m_Context(context), m_BufferSize(size)
     {
-        VkBufferCreateInfo bufferInfo{};
+        VkBufferCreateInfo bufferInfo {};
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         bufferInfo.size = size;
         bufferInfo.usage = usage;
         bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-        VmaAllocationCreateInfo allocInfo{};
-        allocInfo.usage = memoryUsage;
-        allocInfo.flags = flags;
+        VmaAllocationCreateInfo allocationInfo {};
+        allocationInfo.usage = memoryUsage;
+        allocationInfo.flags = flags;
 
         VmaAllocationInfo allocationResult;
-        if (vmaCreateBuffer(m_Context->GetAllocator(), &bufferInfo, &allocInfo, &m_Buffer, &m_Allocation, &allocationResult) != VK_SUCCESS)
+        if (vmaCreateBuffer(m_Context->GetAllocator(), &bufferInfo, &allocationInfo, &m_Buffer, &m_Allocation, &allocationResult) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to create Vulkan buffer! Size: {0}", size);
             throw std::runtime_error("Failed to create Vulkan buffer");
@@ -52,7 +52,7 @@ namespace Antelope
         }
         else
         {
-            char* memOffset = (char*)m_MappedData;
+            char* memOffset { static_cast<char*>(m_MappedData) };
             memOffset += offset;
             memcpy(memOffset, data, size);
         }

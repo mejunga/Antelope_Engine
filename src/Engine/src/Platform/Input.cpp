@@ -24,7 +24,7 @@ namespace Antelope
     void Input::GetMousePosition(float& x, float& y)
     {
         auto window { Application::Get().GetWindow().GetNativeWindow() };
-        double xpos, ypos;
+        double xpos { 0.0 }, ypos { 0.0 };
         glfwGetCursorPos(window, &xpos, &ypos);
         x = static_cast<float>(xpos);
         y = static_cast<float>(ypos);

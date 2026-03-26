@@ -67,6 +67,7 @@ namespace Antelope
 
         private:
             GLFWwindow *m_WindowHandle { nullptr };
+            
             VkInstance m_Instance { VK_NULL_HANDLE };
             VkDebugUtilsMessengerEXT m_DebugMessenger { VK_NULL_HANDLE };
             VkSurfaceKHR m_Surface { VK_NULL_HANDLE };

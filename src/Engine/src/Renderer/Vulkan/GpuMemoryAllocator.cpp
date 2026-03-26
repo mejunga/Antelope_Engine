@@ -44,7 +44,7 @@ namespace Antelope
         VirtualAllocation result {};
         result.Size = size;
 
-        for (size_t i = 0; i < m_Pages.size(); ++i)
+        for (size_t i { 0 }; i < m_Pages.size(); ++i)
         {
             VkResult res { vmaVirtualAllocate(m_Pages[i].VirtualBlock, &allocationInfo, &result.Handle, &result.Offset) };
 
@@ -58,7 +58,7 @@ namespace Antelope
         AE_ENGINE_WARN("Buffer '{0}' is full! Allocating a new Page", m_Name);
         CreateNewPage();
 
-        uint32_t newPageIndex = static_cast<uint32_t>(m_Pages.size() - 1);
+        uint32_t newPageIndex { static_cast<uint32_t>(m_Pages.size() - 1) };
 
         if (vmaVirtualAllocate(m_Pages[newPageIndex].VirtualBlock, &allocationInfo, &result.Handle, &result.Offset) != VK_SUCCESS)
         {
@@ -122,7 +122,7 @@ namespace Antelope
     GpuMemoryAllocator::GpuMemoryAllocator(std::shared_ptr<VulkanContext> context)
         : m_Context(context)
     {
-        VkBufferUsageFlags geomUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        VkBufferUsageFlags geomUsage { VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT };
 
         m_PosBuffer = std::make_shared<PagedVirtualBuffer>(context, PAGE_SIZE, geomUsage, false, "PositionBuffer");
         m_ColorBuffer = std::make_shared<PagedVirtualBuffer>(context, PAGE_SIZE, geomUsage, false, "ColorBuffer");

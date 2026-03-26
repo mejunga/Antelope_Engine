@@ -29,11 +29,10 @@ namespace Antelope
     class VulkanPipeline
     {
         public:
-            VulkanPipeline(
-                std::shared_ptr<VulkanContext> context,
-                const std::string& vertFilepath,
-                const std::string& fragFilepath,
-                const PipelineConfigInfo& configInfo);
+            VulkanPipeline(std::shared_ptr<VulkanContext> context,
+                           const std::string& vertFilepath,
+                           const std::string& fragFilepath,
+                           const PipelineConfigInfo& configInfo);
             
             ~VulkanPipeline();
 

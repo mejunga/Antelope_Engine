@@ -46,6 +46,7 @@ namespace Antelope
 
         private:
             std::shared_ptr<VulkanContext> m_Context;
+            
             VkImage m_DepthImage { VK_NULL_HANDLE };
             VmaAllocation m_DepthImageAllocation { VK_NULL_HANDLE };
             VkImageView m_DepthImageView { VK_NULL_HANDLE };

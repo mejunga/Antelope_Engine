@@ -49,8 +49,8 @@ namespace Antelope
                 std::string Title;
                 uint32_t Width;
                 uint32_t Height;
-                double LastResizeTime = 0.0;
-                bool IsResizing = false;
+                double LastResizeTime { 0.0 };
+                bool IsResizing { false };
             };
 
             WindowData m_Data;  

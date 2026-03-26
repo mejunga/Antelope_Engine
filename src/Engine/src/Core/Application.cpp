@@ -5,8 +5,9 @@
 #include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 #include <Engine/Renderer/Vulkan/SwapChain.hpp>
 #include <Engine/Renderer/Graphics/Renderer.hpp>
-#include <Engine/Renderer/Graphics/Camera.hpp>
-#include <Engine/AssetManager/ModelLoader.hpp>
+#include <Engine/AssetImport/ModelLoader.hpp>
+#include <Engine/AssetImport/TextureManager.hpp>
+#include <Engine/ECS/World.hpp>
 
 #include <GLFW/glfw3.h>
 #include <chrono>
@@ -15,7 +16,7 @@ namespace Antelope
 {
     Application *Application::s_Instance { nullptr };
 
-    Application::Application() : m_EditorCamera(glm::vec3(0.0f, 2.0f, 20.0f))
+    Application::Application() : m_EditorCamera(glm::vec3(0.0f, 2.0f, 20.0f)) 
     {
         if (s_Instance) 
         { 
@@ -51,14 +52,14 @@ namespace Antelope
         AE_ENGINE_INFO("Engine Core Loop Started.");
         SetupMockData(); 
 
-        auto lastTime = std::chrono::high_resolution_clock::now();
+        auto lastTime { std::chrono::high_resolution_clock::now() };
 
         while (m_Running)
         {
             m_Window->OnUpdate();
 
-            auto currentTime = std::chrono::high_resolution_clock::now();
-            float deltaTime = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count();
+            auto currentTime { std::chrono::high_resolution_clock::now() };
+            float deltaTime { std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count() };
             lastTime = currentTime;
 
             if (m_DebounceTimer > 0.0f)
@@ -74,7 +75,7 @@ namespace Antelope
 
                 if (m_ActiveEntity)
                 {
-                    auto& meshComponent = m_ActiveEntity.GetComponent<MeshComponent>();
+                    auto& meshComponent { m_ActiveEntity.GetComponent<MeshComponent>() };
                     m_Renderer->FreeMesh(meshComponent.Handle);
                     m_World->DestroyEntity(m_ActiveEntity);
                     m_ActiveEntity = {};
@@ -83,25 +84,25 @@ namespace Antelope
                 if (m_RenderState == 1) 
                 {
                     AE_ENGINE_INFO("Creating Bear Entity...");
-                    MeshHandle handle = m_Renderer->UploadMesh(m_BearMesh);
+                    MeshHandle handle { m_Renderer->UploadMesh(m_BearMesh) };
                     handle.materialIndex = m_BearTexID;
 
                     m_ActiveEntity = m_World->CreateEntity("Bear");
                     m_ActiveEntity.AddComponent<MeshComponent>(handle);
                     
-                    auto& transform = m_ActiveEntity.GetComponent<TransformComponent>();
+                    auto& transform { m_ActiveEntity.GetComponent<TransformComponent>() };
                     transform.Scale = glm::vec3(0.005f);
                 }
                 else if (m_RenderState == 2)
                 {
                     AE_ENGINE_INFO("Creating Gorilla Entity...");
-                    MeshHandle handle = m_Renderer->UploadMesh(m_GorillaMesh);
+                    MeshHandle handle { m_Renderer->UploadMesh(m_GorillaMesh) };
                     handle.materialIndex = m_GorillaTexID;
 
                     m_ActiveEntity = m_World->CreateEntity("Gorilla");
                     m_ActiveEntity.AddComponent<MeshComponent>(handle);
                     
-                    auto& transform = m_ActiveEntity.GetComponent<TransformComponent>();
+                    auto& transform { m_ActiveEntity.GetComponent<TransformComponent>() };
                     transform.Translation = glm::vec3(0.0f, 0.0f, 0.0f);
                     transform.Scale = glm::vec3(7.5f);
                 }
@@ -119,7 +120,7 @@ namespace Antelope
         
         if (m_ActiveEntity) 
         { 
-            auto& meshComponent = m_ActiveEntity.GetComponent<MeshComponent>();
+            auto& meshComponent { m_ActiveEntity.GetComponent<MeshComponent>() };
             m_Renderer->FreeMesh(meshComponent.Handle); 
         }
         

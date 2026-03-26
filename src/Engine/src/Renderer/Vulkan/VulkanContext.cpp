@@ -14,14 +14,12 @@
 
 namespace Antelope
 {
-    VkResult CreateDebugUtilsMessengerEXT(
-        VkInstance instance, 
-        const VkDebugUtilsMessengerCreateInfoEXT *pMessengerInfo, 
-        const VkAllocationCallbacks *pAllocator,
-        VkDebugUtilsMessengerEXT *pMessenger
-    )
+    VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, 
+                                          const VkDebugUtilsMessengerCreateInfoEXT *pMessengerInfo, 
+                                          const VkAllocationCallbacks *pAllocator,
+                                          VkDebugUtilsMessengerEXT *pMessenger)
     {
-        auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+        auto func { (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT") };
 
         if (func != nullptr)
         {
@@ -33,13 +31,11 @@ namespace Antelope
         }
     }
 
-    void DestroyDebugUtilsMessengerEXT(
-        VkInstance instance,
-        VkDebugUtilsMessengerEXT messenger,
-        const VkAllocationCallbacks *pAllocator
-    )
+    void DestroyDebugUtilsMessengerEXT(VkInstance instance,
+                                       VkDebugUtilsMessengerEXT messenger,
+                                       const VkAllocationCallbacks *pAllocator)
     {
-        auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+        auto func { (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT") };
 
         if (func != nullptr)
         {
@@ -140,25 +136,29 @@ namespace Antelope
 
         for (const auto& queueFamily : queueFamilies)
         {
-            if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+            if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            {
                 indices.GraphicsFamily = i;
             }
 
             VkBool32 presentSupport { false };
             vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_Surface, &presentSupport);
 
-            if (presentSupport) {
+            if (presentSupport)
+            {
                 indices.PresentFamily = i;
             }
 
-            if ((queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT) && !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
+            if ((queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT) && !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT))
+            {
                 indices.TransferFamily = i;
             }
 
             i++;
         }
 
-        if (!indices.TransferFamily.has_value() && indices.GraphicsFamily.has_value()) {
+        if (!indices.TransferFamily.has_value() && indices.GraphicsFamily.has_value())
+        {
             indices.TransferFamily = indices.GraphicsFamily.value();
         }
 
@@ -182,7 +182,7 @@ namespace Antelope
 
     bool VulkanContext::CheckValidationLayerSupport()
     {
-        uint32_t layerCount;
+        uint32_t layerCount { 0 };
         vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
 
         std::vector<VkLayerProperties> availableLayers(layerCount);
@@ -212,7 +212,7 @@ namespace Antelope
 
     bool VulkanContext::CheckDeviceExtensionSupport(VkPhysicalDevice device)
     {
-        uint32_t extensionCount;
+        uint32_t extensionCount { 0 };
         vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
 
         std::vector<VkExtensionProperties> availableExtensions(extensionCount);
@@ -260,7 +260,7 @@ namespace Antelope
                extensionsSupported &&
                swapChainAdequate &&
                deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
-               deviceFeatures.geometryShader;
+               deviceFeatures.geometryShader &&
                deviceFeatures.multiDrawIndirect;
     }
 
@@ -292,7 +292,7 @@ namespace Antelope
         VkPhysicalDeviceProperties physicalDeviceProperties;
         vkGetPhysicalDeviceProperties(m_PhysicalDevice, &physicalDeviceProperties);
 
-        VkSampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts & physicalDeviceProperties.limits.framebufferDepthSampleCounts;
+        VkSampleCountFlags counts { physicalDeviceProperties.limits.framebufferColorSampleCounts & physicalDeviceProperties.limits.framebufferDepthSampleCounts };
 
         if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
         if (counts & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
@@ -320,7 +320,7 @@ namespace Antelope
         appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
         appInfo.apiVersion = VK_API_VERSION_1_3;
 
-        uint32_t glfwExtensionCount = 0;
+        uint32_t glfwExtensionCount { 0 };
         const char **glfwExtensions { glfwGetRequiredInstanceExtensions(&glfwExtensionCount) };
         std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
