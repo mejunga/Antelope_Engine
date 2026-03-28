@@ -1,4 +1,5 @@
-#include <Engine/Renderer/Graphics/Camera.hpp>
+#ifdef ANTELOPE_EDITOR_MODE
+#include <Engine/Renderer/Graphics/EditorCamera.hpp>
 #include <Engine/Platform/Input.hpp>
 #include <Engine/Core/Application.hpp>
 
@@ -89,3 +90,4 @@ namespace Antelope
         return proj;
     }
 }
+#endif

@@ -1,10 +1,13 @@
 #include <Engine/ECS/World.hpp>
 #include <Engine/ECS/Entity.hpp>
 #include <Engine/ECS/BaseComponents.hpp>
-#include <Engine/Renderer/Graphics/Camera.hpp>
 #include <Engine/Core/Application.hpp>
 #include <Engine/Renderer/Graphics/Renderer.hpp>
-#include <Engine/Renderer/Vulkan/SwapChain.hpp> 
+#include <Engine/Renderer/Vulkan/SwapChain.hpp>
+#include <Engine/Debug/Log.hpp>
+#ifdef ANTELOPE_EDITOR_MODE
+#include <Engine/Renderer/Graphics/EditorCamera.hpp>
+#endif
 
 #include <vector>
 
@@ -33,9 +36,54 @@ namespace Antelope
 
     void World::OnUpdateRuntime(float deltaTime)
     {
+        auto renderer { Application::Get().GetRenderer() };
+        if (!renderer) { return; }
 
+        UpdateTransforms();
+
+        glm::mat4 viewMatrix { 1.0f };
+        glm::mat4 projMatrix { 1.0f };
+        bool cameraFound { false };
+
+        auto cameraView { m_Registry.view<TransformComponent, CameraComponent>() };
+        for (auto [entity, transform, camera] : cameraView.each())
+        {
+            if (camera.IsPrimary)
+            {
+                viewMatrix = glm::inverse(transform.WorldMatrix);
+                
+                auto extent { Application::Get().GetSwapChain()->GetExtent() };
+                camera.CalculateProjection(static_cast<float>(extent.width) / static_cast<float>(extent.height));
+                projMatrix = camera.Projection;
+                
+                cameraFound = true;
+                break;
+            }
+        }
+
+        if (!cameraFound) 
+        {
+            AE_ENGINE_WARN("No primary camera found in the scene! Rendering skipped.");
+            return;
+        }
+
+        UniformBufferObject cameraUBO {};
+        cameraUBO.view = viewMatrix;
+        cameraUBO.proj = projMatrix;
+
+        std::vector<RenderCommand> renderList;
+        auto meshView { m_Registry.view<TransformComponent, MeshComponent>() };
+        renderList.reserve(meshView.size_hint());
+
+        for (auto [entityID, transform, meshComponent] : meshView.each()) 
+        {
+            renderList.push_back({ transform.WorldMatrix, transform.NormalMatrix, meshComponent.Handle });
+        }
+
+        renderer->DrawFrame(cameraUBO, renderList);
     }
 
+#ifdef ANTELOPE_EDITOR_MODE
     void World::OnUpdateEditor(float deltaTime, EditorCamera& camera)
     {
         auto renderer { Application::Get().GetRenderer() };
@@ -63,6 +111,7 @@ namespace Antelope
 
         renderer->DrawFrame(cameraUBO, renderList);
     }
+#endif
 
     void World::UpdateEntityTransform(entt::entity startEntity, const glm::mat4& parentMatrix, bool forceUpdate)
     {

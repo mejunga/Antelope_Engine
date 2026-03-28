@@ -1,13 +1,15 @@
 #include <Engine/Renderer/Graphics/Renderer.hpp>
 #include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 #include <Engine/Renderer/Vulkan/SwapChain.hpp>
-#include <Engine/Renderer/Graphics/Camera.hpp>
 #include <Engine/AssetImport/TextureManager.hpp>
 #include <Engine/Renderer/Vulkan/VulkanBuffer.hpp>
 #include <Engine/Renderer/Vulkan/Pipeline.hpp>
 #include <Engine/Renderer/Vulkan/VulkanDescriptor.hpp>
 #include <Engine/Renderer/Vulkan/GpuMemoryAllocator.hpp>
 #include <Engine/Debug/Log.hpp>
+#ifdef ANTELOPE_EDITOR_MODE
+#include <Engine/Renderer/Graphics/EditorCamera.hpp>
+#endif
 
 #include <stdexcept>
 #include <fstream>

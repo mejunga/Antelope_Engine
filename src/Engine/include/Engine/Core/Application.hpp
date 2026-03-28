@@ -1,9 +1,11 @@
 #pragma once
 
 #include <Engine/Renderer/Graphics/Model.hpp>
-#include <Engine/Renderer/Graphics/Camera.hpp>
 #include <Engine/ECS/Entity.hpp>
 #include <Engine/ECS/BaseComponents.hpp>
+#ifdef ANTELOPE_EDITOR_MODE
+#include <Engine/Renderer/Graphics/EditorCamera.hpp>
+#endif
 
 #include <memory>
 
@@ -57,8 +59,9 @@ namespace Antelope
             int m_RenderState = 0;
             float m_DebounceTimer = 0.0f;
             const float DEBOUNCE_DELAY = 0.2f;
+        #ifdef ANTELOPE_EDITOR_MODE
             EditorCamera m_EditorCamera;
-
+        #endif
             std::vector<Entity> m_ActiveEntities;
 
             static Application *s_Instance;

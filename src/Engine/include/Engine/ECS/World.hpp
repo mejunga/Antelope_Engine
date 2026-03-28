@@ -9,7 +9,9 @@
 namespace Antelope
 {
     class Entity;
+#ifdef ANTELOPE_EDITOR_MODE
     class EditorCamera;
+#endif
 
     class World
     {
@@ -20,8 +22,10 @@ namespace Antelope
             Entity CreateEntity(const std::string& name = std::string());
             void DestroyEntity(Entity entity);
 
-            void OnUpdateRuntime(float deltaTime);
+        #ifdef ANTELOPE_EDITOR_MODE
             void OnUpdateEditor(float deltaTime, EditorCamera& camera);
+        #endif
+            void OnUpdateRuntime(float deltaTime);
 
             entt::registry& GetRegistry() { return m_Registry; }
 

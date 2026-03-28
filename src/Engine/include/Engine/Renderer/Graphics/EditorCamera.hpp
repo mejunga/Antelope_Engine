@@ -1,4 +1,5 @@
 #pragma once
+#ifdef ANTELOPE_EDITOR_MODE
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -46,3 +47,4 @@ namespace Antelope
             bool m_FirstMouse { true };
     };
 }
+#endif

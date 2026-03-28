@@ -55,6 +55,25 @@ namespace Antelope {
         }
     };
 
+    struct CameraComponent
+    {
+        glm::mat4 Projection { 1.0f };
+        float PerspectiveFOV { glm::radians(45.0f) };
+        float PerspectiveNear { 0.1f };
+        float PerspectiveFar { 1000.0f };
+
+        bool IsPrimary { true };
+
+        CameraComponent() = default;
+        CameraComponent(const CameraComponent&) = default;
+
+        void CalculateProjection(float aspectRatio)
+        {
+            Projection = glm::perspective(PerspectiveFOV, aspectRatio, PerspectiveNear, PerspectiveFar);
+            Projection[1][1] *= -1.0f;
+        }
+    };
+
     struct MeshComponent
     {
         MeshHandle Handle; 
