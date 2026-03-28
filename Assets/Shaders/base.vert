@@ -15,6 +15,7 @@ struct Face { uvec4 data; };
 struct ObjectData
 {
     mat4 model;
+    mat4 normalMatrix;
     uint posOffset;
     uint colorOffset;
     uint normalOffset;
@@ -59,8 +60,7 @@ void main()
     gl_Position = ubo.proj * ubo.view * obj.model * vec4(position, 1.0);
     
     fragColor = color;
-    mat3 normalMatrix = transpose(inverse(mat3(obj.model)));
-    fragNormal = normalMatrix * normal;
+    fragNormal = mat3(obj.normalMatrix) * normal;
     fragUV = uv;
     fragMatID = obj.materialIndex;
 }

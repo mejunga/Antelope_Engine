@@ -60,19 +60,19 @@ namespace Antelope
     struct RenderCommand 
     {
         glm::mat4 transform;
+        glm::mat4 normalMatrix;
         MeshHandle mesh;
     };
 
     struct ObjectData
     {
         glm::mat4 model { 1.0f };
-        
+        glm::mat4 normalMatrix { 1.0f };
         uint32_t posOffset { 0 };
         uint32_t colorOffset { 0 };
         uint32_t normalOffset { 0 };
         uint32_t uvOffset { 0 };
         uint32_t faceOffset { 0 };
-        
         uint32_t materialIndex { 0 };
         uint32_t padding[2] { 0, 0 };
     };

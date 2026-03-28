@@ -1,8 +1,12 @@
 find_package(imgui CONFIG REQUIRED)
 
 file(GLOB_RECURSE EDITOR_SRC CONFIGURE_DEPENDS "src/*.cpp")
+file(GLOB_RECURSE ENGINE_HDR CONFIGURE_DEPENDS "include/*.hpp")
 
 add_executable(AntelopeApp ${EDITOR_SRC})
+
+target_include_directories(Antelope PUBLIC include)
+target_include_directories(Antelope PRIVATE src)
 
 target_compile_definitions(AntelopeApp PUBLIC ANTELOPE_EDITOR_MODE)
 

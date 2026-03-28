@@ -19,6 +19,7 @@ namespace Antelope
         Entity entity { handle, this };
 
         entity.AddComponent<TransformComponent>();
+        entity.AddComponent<RelationshipComponent>();
         auto& tag { entity.AddComponent<TagComponent>() };
         tag.Tag = name.empty() ? "Entity" : name;
 
@@ -40,6 +41,8 @@ namespace Antelope
         auto renderer { Application::Get().GetRenderer() };
         if (!renderer) { return; }
 
+        UpdateTransforms();
+
         UniformBufferObject cameraUBO {};
         cameraUBO.view = camera.GetViewMatrix();
         
@@ -55,9 +58,65 @@ namespace Antelope
 
         for (auto [entityID, transform, meshComponent] : view.each()) 
         {
-            renderList.push_back({ transform.GetTransform(), meshComponent.Handle });
+            renderList.push_back({ transform.WorldMatrix, transform.NormalMatrix, meshComponent.Handle });
         }
 
         renderer->DrawFrame(cameraUBO, renderList);
+    }
+
+    void World::UpdateEntityTransform(entt::entity startEntity, const glm::mat4& parentMatrix, bool forceUpdate)
+    {
+        entt::entity current { startEntity };
+        
+        while (current != entt::null)
+        {
+            auto& transform { m_Registry.get<TransformComponent>(current) };
+            auto& rel { m_Registry.get<RelationshipComponent>(current) };
+            bool needsUpdate = forceUpdate || transform.IsDirty;
+
+            if (needsUpdate)
+            {
+                transform.WorldMatrix = parentMatrix * transform.GetLocalTransform();
+                transform.NormalMatrix = glm::transpose(glm::inverse(transform.WorldMatrix));
+                transform.IsDirty = false;
+            }
+
+            if (rel.FirstChild != entt::null)
+            {
+                UpdateEntityTransform(rel.FirstChild, transform.WorldMatrix, needsUpdate);
+            }
+
+            current = rel.NextSibling;
+        }
+    }
+
+    void World::UpdateTransforms()
+    {
+        auto view { m_Registry.view<TransformComponent, RelationshipComponent>() };
+
+        for (auto [entity, transform, rel] : view.each())
+        {
+            if (rel.Parent == entt::null)
+            {
+                if (transform.IsDirty)
+                {
+                    transform.WorldMatrix = transform.GetLocalTransform();
+                    transform.NormalMatrix = glm::transpose(glm::inverse(transform.WorldMatrix));
+                    transform.IsDirty = false;
+
+                    if (rel.FirstChild != entt::null)
+                    {
+                        UpdateEntityTransform(rel.FirstChild, transform.WorldMatrix, true);
+                    }
+                }
+                else
+                {
+                    if (rel.FirstChild != entt::null)
+                    {
+                        UpdateEntityTransform(rel.FirstChild, transform.WorldMatrix, false);
+                    }
+                }
+            }
+        }
     }
 }

@@ -548,6 +548,7 @@ namespace Antelope
             }
 
             objectDataMap[objectCount].model = command.transform;
+            objectDataMap[objectCount].normalMatrix = command.normalMatrix;
             objectDataMap[objectCount].posOffset = static_cast<uint32_t>(command.mesh.posAllocation.Offset / sizeof(VertexPosition));
             objectDataMap[objectCount].colorOffset = static_cast<uint32_t>(command.mesh.colorAllocation.Offset / sizeof(VertexColor));
             objectDataMap[objectCount].normalOffset = static_cast<uint32_t>(command.mesh.normalAllocation.Offset / sizeof(VertexNormal));
@@ -558,7 +559,7 @@ namespace Antelope
             indirectCommandsMap[objectCount].vertexCount = command.mesh.faceCount * 3;
             indirectCommandsMap[objectCount].instanceCount = 1;
             indirectCommandsMap[objectCount].firstVertex = 0;
-            indirectCommandsMap[objectCount].firstInstance = objectCount; 
+            indirectCommandsMap[objectCount].firstInstance = objectCount;
             objectCount++;
         }
 

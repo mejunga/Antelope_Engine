@@ -38,6 +38,9 @@ namespace Antelope {
         glm::vec3 Scale { 1.0f, 1.0f, 1.0f };
 
         glm::mat4 WorldMatrix { 1.0f };
+        glm::mat4 NormalMatrix { 1.0f };
+
+        bool IsDirty { true };
 
         TransformComponent() = default;
         TransformComponent(const TransformComponent&) = default;

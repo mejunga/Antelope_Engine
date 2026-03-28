@@ -17,6 +17,8 @@ namespace Antelope
                 : m_EntityHandle(handle), m_World(world) {}
             Entity(const Entity& other) = default;
 
+            void SetParent(Entity parent);
+
             template<typename T, typename... Args>
             T& AddComponent(Args&&... args)
             {
@@ -40,6 +42,9 @@ namespace Antelope
             {
                 m_World->m_Registry.remove<T>(m_EntityHandle);
             }
+
+            bool operator==(const Entity& other) const { return m_EntityHandle == other.m_EntityHandle && m_World == other.m_World; }
+            bool operator!=(const Entity& other) const { return !(*this == other); }
 
             operator bool() const { return m_EntityHandle != entt::null; }
             operator entt::entity() const { return m_EntityHandle; }

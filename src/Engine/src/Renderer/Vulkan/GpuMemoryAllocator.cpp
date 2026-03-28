@@ -30,7 +30,7 @@ namespace Antelope
         }
 
         m_Pages.clear();
-        AE_ENGINE_TRACE("PagedVirtualBuffer '{0}' successfully destroyed.", m_Name);
+        AE_ENGINE_TRACE("PagedVirtualBuffer '{0}' destroyed.", m_Name);
     }
 
     VirtualAllocation PagedVirtualBuffer::Allocate(VkDeviceSize size, VkDeviceSize alignment)

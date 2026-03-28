@@ -1,16 +1,18 @@
 #pragma once
 
 #include <entt/entt.hpp>
+#include <glm/glm.hpp>
 
 #include <string>
 
 
-namespace Antelope {
-
+namespace Antelope
+{
     class Entity;
     class EditorCamera;
 
-    class World {
+    class World
+    {
         public:
             World();
             ~World();
@@ -22,6 +24,10 @@ namespace Antelope {
             void OnUpdateEditor(float deltaTime, EditorCamera& camera);
 
             entt::registry& GetRegistry() { return m_Registry; }
+
+        private:
+            void UpdateTransforms();
+            void UpdateEntityTransform(entt::entity startEntity, const glm::mat4& parentMatrix, bool forceUpdate);
 
         private:
             entt::registry m_Registry;
