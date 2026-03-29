@@ -39,9 +39,9 @@ namespace Antelope
                 minBound = glm::min(minBound, pos);
                 maxBound = glm::max(maxBound, pos);
 
-                subMesh.Data.positions.push_back({ glm::vec4(pos, 1.0f) });
-                subMesh.Data.normals.push_back({ glm::vec4(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z, 0.0f) });
-                subMesh.Data.colors.push_back({ glm::vec4(1.0f) });
+                subMesh.Data.positions.push_back({ pos });
+                subMesh.Data.normals.push_back({ glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z) });
+                subMesh.Data.colors.push_back({ glm::vec3(1.0f) });
                 
                 if (mesh->mTextureCoords[0])
                     subMesh.Data.uvs.push_back({ {mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y} });

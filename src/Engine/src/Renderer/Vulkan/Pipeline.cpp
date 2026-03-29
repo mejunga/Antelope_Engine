@@ -5,6 +5,7 @@
 #include <fstream>
 #include <stdexcept>
 
+
 namespace Antelope
 {
     Pipeline::Pipeline(std::shared_ptr<VulkanContext> context, const std::string& vertFilepath, const std::string& fragFilepath, const PipelineConfigInfo& configInfo)

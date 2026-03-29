@@ -37,6 +37,7 @@ namespace Antelope
             QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
             VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
             
+            VkInstance GetInstance() const { return m_Instance; }
             VkDevice GetDevice() const { return m_Device; }
             VkPhysicalDevice GetPhysicalDevice() const { return m_PhysicalDevice; }
             VkSurfaceKHR GetSurface() const { return m_Surface; }
@@ -46,6 +47,7 @@ namespace Antelope
             VmaAllocator GetAllocator() const { return m_Allocator; }
             GLFWwindow* GetWindowHandle() const { return m_WindowHandle; }
             VkSampleCountFlagBits GetMsaaSamples() const { return m_MsaaSamples; }
+            bool IsSwapchainMaintenance1Supported() const { return m_SwapchainMaintenance1Supported; }
 
         private:
             bool CheckValidationLayerSupport();
@@ -80,6 +82,7 @@ namespace Antelope
 
             VkSampleCountFlagBits m_MsaaSamples { VK_SAMPLE_COUNT_1_BIT };
 
+            bool m_SwapchainMaintenance1Supported { false };
         #ifdef NDEBUG
             bool m_EnableValidationLayers { false };
         #else
@@ -87,6 +90,6 @@ namespace Antelope
         #endif
 
             const std::vector<const char*> m_ValidationLayers { "VK_LAYER_KHRONOS_validation" };
-            const std::vector<const char*> m_DeviceExtensions { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+            std::vector<const char*> m_DeviceExtensions { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
     };
 }

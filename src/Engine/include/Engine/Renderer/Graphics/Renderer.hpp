@@ -21,9 +21,13 @@ namespace Antelope
     class VulkanContext;
     class VulkanBuffer;
     class Pipeline;
-    class DescriptorAllocator;;
+    class DescriptorAllocator;
     class SwapChain;
-    
+#ifdef ANTELOPE_EDITOR_MODE
+    class RenderTexture;
+    class UIContext;
+#endif
+
     struct UniformBufferObject;
     struct Texture;
 
@@ -34,12 +38,31 @@ namespace Antelope
         VkBuffer stagingBuffer { VK_NULL_HANDLE };
         VmaAllocation stagingAllocation { VK_NULL_HANDLE };
         uint32_t meshID { 0 };
+        uint32_t textureIndex { UINT32_MAX };
     };
+
+    struct FrameSyncObjects
+    {
+        VkSemaphore imageAvailableSemaphore { VK_NULL_HANDLE };
+    #ifndef ANTELOPE_EDITOR_MODE
+        VkSemaphore renderFinishedSemaphore { VK_NULL_HANDLE };
+    #endif
+        VkFence inFlightFence { VK_NULL_HANDLE };
+    };
+
+#ifdef ANTELOPE_EDITOR_MODE
+    struct SemaphoreSlot
+    {
+        VkSemaphore semaphore { VK_NULL_HANDLE };
+        VkFence presentFence { VK_NULL_HANDLE };
+        bool pendingPresent { false };
+    };
+#endif
 
     class Renderer
     {
         public:
-            Renderer(std::shared_ptr<VulkanContext> context, std::shared_ptr<SwapChain> swapChain);
+            Renderer(std::shared_ptr<VulkanContext> context, std::shared_ptr<SwapChain> swapChain, uint32_t framesInFlight = 2);
             ~Renderer();
 
             void DrawFrame(const UniformBufferObject& cameraData, const std::vector<RenderCommand>& renderList);
@@ -47,16 +70,28 @@ namespace Antelope
             void FreeMesh(const MeshHandle& handle);
             void UpdateTextureDescriptors(const std::vector<Texture>& textures);
             VkCommandBuffer BeginAsyncGraphicsCommand();
-            void EndAndSubmitAsyncGraphicsCommand(VkCommandBuffer cmd, VkBuffer stagingBuffer, VmaAllocation stagingAllocation);
+            void EndAndSubmitAsyncGraphicsCommand(VkCommandBuffer cmd, VkBuffer stagingBuffer, VmaAllocation stagingAllocation, uint32_t textureIndex = UINT32_MAX);
             void CreateStagingBuffer(const void* data, VkDeviceSize size, VkBuffer& outBuffer, VmaAllocation& outAllocation);
+        #ifdef ANTELOPE_EDITOR_MODE
+            void ResizeRenderTexture(uint32_t width, uint32_t height);
+        #endif
+
+        #ifdef ANTELOPE_EDITOR_MODE
+            std::shared_ptr<RenderTexture> GetRenderTexture() const { return m_RenderTexture; }
+            void SetUIContext(std::shared_ptr<UIContext> uiContext) { m_UIContext = uiContext; }
+        #endif
 
         private:
-            void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize bufferSize);
             void UpdateUniformBuffer(uint32_t currentImage, const UniformBufferObject& cameraData);
             void ProcessPendingTransfers();
             VkCommandBuffer BeginFrame();
             void DrawObjects(VkCommandBuffer cmd, const UniformBufferObject& cameraData, const std::vector<RenderCommand>& renderList);
             void EndFrame(VkCommandBuffer cmd);
+            void DestroySyncObjects();
+        #ifdef ANTELOPE_EDITOR_MODE
+            VkSemaphore AcquireRenderFinishedSemaphore();
+            void MarkSemaphorePending(VkSemaphore semaphore, VkFence presentFence);
+        #endif
 
             void CreateDescriptorSetLayout();
             void CreatePipelineLayout();
@@ -66,7 +101,7 @@ namespace Antelope
             void CreateCommandBuffers();
             void CreateSyncObjects();
             void CreateUniformBuffers();
-            void CreateObjectBuffers(); 
+            void CreateObjectBuffers();
             void CreateIndirectBuffers();
             void CreateDescriptorPool();
             void CreateDescriptorSets();
@@ -77,31 +112,42 @@ namespace Antelope
             std::unique_ptr<GpuMemoryAllocator> m_GpuAllocator;
             std::unique_ptr<Pipeline> m_MainPipeline;
             std::unique_ptr<DescriptorAllocator> m_GlobalDescriptorAllocator;
+        #ifdef ANTELOPE_EDITOR_MODE
+            std::shared_ptr<RenderTexture> m_RenderTexture;
+            std::weak_ptr<UIContext> m_UIContext;
+        #endif
 
             VkDescriptorSetLayout m_DescriptorSetLayout { VK_NULL_HANDLE };
             VkPipelineLayout m_PipelineLayout { VK_NULL_HANDLE };
             VkCommandPool m_CommandPool { VK_NULL_HANDLE };
             VkDescriptorPool m_DescriptorPool { VK_NULL_HANDLE };
             VkCommandPool m_TransferCommandPool { VK_NULL_HANDLE };
-        
-            static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 3;
-            const uint32_t MAX_OBJECTS = 128000;
-            uint32_t m_CurrentFrame = 0;
-            uint32_t m_CurrentImageIndex = 0;
-            uint32_t m_NextMeshID = 1;
 
-            std::vector<VkSemaphore> m_ImageAvailableSemaphores;
-            std::vector<VkSemaphore> m_RenderFinishedSemaphores;
-            std::vector<VkFence> m_InFlightFences;
+            static constexpr uint32_t MAX_OBJECTS { 128000 };
+            uint32_t m_MaxFramesInFlight;
+            uint32_t m_CurrentFrame { 0 };
+            uint32_t m_CurrentImageIndex { 0 };
+            uint32_t m_NextMeshID { 1 };
+        #ifdef ANTELOPE_EDITOR_MODE
+            bool m_Maintenance1Supported { false };
+            uint32_t m_SemaphoreRingIndex { 0 };
+        #endif
+
             std::vector<VkCommandBuffer> m_CommandBuffers;
             std::vector<std::unique_ptr<VulkanBuffer>> m_UniformBuffers;
             std::vector<std::unique_ptr<VulkanBuffer>> m_ObjectBuffers;
             std::vector<std::unique_ptr<VulkanBuffer>> m_IndirectBuffers;
             std::vector<VkDescriptorSet> m_DescriptorSets;
             std::vector<PendingTransfer> m_PendingTransfers;
-            std::unordered_set<uint32_t> m_PendingMeshIDs;
-            std::vector<VkFence> m_ImagesInFlight;
             std::vector<VkDescriptorImageInfo> m_GlobalImageInfos;
-            uint32_t m_LastUpdatedTextureCount[MAX_FRAMES_IN_FLIGHT] {};
+            std::vector<uint32_t> m_LastUpdatedTextureCount;
+            std::unordered_set<uint32_t> m_PendingMeshIDs;
+            std::unordered_set<uint32_t> m_PendingTextureIndices;
+            std::vector<FrameSyncObjects> m_FrameSync;
+        #ifdef ANTELOPE_EDITOR_MODE
+            std::vector<SemaphoreSlot> m_SemaphorePool;
+            std::vector<VkSemaphore> m_RenderFinishedRing;
+            std::vector<VkFence> m_ImagesInFlight;
+        #endif
     };
 }

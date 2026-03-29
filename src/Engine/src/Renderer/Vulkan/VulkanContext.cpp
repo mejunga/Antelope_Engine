@@ -324,6 +324,11 @@ namespace Antelope
         const char **glfwExtensions { glfwGetRequiredInstanceExtensions(&glfwExtensionCount) };
         std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
+    #ifdef ANTELOPE_EDITOR_MODE
+        extensions.push_back(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
+        extensions.push_back(VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME);
+    #endif
+    
         if (m_EnableValidationLayers)
         {
             extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
@@ -446,6 +451,27 @@ namespace Antelope
         std::set<uint32_t> uniqueQueueFamilies { indices.GraphicsFamily.value(), indices.PresentFamily.value(), indices.TransferFamily.value() };
 
         float queuePriority { 0.1f };
+        uint32_t extensionCount { 0 };
+
+        vkEnumerateDeviceExtensionProperties(m_PhysicalDevice, nullptr, &extensionCount, nullptr);
+        std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+        vkEnumerateDeviceExtensionProperties(m_PhysicalDevice, nullptr, &extensionCount, availableExtensions.data());
+
+        for (const auto& ext : availableExtensions)
+        {
+            if (strcmp(ext.extensionName, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME) == 0)
+            {
+                m_SwapchainMaintenance1Supported = true;
+                m_DeviceExtensions.push_back(VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME);
+                AE_ENGINE_INFO("VK_EXT_swapchain_maintenance1 supported - using maintenance1 semaphore path.");
+                break;
+            }
+        }
+
+        if (!m_SwapchainMaintenance1Supported)
+        {
+            AE_ENGINE_WARN("VK_EXT_swapchain_maintenance1 not supported - falling back to semaphore ring with FIFO.");
+        }
 
         for (uint32_t queueFamily : uniqueQueueFamilies)
         {
@@ -466,9 +492,18 @@ namespace Antelope
         vulkan12Features.runtimeDescriptorArray = VK_TRUE;
         vulkan12Features.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
 
+        VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT maintenance1Features {};
+        maintenance1Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT;
+        maintenance1Features.swapchainMaintenance1 = VK_TRUE;
+
+        if (m_SwapchainMaintenance1Supported)
+        {
+            maintenance1Features.pNext = &vulkan12Features;
+        }
+
         VkPhysicalDeviceFeatures2 deviceFeatures2 {};
         deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-        deviceFeatures2.pNext = &vulkan12Features;
+        deviceFeatures2.pNext = m_SwapchainMaintenance1Supported ? static_cast<void*>(&maintenance1Features) : static_cast<void*>(&vulkan12Features);
         deviceFeatures2.features.multiDrawIndirect = VK_TRUE;
         deviceFeatures2.features.geometryShader = VK_TRUE;
         deviceFeatures2.features.samplerAnisotropy = VK_TRUE;

@@ -70,7 +70,7 @@ namespace Antelope
         CopyBufferToImage(cmd, stagingBuffer, newTexture.Image, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
         TransitionImageLayout(cmd, newTexture.Image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-        m_Renderer->EndAndSubmitAsyncGraphicsCommand(cmd, stagingBuffer, stagingAllocation);
+        m_Renderer->EndAndSubmitAsyncGraphicsCommand(cmd, stagingBuffer, stagingAllocation, newTexture.GlobalIndex);
 
         stbi_image_free(pixels);
 

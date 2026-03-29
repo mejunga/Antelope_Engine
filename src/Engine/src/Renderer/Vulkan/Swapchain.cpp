@@ -84,15 +84,16 @@ namespace Antelope
 
     VkPresentModeKHR SwapChain::ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
     {
-        for (const auto& availablePresentMode : availablePresentModes)
-        {
-            if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
-            {
-                return availablePresentMode;
-            }
-        }
-
+    #ifdef ANTELOPE_EDITOR_MODE
         return VK_PRESENT_MODE_FIFO_KHR;
+    #else
+        for (const auto& mode : availablePresentModes)
+        {
+            if (mode == VK_PRESENT_MODE_MAILBOX_KHR)
+                return mode;
+        }
+        return VK_PRESENT_MODE_FIFO_KHR;
+    #endif
     }
 
     VkExtent2D SwapChain::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* windowHandle)

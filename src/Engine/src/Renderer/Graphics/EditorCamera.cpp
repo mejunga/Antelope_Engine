@@ -6,6 +6,7 @@
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
 
+
 namespace Antelope
 {
     EditorCamera::EditorCamera(const glm::vec3& position)

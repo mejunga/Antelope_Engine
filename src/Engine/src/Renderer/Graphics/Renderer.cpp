@@ -9,6 +9,8 @@
 #include <Engine/Debug/Log.hpp>
 #ifdef ANTELOPE_EDITOR_MODE
 #include <Engine/Renderer/Graphics/EditorCamera.hpp>
+#include <Engine/Renderer/Vulkan/RenderTexture.hpp>
+#include <Engine/Renderer/UI/UIContext.hpp>
 #endif
 
 #include <stdexcept>
@@ -18,17 +20,22 @@
 
 namespace Antelope
 {
-    Renderer::Renderer(std::shared_ptr<VulkanContext> context, std::shared_ptr<SwapChain> swapChain)
-        : m_Context(context), m_SwapChain(swapChain)
+    Renderer::Renderer(std::shared_ptr<VulkanContext> context, std::shared_ptr<SwapChain> swapChain, uint32_t framesInFlight)
+        : m_Context(context), m_SwapChain(swapChain), m_MaxFramesInFlight(framesInFlight)
     {
+    #ifdef ANTELOPE_EDITOR_MODE
+        m_Maintenance1Supported = m_Context->IsSwapchainMaintenance1Supported();
+        m_RenderTexture = std::make_shared<RenderTexture>(m_Context, m_SwapChain->GetExtent().width, m_SwapChain->GetExtent().height, m_SwapChain->GetImageFormat());
+    #endif
+        m_LastUpdatedTextureCount.assign(m_MaxFramesInFlight, 0);
         m_GpuAllocator = std::make_unique<GpuMemoryAllocator>(m_Context);
         m_GlobalDescriptorAllocator = std::make_unique<DescriptorAllocator>();
-        std::vector<DescriptorAllocator::PoolSizeRatio> ratios = {
+        std::vector<DescriptorAllocator::PoolSizeRatio> ratios {
             { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1.0f },
             { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 6.0f },
             { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1024.0f }
         };
-        m_GlobalDescriptorAllocator->Init(m_Context, MAX_FRAMES_IN_FLIGHT, ratios);
+        m_GlobalDescriptorAllocator->Init(m_Context, m_MaxFramesInFlight, ratios);
 
         CreateDescriptorSetLayout();
         AE_ENGINE_TRACE("Descriptor Set Layout created.");
@@ -41,15 +48,15 @@ namespace Antelope
         CreateTransferCommandPool();
         AE_ENGINE_TRACE("Transfer Command Pool created.");
         CreateCommandBuffers();
-        AE_ENGINE_TRACE("Command Buffers allocated for {0} frames.", MAX_FRAMES_IN_FLIGHT);
+        AE_ENGINE_TRACE("Command Buffers allocated for {0} frames.", m_MaxFramesInFlight);
         CreateSyncObjects();
-        AE_ENGINE_TRACE("Synchronization Objects created for {0} frames.", MAX_FRAMES_IN_FLIGHT);
+        AE_ENGINE_TRACE("Synchronization Objects created for {0} frames.", m_MaxFramesInFlight);
         CreateUniformBuffers();
-        AE_ENGINE_TRACE("Uniform buffers created and mapped for {0} frames.", MAX_FRAMES_IN_FLIGHT);
+        AE_ENGINE_TRACE("Uniform buffers created and mapped for {0} frames.", m_MaxFramesInFlight);
         CreateObjectBuffers();
-        AE_ENGINE_TRACE("Object buffers created and mapped for {0} frames.", MAX_FRAMES_IN_FLIGHT);
+        AE_ENGINE_TRACE("Object buffers created and mapped for {0} frames.", m_MaxFramesInFlight);
         CreateIndirectBuffers();
-        AE_ENGINE_TRACE("Indirect command buffers created and mapped for {0} frames.", MAX_FRAMES_IN_FLIGHT);
+        AE_ENGINE_TRACE("Indirect command buffers created and mapped for {0} frames.", m_MaxFramesInFlight);
         CreateDescriptorPool();
         AE_ENGINE_TRACE("Descriptor pool created.");
         CreateDescriptorSets();
@@ -58,15 +65,13 @@ namespace Antelope
 
     Renderer::~Renderer()
     {
-        if (m_Context && m_Context->GetDevice() != VK_NULL_HANDLE) 
-        {
+        if (m_Context && m_Context->GetDevice() != VK_NULL_HANDLE)
             vkDeviceWaitIdle(m_Context->GetDevice());
-        }
 
         for (auto& transfer : m_PendingTransfers)
         {
             vkDestroyFence(m_Context->GetDevice(), transfer.fence, nullptr);
-            VkCommandPool poolToUse = (transfer.meshID == 0) ? m_CommandPool : m_TransferCommandPool;
+            VkCommandPool poolToUse { (transfer.meshID == 0) ? m_CommandPool : m_TransferCommandPool };
             vkFreeCommandBuffers(m_Context->GetDevice(), poolToUse, 1, &transfer.commandBuffer);
             vmaDestroyBuffer(m_Context->GetAllocator(), transfer.stagingBuffer, transfer.stagingAllocation);
         }
@@ -74,44 +79,13 @@ namespace Antelope
         m_PendingTransfers.clear();
         m_PendingMeshIDs.clear();
 
-        if (m_DescriptorPool != VK_NULL_HANDLE) 
+        if (m_DescriptorPool != VK_NULL_HANDLE)
         {
             vkDestroyDescriptorPool(m_Context->GetDevice(), m_DescriptorPool, nullptr);
             AE_ENGINE_TRACE("Descriptor Pool destroyed.");
         }
 
-        if (!m_InFlightFences.empty()) 
-        {
-            for (size_t i { 0 }; i < m_InFlightFences.size(); i++) 
-            {
-                vkDestroyFence(m_Context->GetDevice(), m_InFlightFences[i], nullptr);
-            }
-
-            m_InFlightFences.clear();
-            AE_ENGINE_TRACE("In-Flight Fences destroyed.");
-        }
-
-        if (!m_RenderFinishedSemaphores.empty()) 
-        {
-            for (size_t i { 0 }; i < m_RenderFinishedSemaphores.size(); i++) 
-            {
-                vkDestroySemaphore(m_Context->GetDevice(), m_RenderFinishedSemaphores[i], nullptr);
-            }
-
-            m_RenderFinishedSemaphores.clear();
-            AE_ENGINE_TRACE("Render Finished Semaphores destroyed.");
-        }
-
-        if (!m_ImageAvailableSemaphores.empty()) 
-        {
-            for (size_t i { 0 }; i < m_ImageAvailableSemaphores.size(); i++) 
-            {
-                vkDestroySemaphore(m_Context->GetDevice(), m_ImageAvailableSemaphores[i], nullptr);
-            }
-
-            m_ImageAvailableSemaphores.clear();
-            AE_ENGINE_TRACE("Image Available Semaphores destroyed.");
-        }
+        DestroySyncObjects();
 
         if (m_TransferCommandPool != VK_NULL_HANDLE)
         {
@@ -124,14 +98,14 @@ namespace Antelope
             vkDestroyCommandPool(m_Context->GetDevice(), m_CommandPool, nullptr);
             AE_ENGINE_TRACE("Command Pool destroyed.");
         }
-        
-        if (m_PipelineLayout != VK_NULL_HANDLE) 
+
+        if (m_PipelineLayout != VK_NULL_HANDLE)
         {
             vkDestroyPipelineLayout(m_Context->GetDevice(), m_PipelineLayout, nullptr);
             AE_ENGINE_TRACE("Pipeline Layout destroyed.");
         }
 
-        if (m_DescriptorSetLayout != VK_NULL_HANDLE) 
+        if (m_DescriptorSetLayout != VK_NULL_HANDLE)
         {
             vkDestroyDescriptorSetLayout(m_Context->GetDevice(), m_DescriptorSetLayout, nullptr);
             AE_ENGINE_TRACE("Descriptor Set Layout destroyed.");
@@ -146,8 +120,16 @@ namespace Antelope
     void Renderer::DrawFrame(const UniformBufferObject& cameraData, const std::vector<RenderCommand>& renderList)
     {
         VkCommandBuffer cmd { BeginFrame() };
-        if (cmd == VK_NULL_HANDLE) return;
+        if (cmd == VK_NULL_HANDLE) { return; }
         DrawObjects(cmd, cameraData, renderList);
+
+    #ifdef ANTELOPE_EDITOR_MODE
+        if (auto uiContext { m_UIContext.lock() })
+        {
+            uiContext->RecordCommands(cmd, m_CurrentImageIndex);
+        }
+    #endif
+
         EndFrame(cmd);
     }
 
@@ -290,7 +272,7 @@ namespace Antelope
         return cmd;
     }
 
-    void Renderer::EndAndSubmitAsyncGraphicsCommand(VkCommandBuffer cmd, VkBuffer stagingBuffer, VmaAllocation stagingAllocation)
+    void Renderer::EndAndSubmitAsyncGraphicsCommand(VkCommandBuffer cmd, VkBuffer stagingBuffer, VmaAllocation stagingAllocation, uint32_t textureIndex)
     {
         vkEndCommandBuffer(cmd);
 
@@ -306,7 +288,12 @@ namespace Antelope
 
         vkQueueSubmit(m_Context->GetGraphicsQueue(), 1, &submitInfo, fence);
 
-        m_PendingTransfers.push_back({fence, cmd, stagingBuffer, stagingAllocation, 0}); 
+        m_PendingTransfers.push_back({fence, cmd, stagingBuffer, stagingAllocation, 0, textureIndex});
+
+        if (textureIndex != UINT32_MAX)
+        {
+            m_PendingTextureIndices.insert(textureIndex);
+        }
     }
 
     void Renderer::CreateStagingBuffer(const void* data, VkDeviceSize bufferSize, VkBuffer& outBuffer, VmaAllocation& outAllocation)
@@ -330,38 +317,51 @@ namespace Antelope
         vmaCopyMemoryToAllocation(m_Context->GetAllocator(), data, outAllocation, 0, bufferSize);
     }
 
-    void Renderer::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize bufferSize)
+#ifdef ANTELOPE_EDITOR_MODE
+    void Renderer::ResizeRenderTexture(uint32_t width, uint32_t height)
     {
-        VkCommandBufferAllocateInfo allocationInfo {};
-        allocationInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocationInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocationInfo.commandPool = m_CommandPool;
-        allocationInfo.commandBufferCount = 1;
-
-        VkCommandBuffer commandBuffer;
-        vkAllocateCommandBuffers(m_Context->GetDevice(), &allocationInfo, &commandBuffer);
-
-        VkCommandBufferBeginInfo commandBufferBeginInfo {};
-        commandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        commandBufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo);
-
-        VkBufferCopy copyRegion {};
-        copyRegion.srcOffset = 0;
-        copyRegion.dstOffset = 0;
-        copyRegion.size = bufferSize;
-        vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
-        vkEndCommandBuffer(commandBuffer);
-
-        VkSubmitInfo submitInfo {};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &commandBuffer;
-
-        vkQueueSubmit(m_Context->GetGraphicsQueue(), 1, &submitInfo,VK_NULL_HANDLE);
-        vkQueueWaitIdle(m_Context->GetGraphicsQueue());
-        vkFreeCommandBuffers(m_Context->GetDevice(), m_CommandPool, 1, &commandBuffer); 
+        vkDeviceWaitIdle(m_Context->GetDevice());
+        m_RenderTexture->Resize(width, height);
     }
+
+    VkSemaphore Renderer::AcquireRenderFinishedSemaphore()
+    {
+        for (auto& slot : m_SemaphorePool)
+        {
+            if (!slot.pendingPresent) { return slot.semaphore; }
+
+            if (vkGetFenceStatus(m_Context->GetDevice(), slot.presentFence) == VK_SUCCESS)
+            {
+                vkResetFences(m_Context->GetDevice(), 1, &slot.presentFence);
+                slot.pendingPresent = false;
+                return slot.semaphore;
+            }
+        }
+
+        AE_ENGINE_WARN("Semaphore pool exhausted — growing by 1.");
+        VkSemaphoreCreateInfo semInfo {};
+        semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        VkFenceCreateInfo fenInfo {};
+        fenInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+
+        auto& newSlot { m_SemaphorePool.emplace_back() };
+        vkCreateSemaphore(m_Context->GetDevice(), &semInfo, nullptr, &newSlot.semaphore);
+        vkCreateFence(m_Context->GetDevice(), &fenInfo, nullptr, &newSlot.presentFence);
+        return newSlot.semaphore;
+    }
+
+    void Renderer::MarkSemaphorePending(VkSemaphore semaphore, VkFence presentFence)
+    {
+        for (auto& slot : m_SemaphorePool)
+        {
+            if (slot.semaphore == semaphore)
+            {
+                slot.pendingPresent = true;
+                return;
+            }
+        }
+    }
+#endif
 
     void Renderer::UpdateUniformBuffer(uint32_t currentImage, const UniformBufferObject& cameraData)
     {
@@ -416,25 +416,28 @@ namespace Antelope
 
     void Renderer::ProcessPendingTransfers()
     {
-        for (auto it { m_PendingTransfers.begin() }; it != m_PendingTransfers.end(); ) 
+        for (auto it { m_PendingTransfers.begin() }; it != m_PendingTransfers.end(); )
         {
-            if (vkGetFenceStatus(m_Context->GetDevice(), it->fence) == VK_SUCCESS) 
+            if (vkGetFenceStatus(m_Context->GetDevice(), it->fence) == VK_SUCCESS)
             {
                 vkDestroyFence(m_Context->GetDevice(), it->fence, nullptr);
-                
                 VkCommandPool poolToUse { (it->meshID == 0) ? m_CommandPool : m_TransferCommandPool };
                 vkFreeCommandBuffers(m_Context->GetDevice(), poolToUse, 1, &it->commandBuffer);
-                
                 vmaDestroyBuffer(m_Context->GetAllocator(), it->stagingBuffer, it->stagingAllocation);
-                
-                if (it->meshID != 0) 
+
+                if (it->meshID != 0)
                 {
-                    m_PendingMeshIDs.erase(it->meshID); 
+                    m_PendingMeshIDs.erase(it->meshID);
                 }
-                
+
+                if (it->textureIndex != UINT32_MAX)
+                {
+                    m_PendingTextureIndices.erase(it->textureIndex);
+                }
+
                 it = m_PendingTransfers.erase(it);
             }
-            else 
+            else
             {
                 ++it;
             }
@@ -444,13 +447,20 @@ namespace Antelope
     VkCommandBuffer Renderer::BeginFrame()
     {
         ProcessPendingTransfers();
-        vkWaitForFences(m_Context->GetDevice(), 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
-        VkResult result { vkAcquireNextImageKHR(m_Context->GetDevice(), m_SwapChain->GetSwapchain(), UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &m_CurrentImageIndex) };
+        vkWaitForFences(m_Context->GetDevice(), 1, &m_FrameSync[m_CurrentFrame].inFlightFence, VK_TRUE, UINT64_MAX);
+
+        VkResult result { vkAcquireNextImageKHR(
+            m_Context->GetDevice(),
+            m_SwapChain->GetSwapchain(),
+            UINT64_MAX,
+            m_FrameSync[m_CurrentFrame].imageAvailableSemaphore,
+            VK_NULL_HANDLE,
+            &m_CurrentImageIndex) };
 
         if (result == VK_ERROR_OUT_OF_DATE_KHR)
         {
             m_SwapChain->RecreateSwapchain();
-            return VK_NULL_HANDLE; 
+            return VK_NULL_HANDLE;
         }
         else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         {
@@ -458,19 +468,22 @@ namespace Antelope
             return VK_NULL_HANDLE;
         }
 
-        if (m_ImagesInFlight[m_CurrentImageIndex] != VK_NULL_HANDLE) 
+    #ifdef ANTELOPE_EDITOR_MODE
+        if (m_ImagesInFlight[m_CurrentImageIndex] != VK_NULL_HANDLE)
         {
             vkWaitForFences(m_Context->GetDevice(), 1, &m_ImagesInFlight[m_CurrentImageIndex], VK_TRUE, UINT64_MAX);
         }
-        
-        m_ImagesInFlight[m_CurrentImageIndex] = m_InFlightFences[m_CurrentFrame];
-        vkResetFences(m_Context->GetDevice(), 1, &m_InFlightFences[m_CurrentFrame]);
+
+        m_ImagesInFlight[m_CurrentImageIndex] = m_FrameSync[m_CurrentFrame].inFlightFence;
+    #endif
+
+        vkResetFences(m_Context->GetDevice(), 1, &m_FrameSync[m_CurrentFrame].inFlightFence);
         vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
 
-        VkCommandBufferBeginInfo commandBufferInfo {};
-        commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        
-        if (vkBeginCommandBuffer(m_CommandBuffers[m_CurrentFrame], &commandBufferInfo) != VK_SUCCESS) 
+        VkCommandBufferBeginInfo beginInfo {};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+        if (vkBeginCommandBuffer(m_CommandBuffers[m_CurrentFrame], &beginInfo) != VK_SUCCESS)
         {
             AE_ENGINE_ERROR("Failed to begin recording command buffer!");
             return VK_NULL_HANDLE;
@@ -504,10 +517,17 @@ namespace Antelope
 
         VkRenderPassBeginInfo renderPassInfo {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    #ifdef ANTELOPE_EDITOR_MODE
+        renderPassInfo.renderPass = m_RenderTexture->GetRenderPass();
+        renderPassInfo.framebuffer = m_RenderTexture->GetFramebuffer();
+        renderPassInfo.renderArea.extent = m_RenderTexture->GetExtent();
+    #else
         renderPassInfo.renderPass = m_SwapChain->GetRenderPass();
         renderPassInfo.framebuffer = m_SwapChain->GetFramebuffers()[m_CurrentImageIndex];
-        renderPassInfo.renderArea.offset = {0, 0};
         renderPassInfo.renderArea.extent = m_SwapChain->GetExtent();
+    #endif
+        renderPassInfo.renderArea.offset = {0, 0};
+        
 
         std::array<VkClearValue, 2> clearValues {};
         clearValues[0].color = {{0.01f, 0.01f, 0.03f, 1.0f}};
@@ -521,13 +541,23 @@ namespace Antelope
 
         VkViewport viewport {};
         viewport.x = 0.0f; viewport.y = 0.0f;
+    #ifdef ANTELOPE_EDITOR_MODE
+        viewport.width = static_cast<float>(m_RenderTexture->GetExtent().width);
+        viewport.height = static_cast<float>(m_RenderTexture->GetExtent().height);
+    #else
         viewport.width = static_cast<float>(m_SwapChain->GetExtent().width);
         viewport.height = static_cast<float>(m_SwapChain->GetExtent().height);
+    #endif
         viewport.minDepth = 0.0f; viewport.maxDepth = 1.0f;
         vkCmdSetViewport(cmd, 0, 1, &viewport);
 
         VkRect2D scissor {};
-        scissor.offset = {0, 0}; scissor.extent = m_SwapChain->GetExtent();
+        scissor.offset = {0, 0};
+    #ifdef ANTELOPE_EDITOR_MODE
+        scissor.extent = m_RenderTexture->GetExtent();
+    #else
+        scissor.extent = m_SwapChain->GetExtent();
+    #endif
         vkCmdSetScissor(cmd, 0, 1, &scissor);
         
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_PipelineLayout, 0, 1, &m_DescriptorSets[m_CurrentFrame], 0, nullptr);
@@ -542,6 +572,7 @@ namespace Antelope
             const auto& command { renderList[i] };
 
             if (m_PendingMeshIDs.count(command.mesh.MeshID) > 0) { continue; }
+            if (m_PendingTextureIndices.count(command.mesh.materialIndex) > 0) { continue; }
 
             if (objectCount >= MAX_OBJECTS)
             {
@@ -577,59 +608,163 @@ namespace Antelope
     {
         if (vkEndCommandBuffer(cmd) != VK_SUCCESS) { return; }
 
+    #ifdef ANTELOPE_EDITOR_MODE
+        VkSemaphore renderFinished { VK_NULL_HANDLE };
+
+        if (m_Maintenance1Supported)
+        {
+            renderFinished = AcquireRenderFinishedSemaphore();
+        }
+        else
+        {
+            renderFinished = m_RenderFinishedRing[m_SemaphoreRingIndex];
+        }
+
+    #else
+        VkSemaphore renderFinished { m_FrameSync[m_CurrentFrame].renderFinishedSemaphore };
+    #endif
+
+        VkSemaphore waitSemaphores[] { m_FrameSync[m_CurrentFrame].imageAvailableSemaphore };
+        VkPipelineStageFlags waitStages[] { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+
         VkSubmitInfo submitInfo {};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-        VkSemaphore waitSemaphores[] { m_ImageAvailableSemaphores[m_CurrentFrame] };
-        VkPipelineStageFlags waitStages[] { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
         submitInfo.waitSemaphoreCount = 1;
         submitInfo.pWaitSemaphores = waitSemaphores;
         submitInfo.pWaitDstStageMask = waitStages;
         submitInfo.commandBufferCount = 1;
         submitInfo.pCommandBuffers = &cmd;
-
-        VkSemaphore signalSemaphores[] { m_RenderFinishedSemaphores[m_CurrentImageIndex] }; 
         submitInfo.signalSemaphoreCount = 1;
-        submitInfo.pSignalSemaphores = signalSemaphores;
+        submitInfo.pSignalSemaphores = &renderFinished;
 
-        if (vkQueueSubmit(m_Context->GetGraphicsQueue(), 1, &submitInfo, m_InFlightFences[m_CurrentFrame]) != VK_SUCCESS) { return; }
+        if (vkQueueSubmit(m_Context->GetGraphicsQueue(), 1, &submitInfo, m_FrameSync[m_CurrentFrame].inFlightFence) != VK_SUCCESS) { return; }
 
         VkPresentInfoKHR presentInfo {};
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         presentInfo.waitSemaphoreCount = 1;
-        presentInfo.pWaitSemaphores = signalSemaphores;
-        
+        presentInfo.pWaitSemaphores = &renderFinished;
+
         VkSwapchainKHR swapchains[] { m_SwapChain->GetSwapchain() };
         presentInfo.swapchainCount = 1;
         presentInfo.pSwapchains = swapchains;
         presentInfo.pImageIndices = &m_CurrentImageIndex;
 
+    #ifdef ANTELOPE_EDITOR_MODE
+        VkFence presentFence { VK_NULL_HANDLE };
+        VkSwapchainPresentFenceInfoEXT presentFenceInfo {};
+
+        if (m_Maintenance1Supported)
+        {
+            for (auto& slot : m_SemaphorePool)
+            {
+                if (slot.semaphore == renderFinished)
+                {
+                    presentFence = slot.presentFence;
+                    break;
+                }
+            }
+
+            presentFenceInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_EXT;
+            presentFenceInfo.swapchainCount = 1;
+            presentFenceInfo.pFences = &presentFence;
+            presentInfo.pNext = &presentFenceInfo;
+        }
+    #endif
+
         VkResult result { vkQueuePresentKHR(m_Context->GetPresentQueue(), &presentInfo) };
+
+    #ifdef ANTELOPE_EDITOR_MODE
+        if (m_Maintenance1Supported)
+        {
+            MarkSemaphorePending(renderFinished, presentFence);
+        }
+        else
+        {
+            m_SemaphoreRingIndex = (m_SemaphoreRingIndex + 1) % static_cast<uint32_t>(m_RenderFinishedRing.size());
+        }
+    #endif
 
         if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_SwapChain->IsFramebufferResized())
         {
             m_SwapChain->SetFramebufferResized(false);
+            vkDeviceWaitIdle(m_Context->GetDevice());
             m_SwapChain->RecreateSwapchain();
-            
+    #ifdef ANTELOPE_EDITOR_MODE
             uint32_t newImageCount { static_cast<uint32_t>(m_SwapChain->GetFramebuffers().size()) };
             m_ImagesInFlight.assign(newImageCount, VK_NULL_HANDLE);
 
-            if (newImageCount > m_RenderFinishedSemaphores.size())
+            if (m_Maintenance1Supported)
             {
-                size_t oldSize { m_RenderFinishedSemaphores.size() };
-                m_RenderFinishedSemaphores.resize(newImageCount);
-                
-                VkSemaphoreCreateInfo semaphoreInfo {};
-                semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-                
-                for (size_t i { oldSize }; i < newImageCount; i++) 
+                for (auto& slot : m_SemaphorePool)
                 {
-                    vkCreateSemaphore(m_Context->GetDevice(), &semaphoreInfo, nullptr, &m_RenderFinishedSemaphores[i]);
+                    vkResetFences(m_Context->GetDevice(), 1, &slot.presentFence);
+                    slot.pendingPresent = false;
                 }
             }
+    #endif
         }
-        
-        m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+
+        m_CurrentFrame = (m_CurrentFrame + 1) % m_MaxFramesInFlight;
+    }
+
+    void Renderer::DestroySyncObjects()
+    {
+        for (auto& frame : m_FrameSync)
+        {
+            if (frame.imageAvailableSemaphore != VK_NULL_HANDLE)
+            {
+                vkDestroySemaphore(m_Context->GetDevice(), frame.imageAvailableSemaphore, nullptr);
+            }
+                
+            #ifndef ANTELOPE_EDITOR_MODE
+            if (frame.renderFinishedSemaphore != VK_NULL_HANDLE)
+            {
+                vkDestroySemaphore(m_Context->GetDevice(), frame.renderFinishedSemaphore, nullptr);
+            }
+            #endif
+
+            if (frame.inFlightFence != VK_NULL_HANDLE)
+            {
+                vkDestroyFence(m_Context->GetDevice(), frame.inFlightFence, nullptr);
+            }
+        }
+
+        m_FrameSync.clear();
+
+    #ifdef ANTELOPE_EDITOR_MODE
+        if (m_Maintenance1Supported)
+        {
+            for (auto& slot : m_SemaphorePool)
+            {
+                if (slot.semaphore != VK_NULL_HANDLE)
+                {
+                    vkDestroySemaphore(m_Context->GetDevice(), slot.semaphore, nullptr);
+                }
+                    
+                if (slot.presentFence != VK_NULL_HANDLE)
+                {
+                    vkDestroyFence(m_Context->GetDevice(), slot.presentFence, nullptr);
+                }
+            }
+
+            m_SemaphorePool.clear();
+        }
+        else
+        {
+            for (auto& sem : m_RenderFinishedRing)
+            {
+                if (sem != VK_NULL_HANDLE)
+                {
+                    vkDestroySemaphore(m_Context->GetDevice(), sem, nullptr);
+                } 
+            }
+            m_RenderFinishedRing.clear();
+        }
+
+        m_ImagesInFlight.clear();
+    #endif
+
+        AE_ENGINE_TRACE("Sync objects destroyed.");
     }
 
     void Renderer::CreateGraphicsPipeline()
@@ -638,7 +773,11 @@ namespace Antelope
         Pipeline::DefaultPipelineConfigInfo(pipelineConfig, m_Context);
         
         pipelineConfig.pipelineLayout = m_PipelineLayout;
+    #ifdef ANTELOPE_EDITOR_MODE
+        pipelineConfig.renderPass = m_RenderTexture->GetRenderPass();
+    #else
         pipelineConfig.renderPass = m_SwapChain->GetRenderPass();
+    #endif
         
         m_MainPipeline = std::make_unique<Pipeline>(
             m_Context,
@@ -666,13 +805,13 @@ namespace Antelope
 
     void Renderer::CreateCommandBuffers()
     {
-        m_CommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+        m_CommandBuffers.resize(m_MaxFramesInFlight);
 
         VkCommandBufferAllocateInfo allocationInfo {};
         allocationInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         allocationInfo.commandPool = m_CommandPool;
         allocationInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocationInfo.commandBufferCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+        allocationInfo.commandBufferCount = static_cast<uint32_t>(m_MaxFramesInFlight);
 
         if (vkAllocateCommandBuffers(m_Context->GetDevice(), &allocationInfo, m_CommandBuffers.data()) != VK_SUCCESS)
         {
@@ -681,14 +820,13 @@ namespace Antelope
         }
     }
 
-    void Renderer::CreateSyncObjects() 
+    void Renderer::CreateSyncObjects()
     {
+        m_FrameSync.resize(m_MaxFramesInFlight);
+    #ifdef ANTELOPE_EDITOR_MODE
         uint32_t imageCount { static_cast<uint32_t>(m_SwapChain->GetFramebuffers().size()) };
-        
-        m_ImageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-        m_RenderFinishedSemaphores.resize(imageCount);
-        m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
         m_ImagesInFlight.assign(imageCount, VK_NULL_HANDLE);
+    #endif
 
         VkSemaphoreCreateInfo semaphoreInfo {};
         semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -697,32 +835,67 @@ namespace Antelope
         fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-        for (size_t i { 0 }; i < MAX_FRAMES_IN_FLIGHT; i++) 
+        VkFenceCreateInfo unsignaledFenceInfo {};
+        unsignaledFenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+
+        for (size_t i { 0 }; i < m_MaxFramesInFlight; i++)
         {
-            if (vkCreateSemaphore(m_Context->GetDevice(), &semaphoreInfo, nullptr, &m_ImageAvailableSemaphores[i]) != VK_SUCCESS ||
-                vkCreateFence(m_Context->GetDevice(), &fenceInfo, nullptr, &m_InFlightFences[i]) != VK_SUCCESS) 
+            if (vkCreateSemaphore(m_Context->GetDevice(), &semaphoreInfo, nullptr, &m_FrameSync[i].imageAvailableSemaphore) != VK_SUCCESS ||
+                #ifndef ANTELOPE_EDITOR_MODE
+                    vkCreateSemaphore(m_Context->GetDevice(), &semaphoreInfo, nullptr, &m_FrameSync[i].renderFinishedSemaphore) != VK_SUCCESS ||
+                #endif
+                vkCreateFence(m_Context->GetDevice(), &fenceInfo, nullptr, &m_FrameSync[i].inFlightFence) != VK_SUCCESS)
             {
-                AE_ENGINE_ERROR("Failed to create frame synchronization objects!");
-                throw std::runtime_error("Failed to create frame synchronization objects");
+                AE_ENGINE_CRITICAL("Failed to create per-frame sync objects!");
+                throw std::runtime_error("Failed to create per-frame sync objects");
             }
         }
 
-        for (size_t i { 0 }; i < imageCount; i++) 
+    #ifdef ANTELOPE_EDITOR_MODE
+        if (m_Maintenance1Supported)
         {
-            if (vkCreateSemaphore(m_Context->GetDevice(), &semaphoreInfo, nullptr, &m_RenderFinishedSemaphores[i]) != VK_SUCCESS) 
+            uint32_t poolSize { imageCount + m_MaxFramesInFlight };
+            m_SemaphorePool.resize(poolSize);
+
+            for (auto& slot : m_SemaphorePool)
             {
-                AE_ENGINE_ERROR("Failed to create render finished semaphores!");
-                throw std::runtime_error("Failed to create render finished semaphores");
+                if (vkCreateSemaphore(m_Context->GetDevice(), &semaphoreInfo, nullptr, &slot.semaphore) != VK_SUCCESS ||
+                    vkCreateFence(m_Context->GetDevice(), &unsignaledFenceInfo, nullptr, &slot.presentFence) != VK_SUCCESS)
+                {
+                    AE_ENGINE_CRITICAL("Failed to create maintenance1 semaphore pool!");
+                    throw std::runtime_error("Failed to create maintenance1 semaphore pool");
+                }
             }
+
+            AE_ENGINE_TRACE("Sync objects created. {0} frame slots, {1} semaphore pool slots (maintenance1).", m_MaxFramesInFlight, poolSize);
         }
+        else
+        {
+            uint32_t ringSize { m_MaxFramesInFlight + 1 };
+            m_RenderFinishedRing.resize(ringSize);
+
+            for (auto& sem : m_RenderFinishedRing)
+            {
+                if (vkCreateSemaphore(m_Context->GetDevice(), &semaphoreInfo, nullptr, &sem) != VK_SUCCESS)
+                {
+                    AE_ENGINE_CRITICAL("Failed to create semaphore ring!");
+                    throw std::runtime_error("Failed to create semaphore ring");
+                }
+            }
+
+            AE_ENGINE_TRACE("Sync objects created. {0} frame slots, ring size: {1} (fallback).", m_MaxFramesInFlight, ringSize);
+        }
+    #else
+        AE_ENGINE_TRACE("Sync objects created. {0} frame slots.", m_MaxFramesInFlight);
+    #endif
     }
 
     void Renderer::CreateUniformBuffers()
     {
         VkDeviceSize bufferSize { sizeof(UniformBufferObject) };
-        m_UniformBuffers.reserve(MAX_FRAMES_IN_FLIGHT);
+        m_UniformBuffers.reserve(m_MaxFramesInFlight);
 
-        for (size_t i { 0 }; i < MAX_FRAMES_IN_FLIGHT; i++) 
+        for (size_t i { 0 }; i < m_MaxFramesInFlight; i++) 
         {
             m_UniformBuffers.push_back(std::make_unique<VulkanBuffer>(
                 m_Context, 
@@ -737,9 +910,9 @@ namespace Antelope
     void Renderer::CreateObjectBuffers()
     {
         VkDeviceSize bufferSize = sizeof(ObjectData) * MAX_OBJECTS;
-        m_ObjectBuffers.reserve(MAX_FRAMES_IN_FLIGHT);
+        m_ObjectBuffers.reserve(m_MaxFramesInFlight);
 
-        for (size_t i { 0 }; i < MAX_FRAMES_IN_FLIGHT; i++) 
+        for (size_t i { 0 }; i < m_MaxFramesInFlight; i++) 
         {
             m_ObjectBuffers.push_back(std::make_unique<VulkanBuffer>(
                 m_Context, 
@@ -754,9 +927,9 @@ namespace Antelope
     void Renderer::CreateIndirectBuffers()
     {
         VkDeviceSize bufferSize { sizeof(VkDrawIndirectCommand) * MAX_OBJECTS };
-        m_IndirectBuffers.reserve(MAX_FRAMES_IN_FLIGHT);
+        m_IndirectBuffers.reserve(m_MaxFramesInFlight);
 
-        for (size_t i { 0 }; i < MAX_FRAMES_IN_FLIGHT; ++i) 
+        for (size_t i { 0 }; i < m_MaxFramesInFlight; ++i) 
         {
             m_IndirectBuffers.push_back(std::make_unique<VulkanBuffer>(
                 m_Context, 
@@ -772,20 +945,20 @@ namespace Antelope
     {
         std::array<VkDescriptorPoolSize, 3> poolSizes {};
         poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+        poolSizes[0].descriptorCount = static_cast<uint32_t>(m_MaxFramesInFlight);
         
         poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 6);
+        poolSizes[1].descriptorCount = static_cast<uint32_t>(m_MaxFramesInFlight * 6);
 
         poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        poolSizes[2].descriptorCount = 1024 * MAX_FRAMES_IN_FLIGHT;
+        poolSizes[2].descriptorCount = 1024 * m_MaxFramesInFlight;
 
         VkDescriptorPoolCreateInfo descriptorPoolInfo {};
         descriptorPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         descriptorPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT; 
         descriptorPoolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
         descriptorPoolInfo.pPoolSizes = poolSizes.data();
-        descriptorPoolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+        descriptorPoolInfo.maxSets = static_cast<uint32_t>(m_MaxFramesInFlight);
 
         if (vkCreateDescriptorPool(m_Context->GetDevice(), &descriptorPoolInfo, nullptr, &m_DescriptorPool) != VK_SUCCESS) 
         {
@@ -796,9 +969,9 @@ namespace Antelope
 
     void Renderer::CreateDescriptorSets()
     {
-        m_DescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+        m_DescriptorSets.resize(m_MaxFramesInFlight);
 
-        for (size_t i { 0 }; i < MAX_FRAMES_IN_FLIGHT; ++i) 
+        for (size_t i { 0 }; i < m_MaxFramesInFlight; ++i) 
         {
             m_DescriptorSets[i] = m_GlobalDescriptorAllocator->Allocate(m_DescriptorSetLayout);
 
@@ -823,7 +996,8 @@ namespace Antelope
         poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
         poolInfo.queueFamilyIndex = queueFamilyIndices.TransferFamily.value(); 
 
-        if (vkCreateCommandPool(m_Context->GetDevice(), &poolInfo, nullptr, &m_TransferCommandPool) != VK_SUCCESS) {
+        if (vkCreateCommandPool(m_Context->GetDevice(), &poolInfo, nullptr, &m_TransferCommandPool) != VK_SUCCESS)
+        {
             AE_ENGINE_CRITICAL("Failed to create Transfer Command Pool!");
             throw std::runtime_error("Failed to create Transfer Command Pool");
         }

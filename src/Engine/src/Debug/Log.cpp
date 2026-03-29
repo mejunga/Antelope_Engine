@@ -18,6 +18,6 @@ namespace Antelope
         s_ClientLogger->set_level(spdlog::level::trace);
         s_ClientLogger->set_pattern("%^[%T]%$\033[1;34m[%n]\033[0m: %^%v%$");
 
-        AE_ENGINE_INFO("Log System initialized successfully.");
+        AE_ENGINE_INFO("Log System initialized.");
     }
 }

@@ -10,8 +10,8 @@
 #include <string>
 
 
-namespace Antelope {
-
+namespace Antelope
+{
     struct TagComponent
     {
         std::string Tag;

@@ -35,7 +35,6 @@ namespace Antelope
             VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* windowHandle);
             VkFormat FindDepthFormat();
             void CleanupSwapchain();
-            void RecreateSwapChain();
 
             void CreateSwapchain();
             void CreateImageViews();

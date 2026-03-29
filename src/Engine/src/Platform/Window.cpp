@@ -65,7 +65,7 @@ namespace Antelope
                 return;
             }
             
-            AE_ENGINE_TRACE("GLFW Initialized successfully.");
+            AE_ENGINE_TRACE("GLFW Initialized.");
             s_GLFWInitialized = true;
         }
 

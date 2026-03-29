@@ -7,9 +7,11 @@
 #include <Engine/Debug/Log.hpp>
 #ifdef ANTELOPE_EDITOR_MODE
 #include <Engine/Renderer/Graphics/EditorCamera.hpp>
+#include <Engine/Renderer/Vulkan/RenderTexture.hpp>
 #endif
 
 #include <vector>
+
 
 namespace Antelope
 {
@@ -94,10 +96,10 @@ namespace Antelope
         UniformBufferObject cameraUBO {};
         cameraUBO.view = camera.GetViewMatrix();
         
-        auto extent { Application::Get().GetSwapChain()->GetExtent() };
+        auto renderExtent { renderer->GetRenderTexture()->GetExtent() };
         cameraUBO.proj = camera.GetProjectionMatrix(
-            static_cast<float>(extent.width), 
-            static_cast<float>(extent.height)
+            static_cast<float>(renderExtent.width), 
+            static_cast<float>(renderExtent.height)
         );
 
         std::vector<RenderCommand> renderList;

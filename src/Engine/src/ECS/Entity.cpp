@@ -1,6 +1,7 @@
 #include <Engine/ECS/Entity.hpp>
 #include <Engine/ECS/BaseComponents.hpp>
 
+
 namespace Antelope
 {
     void Entity::SetParent(Entity parentEntity)
