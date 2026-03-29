@@ -36,6 +36,7 @@ namespace Antelope
             Window& m_Window;
 
             VkDescriptorPool m_ImGuiPool { VK_NULL_HANDLE };
+            VkDescriptorSet m_SceneTextureDescriptorSet { VK_NULL_HANDLE };
             void* m_SceneTexture { nullptr };
     };
 }

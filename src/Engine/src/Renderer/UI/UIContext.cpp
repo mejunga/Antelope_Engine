@@ -25,7 +25,12 @@ namespace Antelope
     UIContext::~UIContext()
     {
         vkDeviceWaitIdle(m_Context->GetDevice());
-        
+
+        if (m_SceneTextureDescriptorSet != VK_NULL_HANDLE)
+        {
+            ImGui_ImplVulkan_RemoveTexture(m_SceneTextureDescriptorSet);
+        }
+
         ImGui_ImplVulkan_Shutdown();
         ImGui_ImplGlfw_Shutdown();
         ImGui::DestroyContext();
@@ -100,17 +105,21 @@ namespace Antelope
     void UIContext::UpdateSceneTextureID()
     {
         auto renderTex { m_Renderer->GetRenderTexture() };
-        
-        if (m_SceneTexture)
-        {
-            ImGui_ImplVulkan_RemoveTexture(reinterpret_cast<VkDescriptorSet>(m_SceneTexture));
-        }
 
-        m_SceneTexture = (void*)ImGui_ImplVulkan_AddTexture(
-            renderTex->GetSampler(), 
-            renderTex->GetResolveImageView(), 
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-        );
+        VkDescriptorImageInfo imageInfo {};
+        imageInfo.sampler = renderTex->GetSampler();
+        imageInfo.imageView = renderTex->GetResolveImageView();
+        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+        VkWriteDescriptorSet write {};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = m_SceneTextureDescriptorSet;
+        write.dstBinding = 0;
+        write.descriptorCount = 1;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        write.pImageInfo = &imageInfo;
+
+        vkUpdateDescriptorSets(m_Context->GetDevice(), 1, &write, 0, nullptr);
     }
 
     void UIContext::InitImGui()
@@ -171,8 +180,9 @@ namespace Antelope
         ImGui_ImplVulkan_Init(&init_info);
         ImGui_ImplVulkan_CreateFontsTexture();
         
-        auto renderTex { m_Renderer->GetRenderTexture() };
-        m_SceneTexture = (void*)ImGui_ImplVulkan_AddTexture(renderTex->GetSampler(), renderTex->GetResolveImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        auto renderTexture { m_Renderer->GetRenderTexture() };
+        m_SceneTextureDescriptorSet = ImGui_ImplVulkan_AddTexture(renderTexture->GetSampler(), renderTexture->GetResolveImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        m_SceneTexture = (void*)m_SceneTextureDescriptorSet;
     }
 }
 #endif
