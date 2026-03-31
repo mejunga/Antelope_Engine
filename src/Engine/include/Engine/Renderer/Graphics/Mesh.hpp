@@ -62,6 +62,9 @@ namespace Antelope
         glm::mat4 transform;
         glm::mat4 normalMatrix;
         MeshHandle mesh;
+    #ifdef ANTELOPE_EDITOR_MODE
+        uint32_t entityID { 0 };
+    #endif
     };
 
     struct ObjectData
@@ -74,6 +77,11 @@ namespace Antelope
         uint32_t uvOffset { 0 };
         uint32_t faceOffset { 0 };
         uint32_t materialIndex { 0 };
+    #ifdef ANTELOPE_EDITOR_MODE
+        uint32_t entityID { 0 };
+        uint32_t padding { 0 };
+    #else
         uint32_t padding[2] { 0, 0 };
+    #endif
     };
 }

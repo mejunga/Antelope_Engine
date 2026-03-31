@@ -21,13 +21,13 @@ namespace Antelope
 
             void RecreateSwapchain();
 
-            VkSwapchainKHR GetSwapchain() const { return m_Swapchain; }
-            VkRenderPass GetRenderPass() const { return m_RenderPass; }
-            VkExtent2D GetExtent() const { return m_SwapchainExtent; }
-            VkFormat GetImageFormat() const { return m_SwapchainImageFormat; }
-            std::vector<VkFramebuffer>& GetFramebuffers() { return m_SwapchainFramebuffers; }
-            bool IsFramebufferResized() const { return m_FramebufferResized; }
-            void SetFramebufferResized(bool resized) { m_FramebufferResized = resized; }
+            inline VkSwapchainKHR GetSwapchain() const { return m_Swapchain; }
+            inline VkRenderPass GetRenderPass() const { return m_RenderPass; }
+            inline VkExtent2D GetExtent() const { return m_SwapchainExtent; }
+            inline VkFormat GetImageFormat() const { return m_SwapchainImageFormat; }
+            inline std::vector<VkFramebuffer>& GetFramebuffers() { return m_SwapchainFramebuffers; }
+            inline bool IsFramebufferResized() const { return m_FramebufferResized; }
+            inline void SetFramebufferResized(bool resized) { m_FramebufferResized = resized; }
 
         private:
             VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);

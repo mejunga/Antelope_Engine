@@ -73,7 +73,8 @@ namespace Antelope
     {
         for (const auto& availableFormat : availableFormats)
         {
-            if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+            if (availableFormat.format == VK_FORMAT_B8G8R8A8_UNORM && 
+                availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
             {
                 return availableFormat;
             }
@@ -84,16 +85,12 @@ namespace Antelope
 
     VkPresentModeKHR SwapChain::ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
     {
-    #ifdef ANTELOPE_EDITOR_MODE
-        return VK_PRESENT_MODE_FIFO_KHR;
-    #else
         for (const auto& mode : availablePresentModes)
         {
             if (mode == VK_PRESENT_MODE_MAILBOX_KHR)
                 return mode;
         }
         return VK_PRESENT_MODE_FIFO_KHR;
-    #endif
     }
 
     VkExtent2D SwapChain::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* windowHandle)

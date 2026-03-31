@@ -77,8 +77,10 @@ namespace Antelope
         #endif
 
         #ifdef ANTELOPE_EDITOR_MODE
-            std::shared_ptr<RenderTexture> GetRenderTexture() const { return m_RenderTexture; }
-            void SetUIContext(std::shared_ptr<UIContext> uiContext) { m_UIContext = uiContext; }
+            inline std::shared_ptr<RenderTexture> GetRenderTexture() const { return m_RenderTexture; }
+            inline void SetUIContext(std::shared_ptr<UIContext> uiContext) { m_UIContext = uiContext; }
+            inline uint32_t GetMaxFramesInFlight() const { return m_MaxFramesInFlight; }
+            inline uint32_t GetDisplayFrameIndex() const { return (m_CurrentFrame + m_MaxFramesInFlight - 1) % m_MaxFramesInFlight; }
         #endif
 
         private:
@@ -147,7 +149,10 @@ namespace Antelope
         #ifdef ANTELOPE_EDITOR_MODE
             std::vector<SemaphoreSlot> m_SemaphorePool;
             std::vector<VkSemaphore> m_RenderFinishedRing;
-            std::vector<VkFence> m_ImagesInFlight;
+        #endif
+
+        #ifdef ANTELOPE_EDITOR_MODE
+            friend class ScenePicker;
         #endif
     };
 }

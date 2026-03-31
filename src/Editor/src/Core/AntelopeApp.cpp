@@ -41,11 +41,11 @@ void AntelopeApp::OnInit()
     SetupMockData();
 }
 
-void AntelopeApp::OnUpdate(float deltaTime)
+void AntelopeApp::OnUpdate(float timeStep)
 {
     if (m_DebounceTimer > 0.0f)
     {
-        m_DebounceTimer -= deltaTime;
+        m_DebounceTimer -= timeStep;
     }
 
     if (Antelope::Input::IsKeyPressed(GLFW_KEY_SPACE) && m_DebounceTimer <= 0.0f)
@@ -102,13 +102,14 @@ void AntelopeApp::OnUpdate(float deltaTime)
         }
     }
 
-    m_EditorCamera.OnUpdate(deltaTime);
-    GetWorld()->OnUpdateEditor(deltaTime, m_EditorCamera);
+    m_EditorCamera.OnUpdate(timeStep);
+    
+    GetWorld()->OnUpdateEditor(timeStep, m_EditorCamera);
 }
 
 void AntelopeApp::OnUIRender()
 {
-    m_ScenePanel.OnUIRender();
+    m_ScenePanel.OnUIRender(m_EditorCamera);
 }
 
 void AntelopeApp::OnShutdown()

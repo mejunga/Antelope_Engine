@@ -46,7 +46,8 @@ namespace Antelope
         int texWidth { 0 }, texHeight { 0 }, texChannels { 0 };
         stbi_uc* pixels { stbi_load(filepath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha) };
 
-        if (!pixels) {
+        if (!pixels)
+        {
             AE_ENGINE_ERROR("Failed to load texture image: {0}", filepath);
             return 0;
         }
@@ -55,13 +56,17 @@ namespace Antelope
 
         VkBuffer stagingBuffer { VK_NULL_HANDLE };
         VmaAllocation stagingAllocation { VK_NULL_HANDLE };
-        
+
         m_Renderer->CreateStagingBuffer(pixels, imageSize, stagingBuffer, stagingAllocation);
 
+        stbi_image_free(pixels);
+
         Texture newTexture {};
-        
-        CreateImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, 
-                    VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 
+
+        newTexture.GlobalIndex = static_cast<uint32_t>(m_Textures.size());
+
+        CreateImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+                    VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                     VMA_MEMORY_USAGE_AUTO, newTexture.Image, newTexture.Allocation);
 
         VkCommandBuffer cmd { m_Renderer->BeginAsyncGraphicsCommand() };
@@ -72,14 +77,11 @@ namespace Antelope
 
         m_Renderer->EndAndSubmitAsyncGraphicsCommand(cmd, stagingBuffer, stagingAllocation, newTexture.GlobalIndex);
 
-        stbi_image_free(pixels);
-
         newTexture.ImageView = CreateImageView(newTexture.Image, VK_FORMAT_R8G8B8A8_SRGB);
         newTexture.Sampler = CreateTextureSampler();
-        newTexture.GlobalIndex = static_cast<uint32_t>(m_Textures.size());
 
         m_Textures.push_back(newTexture);
-        m_Renderer->UpdateTextureDescriptors(m_Textures); 
+        m_Renderer->UpdateTextureDescriptors(m_Textures);
 
         AE_ENGINE_TRACE("Texture transfer dispatched asynchronously for: {0}", filepath);
         return newTexture.GlobalIndex;

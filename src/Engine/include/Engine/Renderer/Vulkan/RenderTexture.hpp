@@ -18,11 +18,11 @@ namespace Antelope
 
             void Resize(uint32_t width, uint32_t height);
 
-            VkRenderPass GetRenderPass() const { return m_RenderPass; }
-            VkFramebuffer GetFramebuffer() const { return m_Framebuffer; }
-            VkImageView GetResolveImageView() const { return m_ResolveImageView; }
-            VkSampler GetSampler() const { return m_Sampler; }
-            VkExtent2D GetExtent() const { return { m_Width, m_Height }; }
+            inline VkRenderPass GetRenderPass() const { return m_RenderPass; }
+            inline VkFramebuffer GetFramebuffer() const { return m_Framebuffer; }
+            inline VkImageView GetResolveImageView() const { return m_ResolveImageView; }
+            inline VkSampler GetSampler() const { return m_Sampler; }
+            inline VkExtent2D GetExtent() const { return { m_Width, m_Height }; }
 
         private:
             void CreateResources();

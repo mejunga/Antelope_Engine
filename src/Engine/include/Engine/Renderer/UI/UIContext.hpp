@@ -4,6 +4,7 @@
 #include <vulkan/vulkan.h>
 
 #include <memory>
+#include <vector>
 
 namespace Antelope
 {
@@ -24,7 +25,7 @@ namespace Antelope
             void RenderViewports();
             void UpdateSceneTextureID();
 
-            void* GetSceneTextureID() const { return m_SceneTexture; }
+            inline void* GetSceneTextureID() const { return m_SceneTexture; }
 
         private:
             void InitImGui();
@@ -33,11 +34,12 @@ namespace Antelope
             std::shared_ptr<VulkanContext> m_Context;
             std::shared_ptr<SwapChain> m_SwapChain;
             std::shared_ptr<Renderer> m_Renderer;
-            Window& m_Window;
+            void* m_SceneTexture { nullptr };
 
             VkDescriptorPool m_ImGuiPool { VK_NULL_HANDLE };
             VkDescriptorSet m_SceneTextureDescriptorSet { VK_NULL_HANDLE };
-            void* m_SceneTexture { nullptr };
+            
+            Window& m_Window;
     };
 }
 #endif

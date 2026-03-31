@@ -30,7 +30,7 @@ namespace Antelope
 
             uint32_t LoadTexture(const std::string& filepath);
 
-            const std::vector<Texture>& GetGlobalTextures() const { return m_Textures; }
+            inline const std::vector<Texture>& GetGlobalTextures() const { return m_Textures; }
 
         private:
             void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memUsage, VkImage& image, VmaAllocation& allocation);

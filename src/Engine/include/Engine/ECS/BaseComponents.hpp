@@ -31,6 +31,8 @@ namespace Antelope
         RelationshipComponent(const RelationshipComponent&) = default;
     };
 
+    struct DirtyTransform {};
+
     struct TransformComponent
     {
         glm::vec3 Translation { 0.0f, 0.0f, 0.0f };
@@ -40,18 +42,11 @@ namespace Antelope
         glm::mat4 WorldMatrix { 1.0f };
         glm::mat4 NormalMatrix { 1.0f };
 
-        bool IsDirty { true };
-
-        TransformComponent() = default;
-        TransformComponent(const TransformComponent&) = default;
-        TransformComponent(const glm::vec3& translation) : Translation(translation) {}
-
-        glm::mat4 GetLocalTransform() const 
+        glm::mat4 GetLocalTransform() const
         {
-            glm::mat4 rotation { glm::toMat4(glm::quat(Rotation)) };
             return glm::translate(glm::mat4(1.0f), Translation)
-                 * rotation
-                 * glm::scale(glm::mat4(1.0f), Scale);
+                * glm::toMat4(glm::quat(Rotation))
+                * glm::scale(glm::mat4(1.0f), Scale);
         }
     };
 

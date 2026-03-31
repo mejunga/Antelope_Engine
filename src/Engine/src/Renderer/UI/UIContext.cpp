@@ -26,7 +26,7 @@ namespace Antelope
     {
         vkDeviceWaitIdle(m_Context->GetDevice());
 
-        if (m_SceneTextureDescriptorSet != VK_NULL_HANDLE)
+        if (m_SceneTextureDescriptorSet)
         {
             ImGui_ImplVulkan_RemoveTexture(m_SceneTextureDescriptorSet);
         }
@@ -156,6 +156,7 @@ namespace Antelope
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
         io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+        io.ConfigWindowsMoveFromTitleBarOnly = true;
 
         ImGui::StyleColorsDark();
 
@@ -181,7 +182,11 @@ namespace Antelope
         ImGui_ImplVulkan_CreateFontsTexture();
         
         auto renderTexture { m_Renderer->GetRenderTexture() };
-        m_SceneTextureDescriptorSet = ImGui_ImplVulkan_AddTexture(renderTexture->GetSampler(), renderTexture->GetResolveImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        m_SceneTextureDescriptorSet = ImGui_ImplVulkan_AddTexture(
+            renderTexture->GetSampler(),
+            renderTexture->GetResolveImageView(),
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        );
         m_SceneTexture = (void*)m_SceneTextureDescriptorSet;
     }
 }

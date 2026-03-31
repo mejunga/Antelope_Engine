@@ -25,6 +25,8 @@ namespace Antelope
             glm::mat4 GetProjectionMatrix(float width, float height) const;
 
             inline glm::vec3 GetPosition() const { return m_Position; }
+            inline bool IsActive() const { return m_IsActive; }
+            void SetActive(bool active) { m_IsActive = active; }
 
         private:
             void UpdateCameraVectors();
@@ -45,6 +47,7 @@ namespace Antelope
             float m_LastMouseX { 0.0f };
             float m_LastMouseY { 0.0f };
             bool m_FirstMouse { true };
+            bool m_IsActive { false };
     };
 }
 #endif

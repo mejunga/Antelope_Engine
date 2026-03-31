@@ -5,6 +5,7 @@
 
 #include <vector>
 #include <optional>
+#include <functional>
 
 
 struct GLFWwindow; 
@@ -36,18 +37,19 @@ namespace Antelope
             SwapchainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
             QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
             VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
+            void ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& func);
             
-            VkInstance GetInstance() const { return m_Instance; }
-            VkDevice GetDevice() const { return m_Device; }
-            VkPhysicalDevice GetPhysicalDevice() const { return m_PhysicalDevice; }
-            VkSurfaceKHR GetSurface() const { return m_Surface; }
-            VkQueue GetGraphicsQueue() const { return m_GraphicsQueue; }
-            VkQueue GetPresentQueue() const { return m_PresentQueue; }
-            VkQueue GetTransferQueue() const { return m_TransferQueue; }
-            VmaAllocator GetAllocator() const { return m_Allocator; }
-            GLFWwindow* GetWindowHandle() const { return m_WindowHandle; }
-            VkSampleCountFlagBits GetMsaaSamples() const { return m_MsaaSamples; }
-            bool IsSwapchainMaintenance1Supported() const { return m_SwapchainMaintenance1Supported; }
+            inline VkInstance GetInstance() const { return m_Instance; }
+            inline VkDevice GetDevice() const { return m_Device; }
+            inline VkPhysicalDevice GetPhysicalDevice() const { return m_PhysicalDevice; }
+            inline VkSurfaceKHR GetSurface() const { return m_Surface; }
+            inline VkQueue GetGraphicsQueue() const { return m_GraphicsQueue; }
+            inline VkQueue GetPresentQueue() const { return m_PresentQueue; }
+            inline VkQueue GetTransferQueue() const { return m_TransferQueue; }
+            inline VmaAllocator GetAllocator() const { return m_Allocator; }
+            inline GLFWwindow* GetWindowHandle() const { return m_WindowHandle; }
+            inline VkSampleCountFlagBits GetMsaaSamples() const { return m_MsaaSamples; }
+            inline bool IsSwapchainMaintenance1Supported() const { return m_SwapchainMaintenance1Supported; }
 
         private:
             bool CheckValidationLayerSupport();

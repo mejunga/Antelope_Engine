@@ -17,7 +17,9 @@ void main()
     vec3 lightDir = normalize(vec3(1.0, 1.0, 0.5));
     float diff = max(dot(norm, lightDir), 0.2); 
     vec4 texColor = texture(globalTextures[nonuniformEXT(fragMatID)], fragUV);
-    //vec4 texColor = vec4(1.0);
 
-    outColor = vec4(fragColor * texColor.rgb * diff, texColor.a);
+    vec3 linearColor = fragColor * texColor.rgb * diff;
+    vec3 gammaCorrected = pow(linearColor, vec3(1.0 / 2.2));
+
+    outColor = vec4(gammaCorrected, texColor.a);
 }

@@ -21,9 +21,9 @@ namespace Antelope
 
             void WriteToBuffer(void* data, VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0);
 
-            VkBuffer GetBuffer() const { return m_Buffer; }
-            void* GetMappedMemory() const { return m_MappedData; }
-            VkDeviceSize GetSize() const { return m_BufferSize; }
+            inline VkBuffer GetBuffer() const { return m_Buffer; }
+            inline void* GetMappedMemory() const { return m_MappedData; }
+            inline VkDeviceSize GetSize() const { return m_BufferSize; }
             
         private:
             std::shared_ptr<VulkanContext> m_Context;

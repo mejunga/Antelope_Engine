@@ -64,9 +64,7 @@ namespace Antelope
         {
             for (auto& vPos : subMesh.Data.positions)
             {
-                vPos.pos.x -= center.x;
-                vPos.pos.y -= center.y;
-                vPos.pos.z -= center.z;
+                vPos.pos -= center;
             }
         }
 

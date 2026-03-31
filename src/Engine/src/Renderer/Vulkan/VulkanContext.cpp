@@ -180,6 +180,46 @@ namespace Antelope
         throw std::runtime_error("Failed to find supported format");
     }
 
+    void VulkanContext::ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& func)
+    {
+        VkCommandPoolCreateInfo poolInfo {};
+        poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+        poolInfo.queueFamilyIndex = FindQueueFamilies(m_PhysicalDevice).GraphicsFamily.value();
+
+        VkCommandPool pool { VK_NULL_HANDLE };
+        vkCreateCommandPool(m_Device, &poolInfo, nullptr, &pool);
+
+        VkCommandBufferAllocateInfo allocInfo {};
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.commandPool = pool;
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocInfo.commandBufferCount = 1;
+
+        VkCommandBuffer cmd { VK_NULL_HANDLE };
+        vkAllocateCommandBuffers(m_Device, &allocInfo, &cmd);
+
+        VkCommandBufferBeginInfo beginInfo {};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vkBeginCommandBuffer(cmd, &beginInfo);
+
+        func(cmd);
+
+        vkEndCommandBuffer(cmd);
+
+        VkSubmitInfo submitInfo {};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &cmd;
+
+        vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+        vkQueueWaitIdle(m_GraphicsQueue);
+
+        vkFreeCommandBuffers(m_Device, pool, 1, &cmd);
+        vkDestroyCommandPool(m_Device, pool, nullptr);
+    }
+
     bool VulkanContext::CheckValidationLayerSupport()
     {
         uint32_t layerCount { 0 };

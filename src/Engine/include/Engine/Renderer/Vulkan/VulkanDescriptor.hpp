@@ -32,7 +32,6 @@ namespace Antelope
             };
 
             void Init(std::shared_ptr<VulkanContext> context, uint32_t initialSets, std::vector<PoolSizeRatio> poolRatios);
-            void ClearPools();
             void DestroyAllocator();
 
             VkDescriptorSet Allocate(VkDescriptorSetLayout layout);

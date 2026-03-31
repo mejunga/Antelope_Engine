@@ -19,7 +19,7 @@ class AntelopeApp : public Antelope::Application
         ~AntelopeApp();
 
         void OnInit() override;
-        void OnUpdate(float deltaTime) override;
+        void OnUpdate(float timeStep) override;
         void OnUIRender() override;
         void OnShutdown() override;
 
@@ -40,5 +40,5 @@ class AntelopeApp : public Antelope::Application
         Antelope::EditorCamera m_EditorCamera;
         std::vector<Antelope::Entity> m_ActiveEntities;
 
-        Antelope::SceneViewportPanel m_ScenePanel;
+        Antelope::SceneViewPanel m_ScenePanel;
 };

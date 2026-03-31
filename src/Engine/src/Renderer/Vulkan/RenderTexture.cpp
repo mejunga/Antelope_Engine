@@ -118,12 +118,67 @@ namespace Antelope
 
         VkImageCreateInfo resolveInfo { colorInfo };
         resolveInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-        resolveInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+        resolveInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
         vmaCreateImage(allocator, &resolveInfo, &allocInfo, &m_ResolveImage, &m_ResolveAllocation, nullptr);
 
         VkImageViewCreateInfo resolveViewInfo { colorViewInfo };
         resolveViewInfo.image = m_ResolveImage;
         vkCreateImageView(m_Context->GetDevice(), &resolveViewInfo, nullptr, &m_ResolveImageView);
+
+        m_Context->ImmediateSubmit([this](VkCommandBuffer cmd)
+        {
+            VkImageMemoryBarrier toClear {};
+            toClear.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            toClear.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            toClear.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            toClear.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            toClear.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            toClear.image = m_ResolveImage;
+            toClear.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            toClear.subresourceRange.baseMipLevel = 0;
+            toClear.subresourceRange.levelCount = 1;
+            toClear.subresourceRange.baseArrayLayer = 0;
+            toClear.subresourceRange.layerCount = 1;
+            toClear.srcAccessMask = 0;
+            toClear.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+            vkCmdPipelineBarrier(cmd,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                0, 0, nullptr, 0, nullptr, 1, &toClear);
+
+            VkClearColorValue clearColor {};
+            clearColor.float32[0] = 0.1f;
+            clearColor.float32[1] = 0.1f;
+            clearColor.float32[2] = 0.17f;
+            clearColor.float32[3] = 1.0f;
+
+            VkImageSubresourceRange range {};
+            range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            range.baseMipLevel = 0;
+            range.levelCount = 1;
+            range.baseArrayLayer = 0;
+            range.layerCount = 1;
+
+            vkCmdClearColorImage(cmd, m_ResolveImage,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &range);
+
+            VkImageMemoryBarrier toReadable {};
+            toReadable.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            toReadable.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            toReadable.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            toReadable.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            toReadable.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            toReadable.image = m_ResolveImage;
+            toReadable.subresourceRange = range;
+            toReadable.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            toReadable.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+            vkCmdPipelineBarrier(cmd,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                0, 0, nullptr, 0, nullptr, 1, &toReadable);
+        });
     }
 
     void RenderTexture::CreateRenderPass()

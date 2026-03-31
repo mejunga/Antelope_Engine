@@ -52,7 +52,7 @@ namespace Antelope
             if (m_Window->IsResizing() || m_Window->GetWidth() == 0 || m_Window->GetHeight() == 0) { continue; }
 
             auto currentTime { std::chrono::high_resolution_clock::now() };
-            float deltaTime { std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count() };
+            float timeStep { std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count() };
             lastTime = currentTime;
 
         #ifdef ANTELOPE_EDITOR_MODE
@@ -64,7 +64,7 @@ namespace Antelope
             }
         #endif
 
-            OnUpdate(deltaTime);
+            OnUpdate(timeStep);
 
         #ifdef ANTELOPE_EDITOR_MODE
             if (m_UIContext)
@@ -77,7 +77,7 @@ namespace Antelope
         }
 
         vkDeviceWaitIdle(m_VulkanContext->GetDevice());
-        OnShutdown();         
+        OnShutdown();        
         AE_ENGINE_INFO("Engine Core Loop Stopped.");
     }
 

@@ -21,6 +21,8 @@ namespace Antelope
 
     void EditorCamera::OnUpdate(float deltaTime)
     {
+        if (!m_IsActive) { return; }
+        
         float velocity { m_MovementSpeed * deltaTime };
         
         if (Input::IsMouseButtonClicked(GLFW_MOUSE_BUTTON_RIGHT))

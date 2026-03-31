@@ -1,20 +1,38 @@
 #pragma once
 
+#ifdef ANTELOPE_EDITOR_MODE
+#include <Engine/ECS/Entity.hpp>
+#include <Engine/Renderer/Graphics/EditorCamera.hpp>
+#include <Engine/Renderer/UI/ScenePicker.hpp>
+
 #include <imgui.h>
+#include <ImGuizmo.h>
+
+#include <memory>
+
 
 namespace Antelope
 {
-    class SceneViewportPanel
+    class SceneViewPanel
     {
         public:
-            SceneViewportPanel() = default;
-            ~SceneViewportPanel() = default;
+            SceneViewPanel();
+            ~SceneViewPanel() = default;
 
-            void OnUIRender();
+            void OnUIRender(EditorCamera& camera);
+            void SetSelectedEntity(Entity entity) { m_SelectedEntity = entity; }
 
         private:
-            bool m_PanelResizing { false };
-            float m_PanelResizeTimer { 0.0f };
+            int m_PendingResizeFrames { 0 };
             ImVec2 m_LastPanelSize { 0.0f, 0.0f };
+
+            bool m_ViewportFocused { false };
+            bool m_ViewportHovered { false };
+
+            int m_GizmoType { -1 };
+            Entity m_SelectedEntity;
+            
+            std::unique_ptr<ScenePicker> m_ScenePicker;
     };
 }
+#endif

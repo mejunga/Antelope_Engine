@@ -14,8 +14,6 @@
 #endif
 
 #include <stdexcept>
-#include <fstream>
-#include <chrono>
 
 
 namespace Antelope
@@ -25,8 +23,14 @@ namespace Antelope
     {
     #ifdef ANTELOPE_EDITOR_MODE
         m_Maintenance1Supported = m_Context->IsSwapchainMaintenance1Supported();
-        m_RenderTexture = std::make_shared<RenderTexture>(m_Context, m_SwapChain->GetExtent().width, m_SwapChain->GetExtent().height, m_SwapChain->GetImageFormat());
+        m_RenderTexture = std::make_shared<RenderTexture>(
+            m_Context,
+            m_SwapChain->GetExtent().width,
+            m_SwapChain->GetExtent().height,
+            m_SwapChain->GetImageFormat()
+        );
     #endif
+
         m_LastUpdatedTextureCount.assign(m_MaxFramesInFlight, 0);
         m_GpuAllocator = std::make_unique<GpuMemoryAllocator>(m_Context);
         m_GlobalDescriptorAllocator = std::make_unique<DescriptorAllocator>();
@@ -153,18 +157,35 @@ namespace Antelope
         handle.faceAllocation = m_GpuAllocator->AllocateFace(faceSize);
         handle.faceCount = static_cast<uint32_t>(meshData.faces.size());
 
-        std::vector<char> combinedData(totalSize);
-        size_t offset { 0 };
-
-        if (posSize > 0) { memcpy(combinedData.data() + offset, meshData.positions.data(), posSize); offset += posSize; }
-        if (colorSize > 0) { memcpy(combinedData.data() + offset, meshData.colors.data(), colorSize); offset += colorSize; }
-        if (normalSize > 0) { memcpy(combinedData.data() + offset, meshData.normals.data(), normalSize); offset += normalSize; }
-        if (uvSize > 0) { memcpy(combinedData.data() + offset, meshData.uvs.data(), uvSize); offset += uvSize; }
-        if (faceSize > 0) { memcpy(combinedData.data() + offset, meshData.faces.data(), faceSize); }
-
-        VkBuffer stagingBuffer { VK_NULL_HANDLE }; 
+        VkBuffer stagingBuffer { VK_NULL_HANDLE };
         VmaAllocation stagingAllocation { VK_NULL_HANDLE };
-        CreateStagingBuffer(combinedData.data(), totalSize, stagingBuffer, stagingAllocation);
+
+        VkBufferCreateInfo stagingInfo {};
+        stagingInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        stagingInfo.size = totalSize;
+        stagingInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        stagingInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VmaAllocationCreateInfo stagingAllocInfo {};
+        stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+        VmaAllocationInfo stagingAllocResult {};
+
+        if (vmaCreateBuffer(m_Context->GetAllocator(), &stagingInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, &stagingAllocResult) != VK_SUCCESS)
+        {
+            AE_ENGINE_CRITICAL("Failed to create mesh staging buffer! Size: {0} bytes.", totalSize);
+            throw std::runtime_error("Failed to create mesh staging buffer");
+        }
+
+        char* dst { static_cast<char*>(stagingAllocResult.pMappedData) };
+        size_t writeOffset { 0 };
+
+        if (posSize > 0) { memcpy(dst + writeOffset, meshData.positions.data(), posSize); writeOffset += posSize; }
+        if (colorSize > 0) { memcpy(dst + writeOffset, meshData.colors.data(), colorSize);  writeOffset += colorSize; }
+        if (normalSize > 0) { memcpy(dst + writeOffset, meshData.normals.data(), normalSize); writeOffset += normalSize; }
+        if (uvSize > 0) { memcpy(dst + writeOffset, meshData.uvs.data(), uvSize); writeOffset += uvSize; }
+        if (faceSize > 0) { memcpy(dst + writeOffset, meshData.faces.data(), faceSize); }
 
         VkCommandBufferAllocateInfo allocationInfo {};
         allocationInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -222,7 +243,7 @@ namespace Antelope
         vkQueueSubmit(m_Context->GetTransferQueue(), 1, &submitInfo, transferFence);
 
         handle.MeshID = m_NextMeshID++;
-        m_PendingTransfers.push_back({transferFence, commandBuffer, stagingBuffer, stagingAllocation, handle.MeshID});
+        m_PendingTransfers.push_back({transferFence, commandBuffer, stagingBuffer, stagingAllocation, handle.MeshID, UINT32_MAX});
         m_PendingMeshIDs.insert(handle.MeshID);
 
         return handle;
@@ -416,30 +437,35 @@ namespace Antelope
 
     void Renderer::ProcessPendingTransfers()
     {
-        for (auto it { m_PendingTransfers.begin() }; it != m_PendingTransfers.end(); )
+        size_t i { 0 };
+
+        while (i < m_PendingTransfers.size())
         {
-            if (vkGetFenceStatus(m_Context->GetDevice(), it->fence) == VK_SUCCESS)
+            auto& transfer { m_PendingTransfers[i] };
+
+            if (vkGetFenceStatus(m_Context->GetDevice(), transfer.fence) == VK_SUCCESS)
             {
-                vkDestroyFence(m_Context->GetDevice(), it->fence, nullptr);
-                VkCommandPool poolToUse { (it->meshID == 0) ? m_CommandPool : m_TransferCommandPool };
-                vkFreeCommandBuffers(m_Context->GetDevice(), poolToUse, 1, &it->commandBuffer);
-                vmaDestroyBuffer(m_Context->GetAllocator(), it->stagingBuffer, it->stagingAllocation);
+                vkDestroyFence(m_Context->GetDevice(), transfer.fence, nullptr);
+                VkCommandPool poolToUse { (transfer.meshID == 0) ? m_CommandPool : m_TransferCommandPool };
+                vkFreeCommandBuffers(m_Context->GetDevice(), poolToUse, 1, &transfer.commandBuffer);
+                vmaDestroyBuffer(m_Context->GetAllocator(), transfer.stagingBuffer, transfer.stagingAllocation);
 
-                if (it->meshID != 0)
+                if (transfer.meshID != 0)
                 {
-                    m_PendingMeshIDs.erase(it->meshID);
+                    m_PendingMeshIDs.erase(transfer.meshID);
                 }
 
-                if (it->textureIndex != UINT32_MAX)
+                if (transfer.textureIndex != UINT32_MAX)
                 {
-                    m_PendingTextureIndices.erase(it->textureIndex);
+                    m_PendingTextureIndices.erase(transfer.textureIndex);
                 }
 
-                it = m_PendingTransfers.erase(it);
+                m_PendingTransfers[i] = std::move(m_PendingTransfers.back());
+                m_PendingTransfers.pop_back();
             }
             else
             {
-                ++it;
+                ++i;
             }
         }
     }
@@ -460,6 +486,9 @@ namespace Antelope
         if (result == VK_ERROR_OUT_OF_DATE_KHR)
         {
             m_SwapChain->RecreateSwapchain();
+        #ifdef ANTELOPE_EDITOR_MODE
+            uint32_t newImageCount { static_cast<uint32_t>(m_SwapChain->GetFramebuffers().size()) };
+        #endif
             return VK_NULL_HANDLE;
         }
         else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
@@ -467,15 +496,6 @@ namespace Antelope
             AE_ENGINE_ERROR("Failed to acquire swapchain image!");
             return VK_NULL_HANDLE;
         }
-
-    #ifdef ANTELOPE_EDITOR_MODE
-        if (m_ImagesInFlight[m_CurrentImageIndex] != VK_NULL_HANDLE)
-        {
-            vkWaitForFences(m_Context->GetDevice(), 1, &m_ImagesInFlight[m_CurrentImageIndex], VK_TRUE, UINT64_MAX);
-        }
-
-        m_ImagesInFlight[m_CurrentImageIndex] = m_FrameSync[m_CurrentFrame].inFlightFence;
-    #endif
 
         vkResetFences(m_Context->GetDevice(), 1, &m_FrameSync[m_CurrentFrame].inFlightFence);
         vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
@@ -518,7 +538,7 @@ namespace Antelope
         VkRenderPassBeginInfo renderPassInfo {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     #ifdef ANTELOPE_EDITOR_MODE
-        renderPassInfo.renderPass = m_RenderTexture->GetRenderPass();
+        renderPassInfo.renderPass  = m_RenderTexture->GetRenderPass();
         renderPassInfo.framebuffer = m_RenderTexture->GetFramebuffer();
         renderPassInfo.renderArea.extent = m_RenderTexture->GetExtent();
     #else
@@ -528,9 +548,8 @@ namespace Antelope
     #endif
         renderPassInfo.renderArea.offset = {0, 0};
         
-
         std::array<VkClearValue, 2> clearValues {};
-        clearValues[0].color = {{0.01f, 0.01f, 0.03f, 1.0f}};
+        clearValues[0].color = {{0.1f, 0.1f, 0.17f, 1.0f}};
         clearValues[1].depthStencil = {1.0f, 0};
 
         renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
@@ -542,7 +561,7 @@ namespace Antelope
         VkViewport viewport {};
         viewport.x = 0.0f; viewport.y = 0.0f;
     #ifdef ANTELOPE_EDITOR_MODE
-        viewport.width = static_cast<float>(m_RenderTexture->GetExtent().width);
+        viewport.width  = static_cast<float>(m_RenderTexture->GetExtent().width);
         viewport.height = static_cast<float>(m_RenderTexture->GetExtent().height);
     #else
         viewport.width = static_cast<float>(m_SwapChain->GetExtent().width);
@@ -567,10 +586,8 @@ namespace Antelope
 
         uint32_t objectCount { 0 };
 
-        for (size_t i { 0 }; i < renderList.size(); i++) 
+        for (const auto& command : renderList)
         {
-            const auto& command { renderList[i] };
-
             if (m_PendingMeshIDs.count(command.mesh.MeshID) > 0) { continue; }
             if (m_PendingTextureIndices.count(command.mesh.materialIndex) > 0) { continue; }
 
@@ -588,6 +605,9 @@ namespace Antelope
             objectDataMap[objectCount].faceOffset = static_cast<uint32_t>(command.mesh.faceAllocation.Offset / sizeof(Face));
             objectDataMap[objectCount].uvOffset = static_cast<uint32_t>(command.mesh.uvAllocation.Offset / sizeof(VertexUV));
             objectDataMap[objectCount].materialIndex = command.mesh.materialIndex;
+        #ifdef ANTELOPE_EDITOR_MODE
+            objectDataMap[objectCount].entityID = command.entityID;
+        #endif
 
             indirectCommandsMap[objectCount].vertexCount = command.mesh.faceCount * 3;
             indirectCommandsMap[objectCount].instanceCount = 1;
@@ -691,7 +711,6 @@ namespace Antelope
             m_SwapChain->RecreateSwapchain();
     #ifdef ANTELOPE_EDITOR_MODE
             uint32_t newImageCount { static_cast<uint32_t>(m_SwapChain->GetFramebuffers().size()) };
-            m_ImagesInFlight.assign(newImageCount, VK_NULL_HANDLE);
 
             if (m_Maintenance1Supported)
             {
@@ -760,8 +779,6 @@ namespace Antelope
             }
             m_RenderFinishedRing.clear();
         }
-
-        m_ImagesInFlight.clear();
     #endif
 
         AE_ENGINE_TRACE("Sync objects destroyed.");
@@ -771,7 +788,6 @@ namespace Antelope
     {
         PipelineConfigInfo pipelineConfig {};
         Pipeline::DefaultPipelineConfigInfo(pipelineConfig, m_Context);
-        
         pipelineConfig.pipelineLayout = m_PipelineLayout;
     #ifdef ANTELOPE_EDITOR_MODE
         pipelineConfig.renderPass = m_RenderTexture->GetRenderPass();
@@ -825,9 +841,7 @@ namespace Antelope
         m_FrameSync.resize(m_MaxFramesInFlight);
     #ifdef ANTELOPE_EDITOR_MODE
         uint32_t imageCount { static_cast<uint32_t>(m_SwapChain->GetFramebuffers().size()) };
-        m_ImagesInFlight.assign(imageCount, VK_NULL_HANDLE);
     #endif
-
         VkSemaphoreCreateInfo semaphoreInfo {};
         semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 

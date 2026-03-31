@@ -29,7 +29,7 @@ namespace Antelope
             void OnWindowResize(int width, int height);
 
             virtual void OnInit() {}
-            virtual void OnUpdate(float deltaTime) {}
+            virtual void OnUpdate(float timeStep) {}
         #ifdef ANTELOPE_EDITOR_MODE
             virtual void OnUIRender() {}
         #endif

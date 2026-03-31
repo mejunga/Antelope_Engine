@@ -1,18 +1,18 @@
 find_package(imgui CONFIG REQUIRED)
+find_package(imguizmo CONFIG REQUIRED)
 
 file(GLOB_RECURSE EDITOR_SRC CONFIGURE_DEPENDS "src/*.cpp")
-file(GLOB_RECURSE ENGINE_HDR CONFIGURE_DEPENDS "include/*.hpp")
+file(GLOB_RECURSE EDITOR_HDR CONFIGURE_DEPENDS "include/*.hpp")
 
-add_executable(AntelopeApp ${EDITOR_SRC})
+add_executable(AntelopeApp ${EDITOR_SRC} ${EDITOR_HDR})
 
-target_include_directories(Antelope PUBLIC include)
-target_include_directories(Antelope PRIVATE src)
-
-target_compile_definitions(AntelopeApp PUBLIC ANTELOPE_EDITOR_MODE)
+target_include_directories(AntelopeApp PUBLIC include)
+target_include_directories(AntelopeApp PRIVATE src)
 
 target_link_libraries(AntelopeApp PRIVATE 
     Antelope 
     imgui::imgui
+    imguizmo::imguizmo
 )
 
 set_target_properties(AntelopeApp PROPERTIES OUTPUT_NAME "AntelopeEngine")
@@ -22,9 +22,12 @@ add_custom_command(TARGET AntelopeApp POST_BUILD
     "${CMAKE_SOURCE_DIR}/Assets"
     "$<TARGET_FILE_DIR:AntelopeApp>/Assets"
 
+    COMMAND ${CMAKE_COMMAND} -E rm -rf 
+    "$<TARGET_FILE_DIR:AntelopeApp>/Assets/Shaders"
+
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     "${CMAKE_BINARY_DIR}/CompiledShaders"
     "$<TARGET_FILE_DIR:AntelopeApp>/Assets/Shaders"
 
-    COMMENT "Copying Assets and Shaders directories to output directory..."
+    COMMENT "Copying Assets and filtering out raw Shaders..."
 )

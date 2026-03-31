@@ -22,6 +22,8 @@ file(MAKE_DIRECTORY ${SHADER_BIN_DIR})
 set(SHADERS
     "${SHADER_SRC_DIR}/base.vert"
     "${SHADER_SRC_DIR}/base.frag"
+    "${SHADER_SRC_DIR}/editor_picking.vert"
+    "${SHADER_SRC_DIR}/editor_picking.frag"
 )
 
 set(COMPILED_SHADERS "")
