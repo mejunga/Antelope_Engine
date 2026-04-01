@@ -4,6 +4,7 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <entt/entt.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
 
@@ -12,23 +13,14 @@
 
 namespace Antelope
 {
+    struct DisabledComponent {};
+    
     struct TagComponent
     {
         std::string Tag;
         TagComponent() = default;
         TagComponent(const TagComponent&) = default;
         TagComponent(const std::string& tag) : Tag(tag) {}
-    };
-
-    struct RelationshipComponent
-    {
-        entt::entity Parent { entt::null };
-        entt::entity FirstChild { entt::null };
-        entt::entity PreviousSibling { entt::null };
-        entt::entity NextSibling { entt::null };
-        
-        RelationshipComponent() = default;
-        RelationshipComponent(const RelationshipComponent&) = default;
     };
 
     struct DirtyTransform {};
@@ -45,9 +37,20 @@ namespace Antelope
         glm::mat4 GetLocalTransform() const
         {
             return glm::translate(glm::mat4(1.0f), Translation)
-                * glm::toMat4(glm::quat(Rotation))
-                * glm::scale(glm::mat4(1.0f), Scale);
+                 * glm::toMat4(glm::quat(Rotation))
+                 * glm::scale(glm::mat4(1.0f), Scale);
         }
+    };
+
+    struct RelationshipComponent
+    {
+        entt::entity Parent { entt::null };
+        entt::entity FirstChild { entt::null };
+        entt::entity PreviousSibling { entt::null };
+        entt::entity NextSibling { entt::null };
+        
+        RelationshipComponent() = default;
+        RelationshipComponent(const RelationshipComponent&) = default;
     };
 
     struct CameraComponent

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Engine/Renderer/Graphics/Mesh.hpp>
+#include <Engine/Renderer/Graphics/RenderCommand.hpp>
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
@@ -80,7 +80,6 @@ namespace Antelope
             inline std::shared_ptr<RenderTexture> GetRenderTexture() const { return m_RenderTexture; }
             inline void SetUIContext(std::shared_ptr<UIContext> uiContext) { m_UIContext = uiContext; }
             inline uint32_t GetMaxFramesInFlight() const { return m_MaxFramesInFlight; }
-            inline uint32_t GetDisplayFrameIndex() const { return (m_CurrentFrame + m_MaxFramesInFlight - 1) % m_MaxFramesInFlight; }
         #endif
 
         private:

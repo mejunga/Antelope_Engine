@@ -39,71 +39,58 @@ void AntelopeApp::SetupMockData()
 void AntelopeApp::OnInit()
 {
     SetupMockData();
+
+    m_BearRoot = GetWorld()->CreateEntity("BearRoot");
+
+    for (const auto& subMesh : m_BearMesh.SubMeshes)
+    {
+        Antelope::MeshHandle handle { GetRenderer()->UploadMesh(subMesh.Data) };
+        handle.materialIndex = m_BearTexID;
+
+        Antelope::Entity part { GetWorld()->CreateEntity(subMesh.Name.empty() ? "BearPart" : subMesh.Name) };
+        part.AddComponent<Antelope::MeshComponent>(handle);
+        part.GetComponent<Antelope::TransformComponent>().Scale = glm::vec3(0.005f);
+        part.SetParent(m_BearRoot);
+    }
+
+    m_GorillaRoot = GetWorld()->CreateEntity("GorillaRoot");
+    m_GorillaRoot.SetParent(m_BearRoot); 
+    m_GorillaRoot.GetComponent<Antelope::TransformComponent>().Translation = glm::vec3(10.0f, 0.0f, 0.0f);
+    GetWorld()->MarkTransformDirty(m_GorillaRoot);
+
+    for (const auto& subMesh : m_GorillaMesh.SubMeshes)
+    {
+        Antelope::MeshHandle handle { GetRenderer()->UploadMesh(subMesh.Data) };
+        handle.materialIndex = m_GorillaTexID;
+
+        Antelope::Entity part { GetWorld()->CreateEntity(subMesh.Name.empty() ? "GorillaPart" : subMesh.Name) };
+        part.AddComponent<Antelope::MeshComponent>(handle);
+        part.GetComponent<Antelope::TransformComponent>().Scale = glm::vec3(7.5f);
+        part.SetParent(m_GorillaRoot);
+        m_GorillaParts.push_back(part);
+    }
 }
 
 void AntelopeApp::OnUpdate(float timeStep)
 {
-    if (m_DebounceTimer > 0.0f)
-    {
-        m_DebounceTimer -= timeStep;
-    }
+    if (m_DebounceTimer > 0.0f) { m_DebounceTimer -= timeStep; }
 
     if (Antelope::Input::IsKeyPressed(GLFW_KEY_SPACE) && m_DebounceTimer <= 0.0f)
     {
-        m_RenderState = (m_RenderState + 1) % 3;
         m_DebounceTimer = DEBOUNCE_DELAY;
-        AE_CLIENT_TRACE("Space Key Pressed! Switching to State: {0}", m_RenderState);
-
-        if (!m_ActiveEntities.empty())
+        bool isActive { m_GorillaRoot.IsActive() };
+        
+        m_GorillaRoot.SetActive(!isActive); 
+        
+        for (auto& part : m_GorillaParts)
         {
-            for (auto entity : m_ActiveEntities)
-            {
-                auto& meshComponent { entity.GetComponent<Antelope::MeshComponent>() };
-                GetRenderer()->FreeMesh(meshComponent.Handle);
-                GetWorld()->DestroyEntity(entity);
-            }
-            m_ActiveEntities.clear();
+            part.SetActive(!isActive);
         }
-
-        if (m_RenderState == 1) 
-        {
-            AE_CLIENT_INFO("Creating Bear Entities...");
-            for (const auto& subMesh : m_BearMesh.SubMeshes)
-            {
-                Antelope::MeshHandle handle { GetRenderer()->UploadMesh(subMesh.Data) };
-                handle.materialIndex = m_BearTexID;
-
-                Antelope::Entity entity { GetWorld()->CreateEntity(subMesh.Name.empty() ? "BearPart" : subMesh.Name) };
-                entity.AddComponent<Antelope::MeshComponent>(handle);
-                
-                auto& transform { entity.GetComponent<Antelope::TransformComponent>() };
-                transform.Scale = glm::vec3(0.005f);
-                
-                m_ActiveEntities.push_back(entity);
-            }
-        }
-        else if (m_RenderState == 2)
-        {
-            AE_CLIENT_INFO("Creating Gorilla Entities...");
-            for (const auto& subMesh : m_GorillaMesh.SubMeshes)
-            {
-                Antelope::MeshHandle handle { GetRenderer()->UploadMesh(subMesh.Data) };
-                handle.materialIndex = m_GorillaTexID;
-
-                Antelope::Entity entity { GetWorld()->CreateEntity(subMesh.Name.empty() ? "GorillaPart" : subMesh.Name) };
-                entity.AddComponent<Antelope::MeshComponent>(handle);
-                
-                auto& transform { entity.GetComponent<Antelope::TransformComponent>() };
-                transform.Translation = glm::vec3(0.0f, 0.0f, 0.0f);
-                transform.Scale = glm::vec3(7.5f);
-                
-                m_ActiveEntities.push_back(entity);
-            }
-        }
+        
+        AE_CLIENT_TRACE("Gorilla Active State: {0}", !isActive);
     }
 
     m_EditorCamera.OnUpdate(timeStep);
-    
     GetWorld()->OnUpdateEditor(timeStep, m_EditorCamera);
 }
 
@@ -114,10 +101,13 @@ void AntelopeApp::OnUIRender()
 
 void AntelopeApp::OnShutdown()
 {
-    for (auto entity : m_ActiveEntities) 
-    { 
-        auto& meshComponent { entity.GetComponent<Antelope::MeshComponent>() };
-        GetRenderer()->FreeMesh(meshComponent.Handle); 
+    auto& registry { GetWorld()->GetRegistry() };
+    auto view { registry.view<Antelope::MeshComponent>() };
+
+    for (auto [entity, mesh] : view.each()) 
+    {
+        GetRenderer()->FreeMesh(mesh.Handle); 
     }
-    m_ActiveEntities.clear();
+
+    AE_CLIENT_INFO("All meshes freed from GPU.");
 }

@@ -1,5 +1,6 @@
 #include <Engine/ECS/System/TransformSystem.hpp>
 #include <Engine/ECS/BaseComponents.hpp>
+#include <Engine/ECS/World.hpp>
 
 
 namespace Antelope

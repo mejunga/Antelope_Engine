@@ -58,16 +58,6 @@ namespace Antelope
             model.SubMeshes.push_back(subMesh);
         }
 
-        glm::vec3 center {(minBound + maxBound) * 0.5f };
-
-        for (auto& subMesh : model.SubMeshes)
-        {
-            for (auto& vPos : subMesh.Data.positions)
-            {
-                vPos.pos -= center;
-            }
-        }
-
         AE_ENGINE_INFO("Model Loaded: {0}", filepath);
         return model;
     }

@@ -19,11 +19,9 @@ set(SHADER_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Assets/Shaders")
 set(SHADER_BIN_DIR "${CMAKE_BINARY_DIR}/CompiledShaders")
 file(MAKE_DIRECTORY ${SHADER_BIN_DIR})
 
-set(SHADERS
-    "${SHADER_SRC_DIR}/base.vert"
-    "${SHADER_SRC_DIR}/base.frag"
-    "${SHADER_SRC_DIR}/editor_picking.vert"
-    "${SHADER_SRC_DIR}/editor_picking.frag"
+file(GLOB SHADERS CONFIGURE_DEPENDS
+    "${SHADER_SRC_DIR}/*.vert" 
+    "${SHADER_SRC_DIR}/*.frag"
 )
 
 set(COMPILED_SHADERS "")

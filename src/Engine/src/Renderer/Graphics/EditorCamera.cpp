@@ -19,11 +19,15 @@ namespace Antelope
         UpdateCameraVectors();
     }
 
-    void EditorCamera::OnUpdate(float deltaTime)
+    void EditorCamera::OnUpdate(float timeStep)
     {
         if (!m_IsActive) { return; }
         
-        float velocity { m_MovementSpeed * deltaTime };
+        float currentSpeed { m_MovementSpeed };
+        
+        if (Input::IsKeyPressed(GLFW_KEY_LEFT_SHIFT)) { currentSpeed *= 3.0f; }
+
+        float velocity { currentSpeed * timeStep };
         
         if (Input::IsMouseButtonClicked(GLFW_MOUSE_BUTTON_RIGHT))
         {
@@ -53,7 +57,7 @@ namespace Antelope
             xoffset *= m_MouseSensitivity;
             yoffset *= m_MouseSensitivity;
 
-            m_Yaw   += xoffset;
+            m_Yaw += xoffset;
             m_Pitch += yoffset;
 
             if (m_Pitch > 89.0f) { m_Pitch = 89.0f; }
@@ -78,7 +82,7 @@ namespace Antelope
 
         m_Front = glm::normalize(front);
         m_Right = glm::normalize(glm::cross(m_Front, m_WorldUp));
-        m_Up    = glm::normalize(glm::cross(m_Right, m_Front));
+        m_Up = glm::normalize(glm::cross(m_Right, m_Front));
     }
 
     glm::mat4 EditorCamera::GetViewMatrix() const

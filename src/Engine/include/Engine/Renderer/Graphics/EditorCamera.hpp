@@ -19,7 +19,7 @@ namespace Antelope
         public:
             EditorCamera(const glm::vec3& position = glm::vec3(0.0f, 0.0f, 0.0f));
 
-            void OnUpdate(float deltaTime);
+            void OnUpdate(float timeStep);
 
             glm::mat4 GetViewMatrix() const;
             glm::mat4 GetProjectionMatrix(float width, float height) const;
@@ -41,7 +41,7 @@ namespace Antelope
             float m_Yaw { -90.0f };
             float m_Pitch { 0.0f };
 
-            float m_MovementSpeed { 10.0f };
+            float m_MovementSpeed { 50.0f };
             float m_MouseSensitivity { 0.1f };
 
             float m_LastMouseX { 0.0f };

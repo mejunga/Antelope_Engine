@@ -3,6 +3,10 @@
 #include <Engine/Core/Application.hpp>
 #include <Engine/Renderer/Graphics/Renderer.hpp>
 #include <Engine/Renderer/Vulkan/VulkanBuffer.hpp>
+#include <Engine/Renderer/Vulkan/VulkanContext.hpp>
+#include <Engine/Renderer/Graphics/EditorCamera.hpp>
+#include <Engine/Renderer/Vulkan/Pipeline.hpp>
+#include <Engine/Renderer/Vulkan/VulkanDescriptor.hpp>
 #include <Engine/Debug/Log.hpp>
 
 #include <array>
@@ -18,6 +22,8 @@ namespace Antelope
         CreateResources(m_Width, m_Height);
         CreatePipeline();
         CreateStagingBuffer();
+        CreateReadBackFence();
+        CreatePickingBuffers();
     }
 
     ScenePicker::~ScenePicker()
@@ -27,9 +33,37 @@ namespace Antelope
         auto device { m_Context->GetDevice() };
         auto allocator { m_Context->GetAllocator() };
 
-        if (m_Pipeline) { m_Pipeline.reset(); }
-        if (m_RenderPass) { vkDestroyRenderPass(device, m_RenderPass, nullptr); }
-        if (m_StagingBuffer) { vmaDestroyBuffer(allocator, m_StagingBuffer, m_StagingAlloc); }
+        if (m_ReadbackPending)
+        {
+            vkWaitForFences(m_Context->GetDevice(), 1, &m_ReadbackFence, VK_TRUE, UINT64_MAX);
+            auto renderer { Application::Get().GetRenderer() };
+            vkFreeCommandBuffers(m_Context->GetDevice(), renderer->m_CommandPool, 1, &m_PendingCmd);
+        }
+
+        if (m_PickingPipelineLayout != VK_NULL_HANDLE)
+        {
+            vkDestroyPipelineLayout(m_Context->GetDevice(), m_PickingPipelineLayout, nullptr);
+        }
+
+        if (m_ReadbackFence != VK_NULL_HANDLE)
+        {
+            vkDestroyFence(m_Context->GetDevice(), m_ReadbackFence, nullptr);
+        }
+
+        if (m_Pipeline)
+        {
+            m_Pipeline.reset();
+        }
+
+        if (m_RenderPass)
+        {
+            vkDestroyRenderPass(device, m_RenderPass, nullptr);
+        }
+
+        if (m_StagingBuffer)
+        {
+            vmaDestroyBuffer(allocator, m_StagingBuffer, m_StagingAlloc);
+        }
     }
 
     void ScenePicker::Resize(uint32_t width, uint32_t height)
@@ -40,8 +74,148 @@ namespace Antelope
         m_Height = height;
         
         vkDeviceWaitIdle(m_Context->GetDevice());
+
+        if (m_ReadbackPending)
+        {
+            auto renderer { Application::Get().GetRenderer() };
+            vkFreeCommandBuffers(m_Context->GetDevice(), renderer->m_CommandPool, 1, &m_PendingCmd);
+            vkResetFences(m_Context->GetDevice(), 1, &m_ReadbackFence);
+            m_PendingCmd = VK_NULL_HANDLE;
+            m_ReadbackPending = false;
+        }
+
         DestroyResources();
         CreateResources(m_Width, m_Height);
+    }
+
+    void ScenePicker::SubmitPick(uint32_t x, uint32_t y, const EditorCamera& camera, const std::vector<RenderCommand>& renderList)
+    {
+        if (x >= m_Width || y >= m_Height || renderList.empty()) { return; }
+        if (m_ReadbackPending) { return; }
+
+        auto renderer { Application::Get().GetRenderer() };
+
+        struct PickCameraData
+        {
+            glm::mat4 view;
+            glm::mat4 proj;
+        };
+
+        PickCameraData pushData {};
+        pushData.view = camera.GetViewMatrix();
+        pushData.proj = camera.GetProjectionMatrix(static_cast<float>(m_Width), static_cast<float>(m_Height));
+
+        VkCommandBuffer cmd { renderer->BeginAsyncGraphicsCommand() };
+
+        VkRenderPassBeginInfo renderPassInfo {};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassInfo.renderPass = m_RenderPass;
+        renderPassInfo.framebuffer = m_Framebuffer;
+        renderPassInfo.renderArea.offset = {0, 0};
+        renderPassInfo.renderArea.extent = { m_Width, m_Height };
+
+        std::array<VkClearValue, 2> clearValues {};
+        clearValues[0].color.uint32[0] = static_cast<uint32_t>(entt::null);
+        clearValues[1].depthStencil = {1.0f, 0};
+        renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+        renderPassInfo.pClearValues = clearValues.data();
+
+        vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+        m_Pipeline->Bind(cmd);
+        vkCmdPushConstants(cmd, m_PickingPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PickCameraData), &pushData);
+
+        VkViewport viewport {};
+        viewport.width = static_cast<float>(m_Width);
+        viewport.height = static_cast<float>(m_Height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+        VkRect2D scissor {};
+        scissor.offset = { static_cast<int32_t>(x), static_cast<int32_t>(y) };
+        scissor.extent = { 1, 1 };
+        vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                m_PickingPipelineLayout, 0, 1,
+                                &m_PickingDescriptorSet, 0, nullptr);
+
+        ObjectData* objectDataMap { static_cast<ObjectData*>(m_PickingObjectBuffer->GetMappedMemory()) };
+        VkDrawIndirectCommand* indirectMap { static_cast<VkDrawIndirectCommand*>(m_PickingIndirectBuffer->GetMappedMemory()) };
+
+        uint32_t objectCount { 0 };
+
+        for (const auto& command : renderList)
+        {
+            if (renderer->m_PendingMeshIDs.count(command.mesh.MeshID) > 0) { continue; }
+
+            objectDataMap[objectCount].model = command.transform;
+            objectDataMap[objectCount].posOffset = command.mesh.posAllocation.Offset / sizeof(VertexPosition);
+            objectDataMap[objectCount].faceOffset = command.mesh.faceAllocation.Offset / sizeof(Face);
+            objectDataMap[objectCount].entityID = command.entityID;
+
+            indirectMap[objectCount].vertexCount = command.mesh.faceCount * 3;
+            indirectMap[objectCount].instanceCount = 1;
+            indirectMap[objectCount].firstVertex = 0;
+            indirectMap[objectCount].firstInstance = objectCount;
+            objectCount++;
+        }
+
+        vkCmdDrawIndirect(cmd, m_PickingIndirectBuffer->GetBuffer(), 0, objectCount, sizeof(VkDrawIndirectCommand));
+        vkCmdEndRenderPass(cmd);
+
+        VkBufferImageCopy region {};
+        region.bufferOffset = 0;
+        region.bufferRowLength = 0;
+        region.bufferImageHeight = 0;
+        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.imageSubresource.mipLevel = 0;
+        region.imageSubresource.baseArrayLayer = 0;
+        region.imageSubresource.layerCount = 1;
+        region.imageOffset = { static_cast<int32_t>(x), static_cast<int32_t>(y), 0 };
+        region.imageExtent = { 1, 1, 1 };
+
+        vkCmdCopyImageToBuffer(cmd, m_Image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_StagingBuffer, 1, &region);
+
+        vkEndCommandBuffer(cmd);
+
+        VkSubmitInfo submitInfo {};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &cmd;
+
+        vkQueueSubmit(m_Context->GetGraphicsQueue(), 1, &submitInfo, m_ReadbackFence);
+
+        m_PendingCmd = cmd;
+        m_ReadbackPending = true;
+    }
+
+    std::optional<uint32_t> ScenePicker::TryGetPickResult()
+    {
+        if (!m_ReadbackPending) { return std::nullopt; }
+
+        VkResult status { vkGetFenceStatus(m_Context->GetDevice(), m_ReadbackFence) };
+
+        if (status == VK_NOT_READY)
+        {
+            return std::nullopt; 
+        }
+
+        vmaInvalidateAllocation(m_Context->GetAllocator(), m_StagingAlloc, 0, sizeof(uint32_t));
+
+        uint32_t entityID {};
+        VmaAllocationInfo allocationInfo {};
+        vmaGetAllocationInfo(m_Context->GetAllocator(), m_StagingAlloc, &allocationInfo);
+        memcpy(&entityID, allocationInfo.pMappedData, sizeof(uint32_t));
+
+        auto renderer { Application::Get().GetRenderer() };
+        vkFreeCommandBuffers(m_Context->GetDevice(), renderer->m_CommandPool, 1, &m_PendingCmd);
+        vkResetFences(m_Context->GetDevice(), 1, &m_ReadbackFence); 
+
+        m_PendingCmd = VK_NULL_HANDLE;
+        m_ReadbackPending = false;
+
+        return entityID;
     }
 
     void ScenePicker::DestroyResources()
@@ -212,15 +386,34 @@ namespace Antelope
     void ScenePicker::CreatePipeline()
     {
         auto renderer { Application::Get().GetRenderer() };
+
+        VkPushConstantRange pushRange {};
+        pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        pushRange.offset = 0;
+        pushRange.size = sizeof(glm::mat4) * 2;
+
+        VkPipelineLayoutCreateInfo layoutInfo {};
+        layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        layoutInfo.setLayoutCount = 1;
+        layoutInfo.pSetLayouts = &renderer->m_DescriptorSetLayout;
+        layoutInfo.pushConstantRangeCount = 1;
+        layoutInfo.pPushConstantRanges = &pushRange;
+
+        if (vkCreatePipelineLayout(m_Context->GetDevice(), &layoutInfo, nullptr, &m_PickingPipelineLayout) != VK_SUCCESS)
+        {
+            AE_ENGINE_CRITICAL("Failed to create picking pipeline layout!");
+            throw std::runtime_error("Failed to create picking pipeline layout");
+        }
+
         PipelineConfigInfo config {};
         Pipeline::DefaultPipelineConfigInfo(config, m_Context);
-        
         config.renderPass = m_RenderPass;
-        config.pipelineLayout = renderer->m_PipelineLayout;
+        config.pipelineLayout = m_PickingPipelineLayout;
         config.multisampleInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-        
+
         m_Pipeline = std::make_unique<Pipeline>(m_Context, "Assets/Shaders/editor_picking.vert.spv", "Assets/Shaders/editor_picking.frag.spv", config);
     }
+
 
     void ScenePicker::CreateStagingBuffer()
     {
@@ -239,124 +432,50 @@ namespace Antelope
         vmaCreateBuffer(m_Context->GetAllocator(), &bufferInfo, &allocationInfo, &m_StagingBuffer, &m_StagingAlloc, nullptr);
     }
 
-    uint32_t ScenePicker::GetEntityIDAtPixel(uint32_t x, uint32_t y, const EditorCamera& camera, const std::vector<RenderCommand>& renderList)
+    void ScenePicker::CreateReadBackFence()
     {
-        if (x >= m_Width || y >= m_Height || renderList.empty()) return static_cast<uint32_t>(entt::null);
+        VkFenceCreateInfo fenceInfo {};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceInfo.flags = 0;
 
-        auto renderer { Application::Get().GetRenderer() };
-        uint32_t frameIndex { renderer->m_CurrentFrame };
-
-        UniformBufferObject cameraData {};
-        cameraData.view = camera.GetViewMatrix();
-        cameraData.proj = camera.GetProjectionMatrix(static_cast<float>(m_Width), static_cast<float>(m_Height));
-        renderer->UpdateUniformBuffer(frameIndex, cameraData);
-
-        VkCommandBuffer cmd { renderer->BeginAsyncGraphicsCommand() };
-
-        VkRenderPassBeginInfo rpInfo {};
-        rpInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        rpInfo.pNext = nullptr;
-        rpInfo.renderPass = m_RenderPass; 
-        rpInfo.framebuffer = m_Framebuffer;
-        rpInfo.renderArea.offset.x = 0;
-        rpInfo.renderArea.offset.y = 0;
-        rpInfo.renderArea.extent.width = m_Width;
-        rpInfo.renderArea.extent.height = m_Height;
-        
-        std::array<VkClearValue, 2> clearValues {};
-        clearValues[0].color.uint32[0] = static_cast<uint32_t>(entt::null);
-        clearValues[0].color.uint32[1] = 0;
-        clearValues[0].color.uint32[2] = 0;
-        clearValues[0].color.uint32[3] = 0;
-        clearValues[1].depthStencil.depth = 1.0f;
-        clearValues[1].depthStencil.stencil = 0;
-
-        rpInfo.clearValueCount = static_cast<uint32_t>(clearValues.size()); 
-        rpInfo.pClearValues = clearValues.data();
-
-        vkCmdBeginRenderPass(cmd, &rpInfo, VK_SUBPASS_CONTENTS_INLINE);
-        m_Pipeline->Bind(cmd);
-
-        VkViewport viewport {};
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width = static_cast<float>(m_Width);
-        viewport.height = static_cast<float>(m_Height);
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-        vkCmdSetViewport(cmd, 0, 1, &viewport);
-
-        VkRect2D scissor {};
-        scissor.offset.x = static_cast<int32_t>(x);
-        scissor.offset.y = static_cast<int32_t>(y);
-        scissor.extent.width = 1;
-        scissor.extent.height = 1;
-        vkCmdSetScissor(cmd, 0, 1, &scissor);
-
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, renderer->m_PipelineLayout, 0, 1, &renderer->m_DescriptorSets[frameIndex], 0, nullptr);
-        
-        ObjectData* objectDataMap { static_cast<ObjectData*>(renderer->m_ObjectBuffers[frameIndex]->GetMappedMemory()) };
-        VkDrawIndirectCommand* indirectCommandsMap { static_cast<VkDrawIndirectCommand*>(renderer->m_IndirectBuffers[frameIndex]->GetMappedMemory()) };
-        
-        uint32_t objectCount { 0 };
-        for (const auto& command : renderList) 
+        if (vkCreateFence(m_Context->GetDevice(), &fenceInfo, nullptr, &m_ReadbackFence) != VK_SUCCESS)
         {
-            objectDataMap[objectCount].model = command.transform;
-            objectDataMap[objectCount].posOffset = command.mesh.posAllocation.Offset / sizeof(VertexPosition);
-            objectDataMap[objectCount].faceOffset = command.mesh.faceAllocation.Offset / sizeof(Face);
-            objectDataMap[objectCount].entityID = command.entityID;
-            
-            indirectCommandsMap[objectCount].vertexCount = command.mesh.faceCount * 3;
-            indirectCommandsMap[objectCount].instanceCount = 1;
-            indirectCommandsMap[objectCount].firstVertex = 0;
-            indirectCommandsMap[objectCount].firstInstance = objectCount;
-            objectCount++;
+            AE_ENGINE_CRITICAL("Failed to create ScenePicker readback fence!");
+            throw std::runtime_error("Failed to create ScenePicker readback fence");
         }
+    }
 
-        vkCmdDrawIndirect(cmd, renderer->m_IndirectBuffers[frameIndex]->GetBuffer(), 0, objectCount, sizeof(VkDrawIndirectCommand));
-        vkCmdEndRenderPass(cmd);
+    void ScenePicker::CreatePickingBuffers()
+    {
+        auto renderer { Application::Get().GetRenderer() };
 
-        VkBufferImageCopy region {};
-        region.bufferOffset = 0;
-        region.bufferRowLength = 0;
-        region.bufferImageHeight = 0;
-        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        region.imageSubresource.mipLevel = 0;
-        region.imageSubresource.baseArrayLayer = 0;
-        region.imageSubresource.layerCount = 1;
-        region.imageOffset.x = static_cast<int32_t>(x);
-        region.imageOffset.y = static_cast<int32_t>(y);
-        region.imageOffset.z = 0;
-        region.imageExtent.width = 1;
-        region.imageExtent.height = 1;
-        region.imageExtent.depth = 1;
-        
-        vkCmdCopyImageToBuffer(cmd, m_Image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_StagingBuffer, 1, &region);
-        vkEndCommandBuffer(cmd);
+        m_PickingObjectBuffer = std::make_unique<VulkanBuffer>(
+            m_Context,
+            sizeof(ObjectData) * Renderer::MAX_OBJECTS,
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            VMA_MEMORY_USAGE_AUTO,
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT
+        );
 
-        VkSubmitInfo submitInfo {};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submitInfo.pNext = nullptr;
-        submitInfo.waitSemaphoreCount = 0;
-        submitInfo.pWaitSemaphores = nullptr;
-        submitInfo.pWaitDstStageMask = nullptr;
-        submitInfo.commandBufferCount = 1; 
-        submitInfo.pCommandBuffers = &cmd;
-        submitInfo.signalSemaphoreCount = 0;
-        submitInfo.pSignalSemaphores = nullptr;
+        m_PickingIndirectBuffer = std::make_unique<VulkanBuffer>(
+            m_Context,
+            sizeof(VkDrawIndirectCommand) * Renderer::MAX_OBJECTS,
+            VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+            VMA_MEMORY_USAGE_AUTO,
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT
+        );
 
-        vkQueueSubmit(m_Context->GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
-        vkQueueWaitIdle(m_Context->GetGraphicsQueue()); 
-        vkFreeCommandBuffers(m_Context->GetDevice(), renderer->m_CommandPool, 1, &cmd);
-        vmaInvalidateAllocation(m_Context->GetAllocator(), m_StagingAlloc, 0, sizeof(uint32_t));
+        m_PickingDescriptorSet = renderer->m_GlobalDescriptorAllocator->Allocate(renderer->m_DescriptorSetLayout);
 
-        uint32_t entityID { static_cast<uint32_t>(entt::null) };
-
-        VmaAllocationInfo allocationInfo {};
-        vmaGetAllocationInfo(m_Context->GetAllocator(), m_StagingAlloc, &allocationInfo);
-        memcpy(&entityID, allocationInfo.pMappedData, sizeof(uint32_t));
-
-        return entityID;
+        DescriptorWriter writer;
+        writer.WriteBuffer(0, renderer->m_UniformBuffers[0]->GetBuffer(), sizeof(UniformBufferObject), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        writer.WriteBuffer(1, renderer->m_GpuAllocator->GetPosBuffer()->GetBuffer(0), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+        writer.WriteBuffer(2, renderer->m_GpuAllocator->GetColorBuffer()->GetBuffer(0), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+        writer.WriteBuffer(3, renderer->m_GpuAllocator->GetNormalBuffer()->GetBuffer(0), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+        writer.WriteBuffer(4, renderer->m_GpuAllocator->GetFaceBuffer()->GetBuffer(0), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+        writer.WriteBuffer(5, renderer->m_GpuAllocator->GetUvBuffer()->GetBuffer(0), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+        writer.WriteBuffer(6, m_PickingObjectBuffer->GetBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+        writer.UpdateSet(m_Context, m_PickingDescriptorSet);
     }
 }
 #endif

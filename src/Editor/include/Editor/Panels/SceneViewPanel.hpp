@@ -28,6 +28,7 @@ namespace Antelope
 
             bool m_ViewportFocused { false };
             bool m_ViewportHovered { false };
+            bool m_IsCameraMoving { false };
 
             int m_GizmoType { -1 };
             Entity m_SelectedEntity;

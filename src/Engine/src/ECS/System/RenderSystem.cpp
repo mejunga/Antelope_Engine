@@ -2,8 +2,14 @@
 #include <Engine/ECS/BaseComponents.hpp>
 #include <Engine/Debug/Log.hpp>
 #include <Engine/Core/Application.hpp>
+#include <Engine/ECS/World.hpp>
+#include <Engine/Renderer/Graphics/Renderer.hpp>
+#ifdef ANTELOPE_EDITOR_MODE
 #include <Engine/Renderer/Vulkan/RenderTexture.hpp>
+#include <Engine/Renderer/Graphics/EditorCamera.hpp>
+#endif
 #include <Engine/Renderer/Vulkan/SwapChain.hpp>
+#include <Engine/Renderer/Graphics/RenderCommand.hpp>
 
 
 namespace Antelope
@@ -24,17 +30,18 @@ namespace Antelope
 
         std::vector<RenderCommand> renderList;
         auto& registry { world.GetRegistry() };
-        auto view { registry.view<TransformComponent, MeshComponent>() };
+        auto view { registry.view<TransformComponent, MeshComponent>(entt::exclude<DisabledComponent>) };
         renderList.reserve(view.size_hint());
 
         for (auto [entityID, transform, meshComponent] : view.each()) 
         {
-            renderList.push_back({ 
-                transform.WorldMatrix, 
-                transform.NormalMatrix, 
-                meshComponent.Handle,
-                static_cast<uint32_t>(entityID)
-            });
+            RenderCommand cmd{};
+            cmd.transform = transform.WorldMatrix;
+            cmd.normalMatrix = transform.NormalMatrix;
+            cmd.mesh = meshComponent.Handle;
+            cmd.entityID = static_cast<uint32_t>(entityID);
+
+            renderList.push_back(cmd);
         }
 
         renderer->DrawFrame(cameraUBO, renderList);
@@ -77,16 +84,17 @@ namespace Antelope
         cameraUBO.proj = projMatrix;
 
         std::vector<RenderCommand> renderList;
-        auto meshView { registry.view<TransformComponent, MeshComponent>() };
+        auto meshView { registry.view<TransformComponent, MeshComponent>(entt::exclude<DisabledComponent>) };
         renderList.reserve(meshView.size_hint());
 
         for (auto [entityID, transform, meshComponent] : meshView.each()) 
         {
-            renderList.push_back({ 
-                transform.WorldMatrix, 
-                transform.NormalMatrix, 
-                meshComponent.Handle
-            });
+            RenderCommand cmd{};
+            cmd.transform = transform.WorldMatrix;
+            cmd.normalMatrix = transform.NormalMatrix;
+            cmd.mesh = meshComponent.Handle;
+
+            renderList.push_back(cmd);
         }
 
         renderer->DrawFrame(cameraUBO, renderList);

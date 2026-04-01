@@ -33,12 +33,13 @@ class AntelopeApp : public Antelope::Application
         Antelope::ModelData m_GorillaMesh;
         uint32_t m_GorillaTexID { 0 };
 
-        int m_RenderState { 0 };
         float m_DebounceTimer { 0.0f };
         const float DEBOUNCE_DELAY { 0.2f };
 
-        Antelope::EditorCamera m_EditorCamera;
-        std::vector<Antelope::Entity> m_ActiveEntities;
+        Antelope::Entity m_BearRoot;
+        Antelope::Entity m_GorillaRoot;
+        std::vector<Antelope::Entity> m_GorillaParts;
 
+        Antelope::EditorCamera m_EditorCamera;
         Antelope::SceneViewPanel m_ScenePanel;
 };

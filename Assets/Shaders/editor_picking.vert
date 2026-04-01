@@ -2,10 +2,10 @@
 #extension GL_EXT_nonuniform_qualifier : require
 
 struct VertexPosition { vec3 pos; };
-layout(std140, binding = 1) readonly buffer PosBuffer { VertexPosition positions[]; } posBuf;
+layout(std430, binding = 1) readonly buffer PosBuffer { VertexPosition positions[]; } posBuf;
 
 struct Face { uint v0, v1, v2, normalIndex; };
-layout(std140, binding = 4) readonly buffer FaceBuffer { Face faces[]; } faceBuf;
+layout(std430, binding = 4) readonly buffer FaceBuffer { Face faces[]; } faceBuf;
 
 struct ObjectData
 {
@@ -17,13 +17,13 @@ struct ObjectData
     uint padding;
 };
 
-layout(binding = 0) uniform UniformBufferObject
+layout(push_constant) uniform UniformBufferObject
 {
     mat4 view;
     mat4 proj;
 } ubo;
 
-layout(std140, binding = 6) readonly buffer ObjectBuffer { ObjectData objects[]; } objectData;
+layout(std430, binding = 6) readonly buffer ObjectBuffer { ObjectData objects[]; } objectData;
 
 layout(location = 0) out flat uint fragEntityID;
 

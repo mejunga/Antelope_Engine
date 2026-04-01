@@ -83,7 +83,7 @@ namespace Antelope
         m_Textures.push_back(newTexture);
         m_Renderer->UpdateTextureDescriptors(m_Textures);
 
-        AE_ENGINE_TRACE("Texture transfer dispatched asynchronously for: {0}", filepath);
+        AE_ENGINE_TRACE("Texture transfer dispatched for: {0}", filepath);
         return newTexture.GlobalIndex;
     }
 

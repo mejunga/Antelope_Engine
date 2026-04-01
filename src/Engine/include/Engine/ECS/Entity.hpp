@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Engine/ECS/World.hpp>
+#include <Engine/ECS/BaseComponents.hpp>
 
 #include <entt/entt.hpp>
 
@@ -18,6 +19,14 @@ namespace Antelope
             Entity(const Entity& other) = default;
 
             void SetParent(Entity parent);
+
+            void SetActive(bool isActive)
+            {
+                if (isActive) { m_World->GetRegistry().remove<DisabledComponent>(m_EntityHandle); }
+                else { m_World->GetRegistry().emplace_or_replace<DisabledComponent>(m_EntityHandle); }
+            }
+
+            inline bool IsActive() { return !m_World->GetRegistry().all_of<DisabledComponent>(m_EntityHandle); }
 
             template<typename T, typename... Args>
             T& AddComponent(Args&&... args)

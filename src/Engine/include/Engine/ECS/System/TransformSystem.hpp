@@ -1,13 +1,13 @@
 #pragma once
 
-#include <Engine/ECS/World.hpp>
-
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 
 
 namespace Antelope
 {
+    class World;
+
     class TransformSystem
     {
         public:
