@@ -28,8 +28,15 @@ namespace Antelope
 
     ScenePicker::~ScenePicker()
     {
+        if (m_ReadbackPending)
+        {
+            vkWaitForFences(m_Context->GetDevice(), 1, &m_ReadbackFence, VK_TRUE, UINT64_MAX);
+            auto renderer { Application::Get().GetRenderer() };
+            vkFreeCommandBuffers(m_Context->GetDevice(), renderer->m_CommandPool, 1, &m_PendingCmd);
+        }
+
         DestroyResources();
-        
+
         auto device { m_Context->GetDevice() };
         auto allocator { m_Context->GetAllocator() };
 

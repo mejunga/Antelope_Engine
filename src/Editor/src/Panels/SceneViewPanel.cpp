@@ -2,6 +2,7 @@
 
 #include <Engine/Core/Application.hpp>
 #include <Engine/Renderer/Graphics/Renderer.hpp>
+#include <Engine/Renderer/Graphics/EditorCamera.hpp>
 #include <Engine/Renderer/UI/UIContext.hpp>
 #include <Engine/ECS/BaseComponents.hpp>
 #include <Engine/Platform/Input.hpp>
@@ -11,7 +12,7 @@
 #include <GLFW/glfw3.h>
 
 
-namespace Antelope
+namespace Antelope::Editor
 {
     SceneViewPanel::SceneViewPanel()
     {
@@ -40,6 +41,14 @@ namespace Antelope
         camera.SetActive(m_ViewportHovered || m_IsCameraMoving);
 
         ImVec2 viewportSize { ImGui::GetContentRegionAvail() };
+
+        if (viewportSize.x <= 0.0f || viewportSize.y <= 0.0f)
+        {
+            ImGui::End();
+            ImGui::PopStyleVar();
+            return;
+        }
+
         uint32_t newWidth { static_cast<uint32_t>(viewportSize.x) };
         uint32_t newHeight { static_cast<uint32_t>(viewportSize.y) };
 
@@ -73,13 +82,13 @@ namespace Antelope
             auto viewportMinRegion { ImGui::GetWindowContentRegionMin() };
             auto viewportMaxRegion { ImGui::GetWindowContentRegionMax() };
             auto viewportOffset { ImGui::GetWindowPos() };
-            
+
             ImVec2 viewportBounds[2];
             viewportBounds[0] = { viewportMinRegion.x + viewportOffset.x, viewportMinRegion.y + viewportOffset.y };
             viewportBounds[1] = { viewportMaxRegion.x + viewportOffset.x, viewportMaxRegion.y + viewportOffset.y };
 
             auto mousePos { ImGui::GetMousePos() };
-            
+                
             float pickX { mousePos.x - viewportBounds[0].x };
             float pickY { mousePos.y - viewportBounds[0].y };
 
@@ -88,16 +97,13 @@ namespace Antelope
                 std::vector<RenderCommand> renderList;
                 auto& registry { Application::Get().GetWorld()->GetRegistry() };
                 auto view { registry.view<TransformComponent, MeshComponent>() };
-                
+                    
                 for (auto [entityID, transform, mesh] : view.each()) {
                     RenderCommand cmd{};
                     cmd.transform = transform.WorldMatrix;
                     cmd.normalMatrix = transform.NormalMatrix;
                     cmd.mesh = mesh.Handle;
-                    
-                #ifdef ANTELOPE_EDITOR_MODE
                     cmd.entityID = static_cast<uint32_t>(entityID);
-                #endif
                     renderList.push_back(cmd);
                 }
 
@@ -117,7 +123,7 @@ namespace Antelope
                 if (rel.Parent != entt::null)
                 {
                     Entity parentEntity { Entity(rel.Parent, Application::Get().GetWorld().get()) };
-                    
+                      
                     if (m_SelectedEntity == parentEntity) 
                     {
                         m_SelectedEntity = pickedEntity;
@@ -161,7 +167,6 @@ namespace Antelope
 
             auto& tc { m_SelectedEntity.GetComponent<TransformComponent>() };
             glm::mat4 transform { tc.WorldMatrix };
-
             ImGuizmo::Manipulate(glm::value_ptr(cameraView), glm::value_ptr(cameraProjection), (ImGuizmo::OPERATION)m_GizmoType, ImGuizmo::LOCAL, glm::value_ptr(transform));
 
             if (ImGuizmo::IsUsing())

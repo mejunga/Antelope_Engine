@@ -5,5 +5,5 @@
 
 Antelope::Application* Antelope::CreateApplication() 
 { 
-    return new AntelopeApp(); 
+    return new Antelope::Editor::AntelopeApp(); 
 }

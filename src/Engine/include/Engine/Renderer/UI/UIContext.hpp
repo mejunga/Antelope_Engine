@@ -1,10 +1,13 @@
 #pragma once
 
 #ifdef ANTELOPE_EDITOR_MODE
+#include <Engine/Renderer/UI/EditorTheme.hpp>
+
 #include <vulkan/vulkan.h>
 
 #include <memory>
 #include <vector>
+
 
 namespace Antelope
 {
@@ -24,6 +27,7 @@ namespace Antelope
             void RecordCommands(VkCommandBuffer cmdBuffer, uint32_t imageIndex);
             void RenderViewports();
             void UpdateSceneTextureID();
+            void ApplyTheme(const EditorThemeProps& props);
 
             inline void* GetSceneTextureID() const { return m_SceneTexture; }
 

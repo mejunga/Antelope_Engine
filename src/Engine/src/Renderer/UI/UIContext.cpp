@@ -8,6 +8,7 @@
 #include <Engine/Debug/Log.hpp>
 
 #include <imgui.h>
+#include <ImGuizmo.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
 #include <GLFW/glfw3.h>
@@ -24,7 +25,10 @@ namespace Antelope
 
     UIContext::~UIContext()
     {
-        vkDeviceWaitIdle(m_Context->GetDevice());
+        if (m_Context && m_Context->GetDevice() != VK_NULL_HANDLE)
+        {
+            vkDeviceWaitIdle(m_Context->GetDevice());
+        }
 
         if (m_SceneTextureDescriptorSet)
         {
@@ -46,28 +50,11 @@ namespace Antelope
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-        
-        ImGuiWindowFlags window_flags { ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking };
-        const ImGuiViewport* viewport { ImGui::GetMainViewport() };
-        ImGui::SetNextWindowPos(viewport->WorkPos);
-        ImGui::SetNextWindowSize(viewport->WorkSize);
-        ImGui::SetNextWindowViewport(viewport->ID);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-        window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
-        window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
-
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::Begin("AntelopeDockSpace", nullptr, window_flags);
-        ImGui::PopStyleVar(3);
-
-        ImGuiID dockspace_id { ImGui::GetID("AntelopeDockSpace") };
-        ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
+        ImGuizmo::BeginFrame(); 
     }
 
     void UIContext::EndFrame()
     {
-        ImGui::End();
         ImGui::Render();
     }
 
@@ -122,6 +109,35 @@ namespace Antelope
         vkUpdateDescriptorSets(m_Context->GetDevice(), 1, &write, 0, nullptr);
     }
 
+    void UIContext::ApplyTheme(const EditorThemeProps& props)
+    {
+        auto& style { ImGui::GetStyle() };
+        auto& colors { style.Colors };
+
+        style.WindowRounding = props.WindowRounding;
+        style.FrameRounding = props.FrameRounding;
+        style.TabRounding = props.TabRounding;
+        style.WindowBorderSize = props.BorderSize;
+        style.FrameBorderSize = props.BorderSize;
+
+        colors[ImGuiCol_WindowBg] = props.WindowBg;
+        colors[ImGuiCol_Header] = props.Header;
+        colors[ImGuiCol_HeaderHovered] = props.HeaderHovered;
+        colors[ImGuiCol_HeaderActive] = props.HeaderActive;
+        colors[ImGuiCol_Tab] = props.Tab;
+        colors[ImGuiCol_TabHovered] = props.TabHovered;
+        colors[ImGuiCol_TabActive] = props.TabActive;
+        colors[ImGuiCol_TabUnfocused] = props.TabUnfocused;
+        colors[ImGuiCol_TabUnfocusedActive] = props.TabUnfocusedActive;
+        colors[ImGuiCol_TitleBg] = props.TitleBg;
+        colors[ImGuiCol_TitleBgActive] = props.TitleBgActive;
+        colors[ImGuiCol_TitleBgCollapsed] = props.TitleBgCollapsed;
+        colors[ImGuiCol_DockingPreview] = props.DockingPreview;
+        colors[ImGuiCol_DockingEmptyBg] = props.DockingEmptyBg;
+        colors[ImGuiCol_Text] = props.Text;
+        colors[ImGuiCol_TextDisabled] = props.TextDisabled;
+    }
+
     void UIContext::InitImGui()
     {
         uint32_t imageCount { static_cast<uint32_t>(m_SwapChain->GetFramebuffers().size()) };
@@ -158,7 +174,7 @@ namespace Antelope
         io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
         io.ConfigWindowsMoveFromTitleBarOnly = true;
 
-        ImGui::StyleColorsDark();
+        ApplyTheme(ThemeProvider::GetDarkTheme());
 
         ImGui_ImplGlfw_InitForVulkan(m_Window.GetNativeWindow(), true);
 

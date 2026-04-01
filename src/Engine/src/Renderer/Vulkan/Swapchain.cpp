@@ -53,7 +53,7 @@ namespace Antelope
         while (width == 0 || height == 0) 
         {
             glfwGetFramebufferSize(m_Context->GetWindowHandle(), &width, &height);
-            glfwWaitEvents();
+            glfwPollEvents();
         }
 
         if (m_Context && m_Context->GetDevice() != VK_NULL_HANDLE)

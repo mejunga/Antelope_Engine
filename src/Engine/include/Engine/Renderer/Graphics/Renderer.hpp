@@ -23,6 +23,7 @@ namespace Antelope
     class Pipeline;
     class DescriptorAllocator;
     class SwapChain;
+    class GpuMemoryAllocator;
 #ifdef ANTELOPE_EDITOR_MODE
     class RenderTexture;
     class UIContext;

@@ -1,45 +1,54 @@
 #pragma once
 
 #include <Editor/Panels/SceneViewPanel.hpp>
+#include <Editor/Panels/HierarchyPanel.hpp>
+#include <Editor/Panels/PropertiesPanel.hpp>
+#include <Editor/Panels/ConsolePanel.hpp>
+#include <Editor/Panels/ProjectPanel.hpp>
 
 #include <Engine/Core/Application.hpp>
 #include <Engine/Renderer/Graphics/Model.hpp>
 #include <Engine/ECS/Entity.hpp>
 #include <Engine/Renderer/Graphics/EditorCamera.hpp>
 
-#include <imgui.h>
-
 #include <vector>
 
 
-class AntelopeApp : public Antelope::Application
+namespace Antelope::Editor
 {
-    public:
-        AntelopeApp();
-        ~AntelopeApp();
+    class AntelopeApp : public Application
+    {
+        public:
+            AntelopeApp();
+            ~AntelopeApp();
 
-        void OnInit() override;
-        void OnUpdate(float timeStep) override;
-        void OnUIRender() override;
-        void OnShutdown() override;
+            void OnInit() override;
+            void OnUpdate(float timeStep) override;
+            void OnUIRender() override;
+            void OnShutdown() override;
 
-    private:
-        void SetupMockData();
+        private:
+            void SetupMockData();
 
-    private:
-        Antelope::ModelData m_BearMesh;
-        uint32_t m_BearTexID { 0 };
+        private:
+            ModelData m_BearMesh;
+            uint32_t m_BearTexID { 0 };
 
-        Antelope::ModelData m_GorillaMesh;
-        uint32_t m_GorillaTexID { 0 };
+            ModelData m_GorillaMesh;
+            uint32_t m_GorillaTexID { 0 };
 
-        float m_DebounceTimer { 0.0f };
-        const float DEBOUNCE_DELAY { 0.2f };
+            float m_DebounceTimer { 0.0f };
+            const float DEBOUNCE_DELAY { 0.2f };
 
-        Antelope::Entity m_BearRoot;
-        Antelope::Entity m_GorillaRoot;
-        std::vector<Antelope::Entity> m_GorillaParts;
+            Entity m_BearRoot;
+            Entity m_GorillaRoot;
+            std::vector<Entity> m_GorillaParts;
 
-        Antelope::EditorCamera m_EditorCamera;
-        Antelope::SceneViewPanel m_ScenePanel;
-};
+            EditorCamera m_EditorCamera;
+            SceneViewPanel m_ScenePanel;
+            HierarchyPanel m_HierarchyPanel;
+            PropertiesPanel m_PropertiesPanel;
+            ConsolePanel m_ConsolePanel;
+            ProjectPanel m_ProjectPanel;
+    };
+}

@@ -1,6 +1,5 @@
 #pragma once
 
-#ifdef ANTELOPE_EDITOR_MODE
 #include <Engine/ECS/Entity.hpp>
 #include <Engine/Renderer/Graphics/EditorCamera.hpp>
 #include <Engine/Renderer/UI/ScenePicker.hpp>
@@ -11,7 +10,7 @@
 #include <memory>
 
 
-namespace Antelope
+namespace Antelope::Editor
 {
     class SceneViewPanel
     {
@@ -20,7 +19,8 @@ namespace Antelope
             ~SceneViewPanel() = default;
 
             void OnUIRender(EditorCamera& camera);
-            void SetSelectedEntity(Entity entity) { m_SelectedEntity = entity; }
+            inline void SetSelectedEntity(Entity entity) { m_SelectedEntity = entity; }
+            inline Entity GetSelectedEntity() const { return m_SelectedEntity; }
 
         private:
             int m_PendingResizeFrames { 0 };
@@ -32,8 +32,7 @@ namespace Antelope
 
             int m_GizmoType { -1 };
             Entity m_SelectedEntity;
-            
+                
             std::unique_ptr<ScenePicker> m_ScenePicker;
     };
 }
-#endif

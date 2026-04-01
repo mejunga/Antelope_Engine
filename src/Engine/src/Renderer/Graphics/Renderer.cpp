@@ -13,6 +13,11 @@
 #include <Engine/Renderer/UI/UIContext.hpp>
 #endif
 
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
 #include <stdexcept>
 
 
@@ -70,7 +75,9 @@ namespace Antelope
     Renderer::~Renderer()
     {
         if (m_Context && m_Context->GetDevice() != VK_NULL_HANDLE)
+        {
             vkDeviceWaitIdle(m_Context->GetDevice());
+        }
 
         for (auto& transfer : m_PendingTransfers)
         {
@@ -485,10 +492,12 @@ namespace Antelope
 
         if (result == VK_ERROR_OUT_OF_DATE_KHR)
         {
+            vkDestroySemaphore(m_Context->GetDevice(), m_FrameSync[m_CurrentFrame].imageAvailableSemaphore, nullptr);
+            
+            VkSemaphoreCreateInfo semInfo {};
+            semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+            vkCreateSemaphore(m_Context->GetDevice(), &semInfo, nullptr, &m_FrameSync[m_CurrentFrame].imageAvailableSemaphore);
             m_SwapChain->RecreateSwapchain();
-        #ifdef ANTELOPE_EDITOR_MODE
-            uint32_t newImageCount { static_cast<uint32_t>(m_SwapChain->GetFramebuffers().size()) };
-        #endif
             return VK_NULL_HANDLE;
         }
         else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
