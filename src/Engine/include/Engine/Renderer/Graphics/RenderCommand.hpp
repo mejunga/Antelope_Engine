@@ -2,10 +2,18 @@
 
 #include <Engine/Renderer/Graphics/Mesh.hpp>
 #include <glm/glm.hpp>
+
 #include <cstdint>
+
 
 namespace Antelope
 {
+    struct UniformBufferObject
+    {
+        glm::mat4 view;
+        glm::mat4 proj;
+    };
+
     struct RenderCommand 
     {
         glm::mat4 transform;

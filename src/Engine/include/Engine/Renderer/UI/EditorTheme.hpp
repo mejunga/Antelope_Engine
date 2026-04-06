@@ -45,10 +45,10 @@ namespace Antelope
                 theme.TabRounding = 3.0f;
                 theme.BorderSize = 0.0f;
 
-                theme.WindowBg = ImVec4{ 0.1f, 0.105f, 0.11f, 1.0f };
-                theme.Header = ImVec4{ 0.2f, 0.205f, 0.21f, 1.0f };
-                theme.HeaderHovered = ImVec4{ 0.3f, 0.305f, 0.31f, 1.0f };
-                theme.HeaderActive = ImVec4{ 0.15f, 0.1505f, 0.151f, 1.0f };
+                theme.WindowBg = ImVec4{ 0.15f, 0.15f, 0.15f, 1.0f };
+                theme.Header = ImVec4{ 0.22f, 0.22f, 0.22f, 1.0f };
+                theme.HeaderHovered = ImVec4{ 0.28f, 0.28f, 0.28f, 1.0f };
+                theme.HeaderActive = ImVec4{ 0.20f, 0.20f, 0.20f, 1.0f };
                 
                 theme.Tab = ImVec4{ 0.15f, 0.1505f, 0.151f, 1.0f };
                 theme.TabHovered = ImVec4{ 0.38f, 0.3805f, 0.381f, 1.0f };
@@ -56,12 +56,12 @@ namespace Antelope
                 theme.TabUnfocused = ImVec4{ 0.15f, 0.1505f, 0.151f, 1.0f };
                 theme.TabUnfocusedActive = ImVec4{ 0.2f, 0.205f, 0.21f, 1.0f };
 
-                theme.TitleBg = ImVec4{ 0.08f, 0.0805f, 0.081f, 1.0f };
-                theme.TitleBgActive = ImVec4{ 0.08f, 0.0805f, 0.081f, 1.0f };
+                theme.TitleBg = ImVec4{ 0.12f, 0.12f, 0.12f, 1.0f };
+                theme.TitleBgActive = ImVec4{ 0.12f, 0.12f, 0.12f, 1.0f };
                 theme.TitleBgCollapsed = ImVec4{ 0.08f, 0.0805f, 0.081f, 1.0f };
 
                 theme.DockingPreview = ImVec4{ 0.2f, 0.5f, 0.8f, 0.3f }; 
-                theme.DockingEmptyBg = ImVec4{ 0.1f, 0.105f, 0.11f, 1.0f };
+                theme.DockingEmptyBg = ImVec4{ 0.12f, 0.12f, 0.12f, 1.0f };
 
                 theme.Text = ImVec4{ 0.9f, 0.9f, 0.9f, 1.0f };
                 theme.TextDisabled = ImVec4{ 0.5f, 0.5f, 0.5f, 1.0f };

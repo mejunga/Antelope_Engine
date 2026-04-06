@@ -163,7 +163,7 @@ namespace Antelope
         pool_info.maxSets = 1000;
         pool_info.poolSizeCount = (uint32_t)std::size(pool_sizes);
         pool_info.pPoolSizes = pool_sizes;
-        
+
         vkCreateDescriptorPool(m_Context->GetDevice(), &pool_info, nullptr, &m_ImGuiPool);
 
         IMGUI_CHECKVERSION();
@@ -179,6 +179,7 @@ namespace Antelope
         ImGui_ImplGlfw_InitForVulkan(m_Window.GetNativeWindow(), true);
 
         ImGui_ImplVulkan_InitInfo init_info {};
+        init_info.ApiVersion = VK_API_VERSION_1_3;
         init_info.Instance = m_Context->GetInstance();
         init_info.PhysicalDevice = m_Context->GetPhysicalDevice();
         init_info.Device = m_Context->GetDevice();
@@ -186,17 +187,16 @@ namespace Antelope
         init_info.Queue = m_Context->GetGraphicsQueue();
         init_info.PipelineCache = VK_NULL_HANDLE;
         init_info.DescriptorPool = m_ImGuiPool;
-        init_info.Subpass = 0;
         init_info.MinImageCount = 2;
         init_info.ImageCount = imageCount;
-        init_info.MSAASamples = m_Context->GetMsaaSamples();
         init_info.Allocator = nullptr;
         init_info.CheckVkResultFn = nullptr;
-        init_info.RenderPass = m_SwapChain->GetRenderPass();
+        init_info.PipelineInfoMain.RenderPass = m_SwapChain->GetRenderPass();
+        init_info.PipelineInfoMain.MSAASamples = m_Context->GetMsaaSamples();
+        init_info.PipelineInfoMain.Subpass = 0;
 
         ImGui_ImplVulkan_Init(&init_info);
-        ImGui_ImplVulkan_CreateFontsTexture();
-        
+
         auto renderTexture { m_Renderer->GetRenderTexture() };
         m_SceneTextureDescriptorSet = ImGui_ImplVulkan_AddTexture(
             renderTexture->GetSampler(),

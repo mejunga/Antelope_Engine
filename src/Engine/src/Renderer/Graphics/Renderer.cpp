@@ -1,4 +1,5 @@
 #include <Engine/Renderer/Graphics/Renderer.hpp>
+#include <Engine/Renderer/Graphics/SkyRenderer.hpp>
 #include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 #include <Engine/Renderer/Vulkan/SwapChain.hpp>
 #include <Engine/AssetImport/TextureManager.hpp>
@@ -11,6 +12,7 @@
 #include <Engine/Renderer/Graphics/EditorCamera.hpp>
 #include <Engine/Renderer/Vulkan/RenderTexture.hpp>
 #include <Engine/Renderer/UI/UIContext.hpp>
+#include <Engine/Renderer/Graphics/GridRenderer.hpp>
 #endif
 
 #define GLM_FORCE_RADIANS
@@ -52,6 +54,17 @@ namespace Antelope
         AE_ENGINE_TRACE("Pipeline Layout created.");
         CreateGraphicsPipeline();
         AE_ENGINE_INFO("Graphics Pipeline created.");
+    #ifdef ANTELOPE_EDITOR_MODE
+        VkRenderPass sceneRenderPass { m_RenderTexture->GetRenderPass() };
+    #else
+        VkRenderPass sceneRenderPass { m_SwapChain->GetRenderPass() };
+    #endif
+        m_SkyRenderer = std::make_unique<SkyRenderer>(m_Context, m_PipelineLayout, sceneRenderPass);
+        AE_ENGINE_TRACE("Sky Renderer created.");
+    #ifdef ANTELOPE_EDITOR_MODE
+        m_GridRenderer = std::make_unique<GridRenderer>(m_Context, m_PipelineLayout, sceneRenderPass);
+        AE_ENGINE_TRACE("Grid Renderer created.");
+    #endif
         CreateCommandPool();
         AE_ENGINE_TRACE("Command Pool created.");
         CreateTransferCommandPool();
@@ -558,38 +571,40 @@ namespace Antelope
         renderPassInfo.renderArea.offset = {0, 0};
         
         std::array<VkClearValue, 2> clearValues {};
-        clearValues[0].color = {{0.1f, 0.1f, 0.17f, 1.0f}};
+        clearValues[0] = {};
         clearValues[1].depthStencil = {1.0f, 0};
 
         renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
         renderPassInfo.pClearValues = clearValues.data();
 
         vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-        m_MainPipeline->Bind(cmd);
 
         VkViewport viewport {};
         viewport.x = 0.0f; viewport.y = 0.0f;
-    #ifdef ANTELOPE_EDITOR_MODE
+        #ifdef ANTELOPE_EDITOR_MODE
         viewport.width  = static_cast<float>(m_RenderTexture->GetExtent().width);
         viewport.height = static_cast<float>(m_RenderTexture->GetExtent().height);
-    #else
+        #else
         viewport.width = static_cast<float>(m_SwapChain->GetExtent().width);
         viewport.height = static_cast<float>(m_SwapChain->GetExtent().height);
-    #endif
+        #endif
         viewport.minDepth = 0.0f; viewport.maxDepth = 1.0f;
         vkCmdSetViewport(cmd, 0, 1, &viewport);
 
         VkRect2D scissor {};
         scissor.offset = {0, 0};
-    #ifdef ANTELOPE_EDITOR_MODE
+        #ifdef ANTELOPE_EDITOR_MODE
         scissor.extent = m_RenderTexture->GetExtent();
-    #else
+        #else
         scissor.extent = m_SwapChain->GetExtent();
-    #endif
+        #endif
         vkCmdSetScissor(cmd, 0, 1, &scissor);
-        
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_PipelineLayout, 0, 1, &m_DescriptorSets[m_CurrentFrame], 0, nullptr);
-        
+
+        m_SkyRenderer->Draw(cmd, m_DescriptorSets[m_CurrentFrame]);
+        m_MainPipeline->Bind(cmd);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+        m_PipelineLayout, 0, 1, &m_DescriptorSets[m_CurrentFrame], 0, nullptr);
+
         ObjectData* objectDataMap { static_cast<ObjectData*>(m_ObjectBuffers[m_CurrentFrame]->GetMappedMemory()) };
         VkDrawIndirectCommand* indirectCommandsMap { static_cast<VkDrawIndirectCommand*>(m_IndirectBuffers[m_CurrentFrame]->GetMappedMemory()) };
 
@@ -630,6 +645,10 @@ namespace Antelope
             vkCmdDrawIndirect(cmd, m_IndirectBuffers[m_CurrentFrame]->GetBuffer(), 0, objectCount, sizeof(VkDrawIndirectCommand));
         }
 
+    #ifdef ANTELOPE_EDITOR_MODE
+        m_GridRenderer->Draw(cmd, m_DescriptorSets[m_CurrentFrame]);
+    #endif
+
         vkCmdEndRenderPass(cmd);
     }
 
@@ -646,7 +665,7 @@ namespace Antelope
         }
         else
         {
-            renderFinished = m_RenderFinishedRing[m_SemaphoreRingIndex];
+            renderFinished = m_RenderFinishedRing[m_CurrentImageIndex];
         }
 
     #else
@@ -706,10 +725,6 @@ namespace Antelope
         if (m_Maintenance1Supported)
         {
             MarkSemaphorePending(renderFinished, presentFence);
-        }
-        else
-        {
-            m_SemaphoreRingIndex = (m_SemaphoreRingIndex + 1) % static_cast<uint32_t>(m_RenderFinishedRing.size());
         }
     #endif
 
@@ -894,7 +909,7 @@ namespace Antelope
         }
         else
         {
-            uint32_t ringSize { m_MaxFramesInFlight + 1 };
+            uint32_t ringSize { imageCount };
             m_RenderFinishedRing.resize(ringSize);
 
             for (auto& sem : m_RenderFinishedRing)

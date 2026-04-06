@@ -8,12 +8,6 @@
 
 namespace Antelope
 {
-    struct UniformBufferObject
-    {
-        glm::mat4 view;
-        glm::mat4 proj;
-    };
-
     class EditorCamera
     {
         public:
@@ -41,7 +35,7 @@ namespace Antelope
             float m_Yaw { -90.0f };
             float m_Pitch { 0.0f };
 
-            float m_MovementSpeed { 50.0f };
+            float m_MovementSpeed { 5.0f };
             float m_MouseSensitivity { 0.1f };
 
             float m_LastMouseX { 0.0f };

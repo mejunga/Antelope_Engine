@@ -25,7 +25,7 @@ namespace Antelope
         
         float currentSpeed { m_MovementSpeed };
         
-        if (Input::IsKeyPressed(GLFW_KEY_LEFT_SHIFT)) { currentSpeed *= 3.0f; }
+        if (Input::IsKeyPressed(GLFW_KEY_LEFT_SHIFT)) { currentSpeed *= 1.5f; }
 
         float velocity { currentSpeed * timeStep };
         

@@ -4,12 +4,12 @@
 #include <Engine/Core/Application.hpp>
 #include <Engine/ECS/World.hpp>
 #include <Engine/Renderer/Graphics/Renderer.hpp>
+#include <Engine/Renderer/Vulkan/SwapChain.hpp>
+#include <Engine/Renderer/Graphics/RenderCommand.hpp>
 #ifdef ANTELOPE_EDITOR_MODE
 #include <Engine/Renderer/Vulkan/RenderTexture.hpp>
 #include <Engine/Renderer/Graphics/EditorCamera.hpp>
 #endif
-#include <Engine/Renderer/Vulkan/SwapChain.hpp>
-#include <Engine/Renderer/Graphics/RenderCommand.hpp>
 
 
 namespace Antelope
@@ -28,7 +28,9 @@ namespace Antelope
             static_cast<float>(renderExtent.height)
         );
 
-        std::vector<RenderCommand> renderList;
+        static std::vector<RenderCommand> renderList;
+        renderList.clear();
+
         auto& registry { world.GetRegistry() };
         auto view { registry.view<TransformComponent, MeshComponent>(entt::exclude<DisabledComponent>) };
         renderList.reserve(view.size_hint());
@@ -83,7 +85,9 @@ namespace Antelope
         cameraUBO.view = viewMatrix;
         cameraUBO.proj = projMatrix;
 
-        std::vector<RenderCommand> renderList;
+        static std::vector<RenderCommand> renderList;
+        renderList.clear();
+
         auto meshView { registry.view<TransformComponent, MeshComponent>(entt::exclude<DisabledComponent>) };
         renderList.reserve(meshView.size_hint());
 

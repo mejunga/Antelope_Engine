@@ -16,7 +16,7 @@ namespace Antelope::Editor
 {
     SceneViewPanel::SceneViewPanel()
     {
-        m_ScenePicker = std::make_unique<ScenePicker>(Application::Get().GetVulkanContext(), 800, 600);
+        m_ScenePicker = std::make_unique<ScenePicker>(Application::Get().GetVulkanContext(), 1, 1);
     }
 
     void SceneViewPanel::OnUIRender(EditorCamera& camera)

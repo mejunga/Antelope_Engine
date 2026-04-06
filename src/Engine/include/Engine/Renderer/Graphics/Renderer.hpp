@@ -24,12 +24,13 @@ namespace Antelope
     class DescriptorAllocator;
     class SwapChain;
     class GpuMemoryAllocator;
+    class SkyRenderer;
 #ifdef ANTELOPE_EDITOR_MODE
     class RenderTexture;
     class UIContext;
+    class GridRenderer;
 #endif
 
-    struct UniformBufferObject;
     struct Texture;
 
     struct PendingTransfer
@@ -113,10 +114,12 @@ namespace Antelope
             std::shared_ptr<SwapChain> m_SwapChain;
             std::unique_ptr<GpuMemoryAllocator> m_GpuAllocator;
             std::unique_ptr<Pipeline> m_MainPipeline;
+            std::unique_ptr<SkyRenderer> m_SkyRenderer;
             std::unique_ptr<DescriptorAllocator> m_GlobalDescriptorAllocator;
         #ifdef ANTELOPE_EDITOR_MODE
             std::shared_ptr<RenderTexture> m_RenderTexture;
             std::weak_ptr<UIContext> m_UIContext;
+            std::unique_ptr<GridRenderer> m_GridRenderer;
         #endif
 
             VkDescriptorSetLayout m_DescriptorSetLayout { VK_NULL_HANDLE };
@@ -132,7 +135,6 @@ namespace Antelope
             uint32_t m_NextMeshID { 1 };
         #ifdef ANTELOPE_EDITOR_MODE
             bool m_Maintenance1Supported { false };
-            uint32_t m_SemaphoreRingIndex { 0 };
         #endif
 
             std::vector<VkCommandBuffer> m_CommandBuffers;
@@ -153,6 +155,8 @@ namespace Antelope
 
         #ifdef ANTELOPE_EDITOR_MODE
             friend class ScenePicker;
+            friend class GridRenderer;
         #endif
+            friend class SkyRenderer;
     };
 }

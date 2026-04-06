@@ -1,7 +1,7 @@
 {
   "name": "game-engine",
   "version-string": "0.1.0",
-  "builtin-baseline": "e5a1490e1409d175932ef6014519e9ae149ddb7c", 
+  "builtin-baseline": "77df67cfff9c12ccfdb52284e07c87c75092f723", 
   "dependencies": [
     "glfw3",
     "glm",
