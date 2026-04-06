@@ -26,11 +26,13 @@ namespace Antelope
             void OnUpdateRuntime(float timeStep);
             void MarkTransformDirty(Entity entity);
 
+            void MarkHierarchyDirty() { m_HierarchyDirty = true; }
             inline entt::registry& GetRegistry() { return m_Registry; }
 
         private:
             entt::registry m_Registry;
-            
+            bool m_HierarchyDirty { true };
+
             friend class Entity;
     };
 }

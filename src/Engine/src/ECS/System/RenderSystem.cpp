@@ -32,14 +32,14 @@ namespace Antelope
         renderList.clear();
 
         auto& registry { world.GetRegistry() };
-        auto view { registry.view<TransformComponent, MeshComponent>(entt::exclude<DisabledComponent>) };
+        auto view { registry.view<TransformComponent, MeshComponent, NormalMatrixComponent>(entt::exclude<DisabledComponent>) };
         renderList.reserve(view.size_hint());
 
-        for (auto [entityID, transform, meshComponent] : view.each()) 
+        for (auto [entityID, transform, meshComponent, normalMat] : view.each())
         {
             RenderCommand cmd{};
             cmd.transform = transform.WorldMatrix;
-            cmd.normalMatrix = transform.NormalMatrix;
+            cmd.normalMatrix = normalMat.Matrix;
             cmd.mesh = meshComponent.Handle;
             cmd.entityID = static_cast<uint32_t>(entityID);
 
@@ -88,14 +88,14 @@ namespace Antelope
         static std::vector<RenderCommand> renderList;
         renderList.clear();
 
-        auto meshView { registry.view<TransformComponent, MeshComponent>(entt::exclude<DisabledComponent>) };
+        auto meshView { registry.view<TransformComponent, MeshComponent, NormalMatrixComponent>(entt::exclude<DisabledComponent>) };
         renderList.reserve(meshView.size_hint());
 
-        for (auto [entityID, transform, meshComponent] : meshView.each()) 
+        for (auto [entityID, transform, meshComponent, normalMat] : meshView.each()) 
         {
             RenderCommand cmd{};
             cmd.transform = transform.WorldMatrix;
-            cmd.normalMatrix = transform.NormalMatrix;
+            cmd.normalMatrix = normalMat.Matrix;
             cmd.mesh = meshComponent.Handle;
 
             renderList.push_back(cmd);

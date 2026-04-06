@@ -31,15 +31,23 @@ namespace Antelope
         glm::vec3 Rotation { 0.0f, 0.0f, 0.0f };
         glm::vec3 Scale { 1.0f, 1.0f, 1.0f };
 
+        glm::mat4 LocalMatrix { 1.0f };
         glm::mat4 WorldMatrix { 1.0f };
-        glm::mat4 NormalMatrix { 1.0f };
 
-        glm::mat4 GetLocalTransform() const
+        TransformComponent() = default;
+        TransformComponent(const TransformComponent&) = default;
+
+        void RebuildLocal()
         {
-            return glm::translate(glm::mat4(1.0f), Translation)
-                 * glm::toMat4(glm::quat(Rotation))
-                 * glm::scale(glm::mat4(1.0f), Scale);
+            LocalMatrix = glm::translate(glm::mat4(1.0f), Translation)
+                        * glm::toMat4(glm::quat(Rotation))
+                        * glm::scale(glm::mat4(1.0f), Scale);
         }
+    };
+
+    struct NormalMatrixComponent
+    {
+        glm::mat3 Matrix { 1.0f };
     };
 
     struct RelationshipComponent
@@ -48,6 +56,8 @@ namespace Antelope
         entt::entity FirstChild { entt::null };
         entt::entity PreviousSibling { entt::null };
         entt::entity NextSibling { entt::null };
+        
+        uint32_t Depth { 0 }; 
         
         RelationshipComponent() = default;
         RelationshipComponent(const RelationshipComponent&) = default;

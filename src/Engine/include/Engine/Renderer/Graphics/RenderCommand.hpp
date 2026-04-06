@@ -17,7 +17,7 @@ namespace Antelope
     struct RenderCommand 
     {
         glm::mat4 transform;
-        glm::mat4 normalMatrix;
+        glm::mat3 normalMatrix;
         MeshHandle mesh;
         
         bool IsSelected { false };

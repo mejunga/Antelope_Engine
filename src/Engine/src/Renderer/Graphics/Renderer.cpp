@@ -622,7 +622,7 @@ namespace Antelope
             }
 
             objectDataMap[objectCount].model = command.transform;
-            objectDataMap[objectCount].normalMatrix = command.normalMatrix;
+            objectDataMap[objectCount].normalMatrix = glm::mat4(command.normalMatrix);
             objectDataMap[objectCount].posOffset = static_cast<uint32_t>(command.mesh.posAllocation.Offset / sizeof(VertexPosition));
             objectDataMap[objectCount].colorOffset = static_cast<uint32_t>(command.mesh.colorAllocation.Offset / sizeof(VertexColor));
             objectDataMap[objectCount].normalOffset = static_cast<uint32_t>(command.mesh.normalAllocation.Offset / sizeof(VertexNormal));

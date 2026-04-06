@@ -12,8 +12,6 @@ namespace Antelope
     {
         public:
             static void OnUpdate(World& world);
-
-        private:
-            static void UpdateNodeCascade(entt::registry& registry, entt::entity entity, const glm::mat4& parentMatrix);
+            static void SortHierarchy(World& world);
     };
 }

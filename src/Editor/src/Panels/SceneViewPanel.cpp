@@ -94,14 +94,17 @@ namespace Antelope::Editor
 
             if (pickX >= 0 && pickY >= 0 && pickX < newWidth && pickY < newHeight) 
             {
-                std::vector<RenderCommand> renderList;
+                static std::vector<RenderCommand> renderList;
+                renderList.clear();
+                
                 auto& registry { Application::Get().GetWorld()->GetRegistry() };
-                auto view { registry.view<TransformComponent, MeshComponent>() };
-                    
-                for (auto [entityID, transform, mesh] : view.each()) {
-                    RenderCommand cmd{};
+                auto view { registry.view<TransformComponent, MeshComponent, NormalMatrixComponent>() };
+
+                for (auto [entityID, transform, mesh, normalMat] : view.each())
+                {
+                    RenderCommand cmd {};
                     cmd.transform = transform.WorldMatrix;
-                    cmd.normalMatrix = transform.NormalMatrix;
+                    cmd.normalMatrix = normalMat.Matrix;
                     cmd.mesh = mesh.Handle;
                     cmd.entityID = static_cast<uint32_t>(entityID);
                     renderList.push_back(cmd);

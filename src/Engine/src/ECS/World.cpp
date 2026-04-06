@@ -11,7 +11,14 @@
 
 namespace Antelope
 {
-    World::World() {}
+    World::World()
+    {
+        m_Registry.on_construct<MeshComponent>().connect<[](entt::registry& reg, entt::entity e)
+        {
+            reg.emplace_or_replace<NormalMatrixComponent>(e);
+        }>();
+    }
+
     World::~World() {}
 
     Entity World::CreateEntity(const std::string& name)
@@ -23,19 +30,26 @@ namespace Antelope
         entity.AddComponent<RelationshipComponent>();
         auto& tag { entity.AddComponent<TagComponent>() };
         tag.Tag = name.empty() ? "Entity" : name;
-        MarkTransformDirty(entity); 
-
+        MarkTransformDirty(entity);
+        MarkHierarchyDirty();
         return entity;
     }
 
     void World::DestroyEntity(Entity entity)
     {
         m_Registry.destroy(entity);
+        MarkHierarchyDirty();
     }
 
 #ifdef ANTELOPE_EDITOR_MODE
     void World::OnUpdateEditor(float timeStep, const EditorCamera& camera)
     {
+        if (m_HierarchyDirty)
+        {
+            TransformSystem::SortHierarchy(*this);
+            m_HierarchyDirty = false;
+        }
+
         TransformSystem::OnUpdate(*this);
         auto renderer { Application::Get().GetRenderer() };
         RenderSystem::RenderEditor(*this, renderer, camera);
@@ -43,7 +57,13 @@ namespace Antelope
 #endif
 
     void World::OnUpdateRuntime(float timeStep)
-    {            
+    {        
+        if (m_HierarchyDirty)
+        {
+            TransformSystem::SortHierarchy(*this);
+            m_HierarchyDirty = false;
+        }
+
         TransformSystem::OnUpdate(*this);
         auto renderer { Application::Get().GetRenderer() };
         RenderSystem::RenderRuntime(*this, renderer);

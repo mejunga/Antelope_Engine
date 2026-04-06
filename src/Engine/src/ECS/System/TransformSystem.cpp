@@ -5,41 +5,47 @@
 
 namespace Antelope
 {
+    void TransformSystem::SortHierarchy(World& world)
+    {
+        auto& registry { world.GetRegistry() };
+
+        registry.sort<TransformComponent>([&registry](const entt::entity lhs, const entt::entity rhs)
+        {
+            return registry.get<RelationshipComponent>(lhs).Depth < registry.get<RelationshipComponent>(rhs).Depth;
+        });
+    }
+
     void TransformSystem::OnUpdate(World& world)
     {
         auto& registry { world.GetRegistry() };
-        auto view { registry.view<TransformComponent, RelationshipComponent, DirtyTransform>() };
+        auto view { registry.view<TransformComponent, RelationshipComponent>() };
+        view.use<TransformComponent>();
 
         for (auto [entity, transform, rel] : view.each())
         {
-            bool isRootDirty { (rel.Parent == entt::null) || !registry.all_of<DirtyTransform>(rel.Parent) };
-
-            if (isRootDirty)
+            if (registry.all_of<DirtyTransform>(entity))
             {
-                glm::mat4 parentMat { 1.0f };
-
-                if (rel.Parent != entt::null) { parentMat = registry.get<TransformComponent>(rel.Parent).WorldMatrix; }
-
-                UpdateNodeCascade(registry, entity, parentMat);
+                transform.RebuildLocal();
+            }
+                
+            if (rel.Parent == entt::null)
+            {
+                transform.WorldMatrix = transform.LocalMatrix;
+            }
+            else
+            {
+                const auto& parentTransform { registry.get<TransformComponent>(rel.Parent) };
+                transform.WorldMatrix = parentTransform.WorldMatrix * transform.LocalMatrix;
             }
         }
 
-        registry.clear<DirtyTransform>(); 
-    }
-
-    void TransformSystem::UpdateNodeCascade(entt::registry& registry, entt::entity entity, const glm::mat4& parentMatrix)
-    {
-        auto& transform { registry.get<TransformComponent>(entity) };
-        auto& rel { registry.get<RelationshipComponent>(entity) };
-
-        transform.WorldMatrix = parentMatrix * transform.GetLocalTransform();
-        transform.NormalMatrix = glm::transpose(glm::inverse(transform.WorldMatrix));
-
-        entt::entity child { rel.FirstChild };
-        while (child != entt::null)
+        auto normalView { registry.view<TransformComponent, NormalMatrixComponent>() };
+        
+        for (auto [entity, transform, normalMat] : normalView.each())
         {
-            UpdateNodeCascade(registry, child, transform.WorldMatrix);
-            child = registry.get<RelationshipComponent>(child).NextSibling;
+            normalMat.Matrix = glm::transpose(glm::inverse(glm::mat3(transform.WorldMatrix)));
         }
+
+        registry.clear<DirtyTransform>();
     }
 }
