@@ -90,4 +90,43 @@ namespace Antelope
         MeshComponent(const MeshComponent&) = default;
         MeshComponent(MeshHandle handle) : Handle(handle) {}
     };
+
+    enum class RigidBodyType
+    {
+        Static = 0,
+        Kinematic,
+        Dynamic
+    };
+
+    struct RigidBodyComponent
+    {
+        RigidBodyType Type { RigidBodyType::Static };
+        
+        float Mass { 1.0f };
+        float Friction { 0.2f };
+        float Restitution { 0.0f };
+        
+        uint32_t RuntimeBodyID { 0xFFFFFFFF }; 
+        
+        RigidBodyComponent() = default;
+        RigidBodyComponent(const RigidBodyComponent&) = default;
+    };
+
+    enum class ColliderType
+    {
+        Box = 0,
+        Sphere,
+        Capsule
+    };
+
+    struct ColliderComponent
+    {
+        ColliderType Type { ColliderType::Box };
+        
+        glm::vec3 Size { 0.5f, 0.5f, 0.5f }; 
+        glm::vec3 Offset { 0.0f, 0.0f, 0.0f }; 
+        
+        ColliderComponent() = default;
+        ColliderComponent(const ColliderComponent&) = default;
+    };
 }

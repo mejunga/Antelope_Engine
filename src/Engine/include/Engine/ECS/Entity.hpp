@@ -27,6 +27,7 @@ namespace Antelope
             }
 
             inline bool IsActive() { return !m_World->GetRegistry().all_of<DisabledComponent>(m_EntityHandle); }
+            inline entt::entity GetHandle() const { return m_EntityHandle; }
 
             template<typename T, typename... Args>
             T& AddComponent(Args&&... args)

@@ -7,6 +7,8 @@
 #include <Engine/ECS/BaseComponents.hpp>
 #include <Engine/Platform/Input.hpp>
 #include <Engine/Debug/Log.hpp>
+#include <Engine/ECS/System/PhysicsSystem.hpp>
+#include <Engine/Physics/PhysicsContext.hpp>
 
 #include <glm/gtc/type_ptr.hpp>
 #include <GLFW/glfw3.h>
@@ -121,22 +123,25 @@ namespace Antelope::Editor
             if (pickedID != static_cast<uint32_t>(entt::null))
             {
                 Entity pickedEntity { Entity(static_cast<entt::entity>(pickedID), Application::Get().GetWorld().get()) };
-                auto& rel { pickedEntity.GetComponent<RelationshipComponent>() };
-
-                if (rel.Parent != entt::null)
+                Entity rootEntity { pickedEntity };
+                
+                while (rootEntity.GetComponent<RelationshipComponent>().Parent != entt::null)
                 {
-                    Entity parentEntity { Entity(rel.Parent, Application::Get().GetWorld().get()) };
-                      
-                    if (m_SelectedEntity == parentEntity) 
+                    rootEntity = Entity(rootEntity.GetComponent<RelationshipComponent>().Parent, Application::Get().GetWorld().get());
+                }
+
+                if (rootEntity != pickedEntity)
+                {
+                    if (m_SelectedEntity == rootEntity) 
                     {
                         m_SelectedEntity = pickedEntity;
                     } 
                     else 
                     {
-                        m_SelectedEntity = parentEntity;
+                        m_SelectedEntity = rootEntity;
                     }
-                } 
-                else 
+                }
+                else
                 {
                     m_SelectedEntity = pickedEntity;
                 }
@@ -191,6 +196,15 @@ namespace Antelope::Editor
                 tc.Rotation = glm::radians(rotation);
                 tc.Scale = scale;
                 Application::Get().GetWorld()->MarkTransformDirty(m_SelectedEntity);
+
+                if (Application::Get().GetWorld()->IsSimulating())
+                {
+                    PhysicsSystem::SetBodyTransform(
+                        *Application::Get().GetWorld(), 
+                        *Application::Get().GetWorld()->GetPhysicsContext(), 
+                        m_SelectedEntity.GetHandle()
+                    );
+                }
             }
         }
 

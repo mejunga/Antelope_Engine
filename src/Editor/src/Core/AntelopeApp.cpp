@@ -42,34 +42,64 @@ namespace Antelope::Editor
     {
         SetupMockData();
 
-        m_BearRoot = GetWorld()->CreateEntity("BearRoot");
+        Entity ground { GetWorld()->CreateEntity("Ground") };
+        auto& groundTransform { ground.GetComponent<TransformComponent>() };
+        groundTransform.Translation = glm::vec3(0.0f, -2.0f, 0.0f);
+        
+        auto& groundRb { ground.AddComponent<RigidBodyComponent>() };
+        groundRb.Type = RigidBodyType::Static;
+        
+        auto& groundCol { ground.AddComponent<ColliderComponent>() };
+        groundCol.Type = ColliderType::Box;
+        groundCol.Size = glm::vec3(20.0f, 1.0f, 20.0f);
+
+        m_BearRoot = GetWorld()->CreateEntity("Bear_Sculpture_Root");
+        auto& rootTransform { m_BearRoot.GetComponent<TransformComponent>() };
+        rootTransform.Translation = glm::vec3(0.0f, 2.0f, 0.0f);
+        rootTransform.Rotation = glm::vec3(0.0f, 0.0f, glm::radians(15.0f)); 
+        
+        auto& rootRb { m_BearRoot.AddComponent<RigidBodyComponent>() };
+        rootRb.Type = RigidBodyType::Dynamic;
+        rootRb.Mass = 500.0f;
+
+        Entity bear1Pivot { GetWorld()->CreateEntity("Bear1_Pivot") };
+        bear1Pivot.SetParent(m_BearRoot);
+        auto& bear1Transform { bear1Pivot.GetComponent<TransformComponent>() };
+        bear1Transform.Translation = glm::vec3(-5.0f, 0.0f, 0.0f);
+        
+        auto& bear1Col { bear1Pivot.AddComponent<ColliderComponent>() };
+        bear1Col.Type = ColliderType::Box;
+        bear1Col.Size = glm::vec3(1.0f, 1.0f, 1.5f);
 
         for (const auto& subMesh : m_BearMesh.SubMeshes)
         {
             MeshHandle handle { GetRenderer()->UploadMesh(subMesh.Data) };
             handle.materialIndex = m_BearTexID;
 
-            Entity part { GetWorld()->CreateEntity(subMesh.Name.empty() ? "BearPart" : subMesh.Name) };
+            Entity part { GetWorld()->CreateEntity(subMesh.Name.empty() ? "Bear1_Part" : subMesh.Name) };
             part.AddComponent<MeshComponent>(handle);
-            part.GetComponent<TransformComponent>().Scale = glm::vec3(0.005f);
-            part.SetParent(m_BearRoot);
+            part.GetComponent<TransformComponent>().Scale = glm::vec3(0.00125f);
+            part.SetParent(bear1Pivot);
         }
 
-        m_GorillaRoot = GetWorld()->CreateEntity("GorillaRoot");
-        m_GorillaRoot.SetParent(m_BearRoot); 
-        m_GorillaRoot.GetComponent<TransformComponent>().Translation = glm::vec3(10.0f, 0.0f, 0.0f);
-        GetWorld()->MarkTransformDirty(m_GorillaRoot);
+        Entity bear2Pivot { GetWorld()->CreateEntity("Bear2_Pivot") };
+        bear2Pivot.SetParent(m_BearRoot);
+        auto& bear2Transform { bear2Pivot.GetComponent<TransformComponent>() };
+        bear2Transform.Translation = glm::vec3(5.0f, 0.0f, 0.0f);
+        
+        auto& bear2Col { bear2Pivot.AddComponent<ColliderComponent>() };
+        bear2Col.Type = ColliderType::Box;
+        bear2Col.Size = glm::vec3(1.0f, 1.0f, 1.5f); 
 
-        for (const auto& subMesh : m_GorillaMesh.SubMeshes)
+        for (const auto& subMesh : m_BearMesh.SubMeshes)
         {
             MeshHandle handle { GetRenderer()->UploadMesh(subMesh.Data) };
-            handle.materialIndex = m_GorillaTexID;
+            handle.materialIndex = m_BearTexID;
 
-            Entity part { GetWorld()->CreateEntity(subMesh.Name.empty() ? "GorillaPart" : subMesh.Name) };
+            Entity part { GetWorld()->CreateEntity(subMesh.Name.empty() ? "Bear2_Part" : subMesh.Name) };
             part.AddComponent<MeshComponent>(handle);
-            part.GetComponent<TransformComponent>().Scale = glm::vec3(7.5f);
-            part.SetParent(m_GorillaRoot);
-            m_GorillaParts.push_back(part);
+            part.GetComponent<TransformComponent>().Scale = glm::vec3(0.00125f);
+            part.SetParent(bear2Pivot);
         }
     }
 
@@ -77,19 +107,25 @@ namespace Antelope::Editor
     {
         if (m_DebounceTimer > 0.0f) { m_DebounceTimer -= timeStep; }
 
-        if (Input::IsKeyPressed(GLFW_KEY_SPACE) && m_DebounceTimer <= 0.0f)
+        if (Input::IsKeyPressed(GLFW_KEY_X) && m_DebounceTimer <= 0.0f)
         {
             m_DebounceTimer = DEBOUNCE_DELAY;
-            bool isActive { m_GorillaRoot.IsActive() };
             
-            m_GorillaRoot.SetActive(!isActive); 
-            
-            for (auto& part : m_GorillaParts)
+            if (GetWorld()->IsSimulating())
             {
-                part.SetActive(!isActive);
+                GetWorld()->OnSimulationStop();
+                AE_CLIENT_INFO("Physics PAUSED via X key.");
             }
-            
-            AE_CLIENT_TRACE("Gorilla Active State: {0}", !isActive);
+            else
+            {
+                GetWorld()->OnSimulationStart();
+                AE_CLIENT_INFO("Physics STARTED via X key.");
+            }
+        }
+
+        if (GetWorld()->IsSimulating())
+        {
+            GetWorld()->StepSimulation(timeStep);
         }
 
         m_EditorCamera.OnUpdate(timeStep);
@@ -99,10 +135,10 @@ namespace Antelope::Editor
     void AntelopeApp::OnUIRender()
     {
         static ImGuiDockNodeFlags dockspace_flags { ImGuiDockNodeFlags_None };
-        ImGuiWindowFlags window_flags { ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking | 
-                                        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | 
-                                        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | 
-                                        ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus };
+        ImGuiWindowFlags window_flags { ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking 
+                                      | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse 
+                                      | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove 
+                                      | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus };
 
         ImGuiViewport* viewport { ImGui::GetMainViewport() };
         ImGui::SetNextWindowPos(viewport->WorkPos);
