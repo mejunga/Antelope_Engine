@@ -118,22 +118,43 @@ namespace Antelope
         style.FrameRounding = props.FrameRounding;
         style.TabRounding = props.TabRounding;
         style.WindowBorderSize = props.BorderSize;
-        style.FrameBorderSize = props.BorderSize;
+        style.FrameBorderSize = props.FrameBorderSize;
 
         colors[ImGuiCol_WindowBg] = props.WindowBg;
+        colors[ImGuiCol_ChildBg] = props.ChildBg;
+        colors[ImGuiCol_PopupBg] = props.PopupBg;
+
         colors[ImGuiCol_Header] = props.Header;
         colors[ImGuiCol_HeaderHovered] = props.HeaderHovered;
         colors[ImGuiCol_HeaderActive] = props.HeaderActive;
+
         colors[ImGuiCol_Tab] = props.Tab;
         colors[ImGuiCol_TabHovered] = props.TabHovered;
         colors[ImGuiCol_TabActive] = props.TabActive;
         colors[ImGuiCol_TabUnfocused] = props.TabUnfocused;
         colors[ImGuiCol_TabUnfocusedActive] = props.TabUnfocusedActive;
+
         colors[ImGuiCol_TitleBg] = props.TitleBg;
         colors[ImGuiCol_TitleBgActive] = props.TitleBgActive;
         colors[ImGuiCol_TitleBgCollapsed] = props.TitleBgCollapsed;
+
+        colors[ImGuiCol_FrameBg] = props.FrameBg;
+        colors[ImGuiCol_FrameBgHovered] = props.FrameBgHovered;
+        colors[ImGuiCol_FrameBgActive] = props.FrameBgActive;
+
+        colors[ImGuiCol_Button] = props.Button;
+        colors[ImGuiCol_ButtonHovered] = props.ButtonHovered;
+        colors[ImGuiCol_ButtonActive] = props.ButtonActive;
+
+        colors[ImGuiCol_Border] = props.Border;
+        colors[ImGuiCol_BorderShadow] = ImVec4{ 0.00f, 0.00f, 0.00f, 0.00f };
+        colors[ImGuiCol_Separator] = props.Separator;
+        colors[ImGuiCol_SeparatorHovered] = props.SeparatorHovered;
+        colors[ImGuiCol_SeparatorActive] = props.SeparatorActive;
+
         colors[ImGuiCol_DockingPreview] = props.DockingPreview;
         colors[ImGuiCol_DockingEmptyBg] = props.DockingEmptyBg;
+
         colors[ImGuiCol_Text] = props.Text;
         colors[ImGuiCol_TextDisabled] = props.TextDisabled;
     }
@@ -169,6 +190,11 @@ namespace Antelope
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGuiIO& io { ImGui::GetIO() };
+        
+        ImFontConfig fontConfig;
+        fontConfig.OversampleH = 3;
+        fontConfig.OversampleV = 3;
+        io.Fonts->AddFontFromFileTTF("Assets/Fonts/Inter-Regular.ttf", 24.0f, &fontConfig);
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
         io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;

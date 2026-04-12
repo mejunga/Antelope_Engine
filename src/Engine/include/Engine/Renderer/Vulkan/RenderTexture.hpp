@@ -23,6 +23,9 @@ namespace Antelope
             inline VkImageView GetResolveImageView() const { return m_ResolveImageView; }
             inline VkSampler GetSampler() const { return m_Sampler; }
             inline VkExtent2D GetExtent() const { return { m_Width, m_Height }; }
+            inline VkImageView GetMaskImageView() const { return m_MaskImageView; }
+            inline VkFormat GetColorFormat() const { return m_ColorFormat; }
+
 
         private:
             void CreateResources();
@@ -47,6 +50,10 @@ namespace Antelope
             VkSampler m_Sampler { VK_NULL_HANDLE };
             VkRenderPass m_RenderPass { VK_NULL_HANDLE };
             VkFramebuffer m_Framebuffer { VK_NULL_HANDLE };
+            VkImage m_MaskImage { VK_NULL_HANDLE };
+            VmaAllocation m_MaskAllocation { VK_NULL_HANDLE };
+            VkImageView m_MaskImageView { VK_NULL_HANDLE };
+
 
             uint32_t m_Width;
             uint32_t m_Height;

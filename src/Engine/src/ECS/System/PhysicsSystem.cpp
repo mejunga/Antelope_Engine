@@ -146,8 +146,12 @@ namespace Antelope
             
             if (body)
             {
-                bodyInterface.AddBody(body->GetID(), JPH::EActivation::Activate);
                 rb.RuntimeBodyID = body->GetID().GetIndexAndSequenceNumber();
+
+                if (!registry.all_of<DisabledComponent>(entity))
+                {
+                    bodyInterface.AddBody(body->GetID(), JPH::EActivation::Activate);
+                }
             }
             else
             {
@@ -160,15 +164,38 @@ namespace Antelope
 
     void PhysicsSystem::OnUpdate(World& world, PhysicsContext& physicsContext, float timeStep)
     {
-        physicsContext.GetSystem().Update(timeStep, 1, physicsContext.GetTempAllocator(), physicsContext.GetJobSystem());
-
         auto& registry { world.GetRegistry() };
         JPH::BodyInterface& bodyInterface { physicsContext.GetBodyInterface() };
+
+        auto rbView { registry.view<RigidBodyComponent>() };
+        for (auto [entity, rb] : rbView.each())
+        {
+            if (rb.RuntimeBodyID != 0xFFFFFFFF)
+            {
+                JPH::BodyID bodyID(rb.RuntimeBodyID);
+                
+                bool isActive { !registry.all_of<DisabledComponent>(entity) };
+                bool isAdded { bodyInterface.IsAdded(bodyID) };
+
+                if (isActive && !isAdded)
+                {
+                    bodyInterface.AddBody(bodyID, JPH::EActivation::Activate);
+                }
+                else if (!isActive && isAdded)
+                {
+                    bodyInterface.RemoveBody(bodyID);
+                }
+            }
+        }
+
+        physicsContext.GetSystem().Update(timeStep, 1, physicsContext.GetTempAllocator(), physicsContext.GetJobSystem());
 
         auto view { registry.view<TransformComponent, RigidBodyComponent>() };
 
         for (auto [entity, transform, rb] : view.each())
         {
+            if (registry.all_of<DisabledComponent>(entity)) { continue; }
+
             if (rb.Type != RigidBodyType::Static && rb.RuntimeBodyID != 0xFFFFFFFF)
             {
                 JPH::BodyID bodyID(rb.RuntimeBodyID);

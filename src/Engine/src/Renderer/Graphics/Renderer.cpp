@@ -13,6 +13,7 @@
 #include <Engine/Renderer/Vulkan/RenderTexture.hpp>
 #include <Engine/Renderer/UI/UIContext.hpp>
 #include <Engine/Renderer/Graphics/GridRenderer.hpp>
+#include <Engine/Renderer/Graphics/OutlineRenderer.hpp>
 #endif
 
 #define GLM_FORCE_RADIANS
@@ -64,6 +65,8 @@ namespace Antelope
     #ifdef ANTELOPE_EDITOR_MODE
         m_GridRenderer = std::make_unique<GridRenderer>(m_Context, m_PipelineLayout, sceneRenderPass);
         AE_ENGINE_TRACE("Grid Renderer created.");
+        m_OutlineRenderer = std::make_unique<OutlineRenderer>(m_Context, m_PipelineLayout, m_RenderTexture);
+        AE_ENGINE_TRACE("Outline Renderer created.");
     #endif
         CreateCommandPool();
         AE_ENGINE_TRACE("Command Pool created.");
@@ -363,6 +366,7 @@ namespace Antelope
     {
         vkDeviceWaitIdle(m_Context->GetDevice());
         m_RenderTexture->Resize(width, height);
+        m_OutlineRenderer->RebuildResources(m_RenderTexture);
     }
 
     VkSemaphore Renderer::AcquireRenderFinishedSemaphore()
@@ -609,6 +613,7 @@ namespace Antelope
         VkDrawIndirectCommand* indirectCommandsMap { static_cast<VkDrawIndirectCommand*>(m_IndirectBuffers[m_CurrentFrame]->GetMappedMemory()) };
 
         uint32_t objectCount { 0 };
+        std::vector<uint32_t> selectedIndirectIndices;
 
         for (const auto& command : renderList)
         {
@@ -637,6 +642,14 @@ namespace Antelope
             indirectCommandsMap[objectCount].instanceCount = 1;
             indirectCommandsMap[objectCount].firstVertex = 0;
             indirectCommandsMap[objectCount].firstInstance = objectCount;
+        
+        #ifdef ANTELOPE_EDITOR_MODE
+            if (m_SelectedEntityIDs.count(command.entityID))
+            {
+                selectedIndirectIndices.push_back(objectCount);
+            }
+        #endif
+
             objectCount++;
         }
 
@@ -650,6 +663,14 @@ namespace Antelope
     #endif
 
         vkCmdEndRenderPass(cmd);
+
+    #ifdef ANTELOPE_EDITOR_MODE
+        if (!selectedIndirectIndices.empty())
+        {
+            m_OutlineRenderer->DrawMask(cmd, selectedIndirectIndices, m_IndirectBuffers[m_CurrentFrame]->GetBuffer(), m_DescriptorSets[m_CurrentFrame], m_OutlineColor);
+            m_OutlineRenderer->DrawComposite(cmd);
+        }
+    #endif
     }
 
     void Renderer::EndFrame(VkCommandBuffer cmd)

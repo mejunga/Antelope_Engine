@@ -29,6 +29,7 @@ namespace Antelope
     class RenderTexture;
     class UIContext;
     class GridRenderer;
+    class OutlineRenderer;
 #endif
 
     struct Texture;
@@ -83,6 +84,11 @@ namespace Antelope
             inline void SetUIContext(std::shared_ptr<UIContext> uiContext) { m_UIContext = uiContext; }
             inline uint32_t GetMaxFramesInFlight() const { return m_MaxFramesInFlight; }
         #endif
+            inline void SetSelectedEntityIDs(std::unordered_set<uint32_t> entityIDs, glm::vec4 outlineColor = { 1.0f, 0.6f, 0.0f, 1.0f })
+            {
+                m_SelectedEntityIDs = std::move(entityIDs);
+                m_OutlineColor = outlineColor;
+            }
 
         private:
             void UpdateUniformBuffer(uint32_t currentImage, const UniformBufferObject& cameraData);
@@ -120,6 +126,7 @@ namespace Antelope
             std::shared_ptr<RenderTexture> m_RenderTexture;
             std::weak_ptr<UIContext> m_UIContext;
             std::unique_ptr<GridRenderer> m_GridRenderer;
+            std::unique_ptr<OutlineRenderer> m_OutlineRenderer;
         #endif
 
             VkDescriptorSetLayout m_DescriptorSetLayout { VK_NULL_HANDLE };
@@ -133,6 +140,7 @@ namespace Antelope
             uint32_t m_CurrentFrame { 0 };
             uint32_t m_CurrentImageIndex { 0 };
             uint32_t m_NextMeshID { 1 };
+            glm::vec4 m_OutlineColor { 1.0f, 0.6f, 0.0f, 1.0f };
         #ifdef ANTELOPE_EDITOR_MODE
             bool m_Maintenance1Supported { false };
         #endif
@@ -148,6 +156,7 @@ namespace Antelope
             std::unordered_set<uint32_t> m_PendingMeshIDs;
             std::unordered_set<uint32_t> m_PendingTextureIndices;
             std::vector<FrameSyncObjects> m_FrameSync;
+            std::unordered_set<uint32_t> m_SelectedEntityIDs;
         #ifdef ANTELOPE_EDITOR_MODE
             std::vector<SemaphoreSlot> m_SemaphorePool;
             std::vector<VkSemaphore> m_RenderFinishedRing;

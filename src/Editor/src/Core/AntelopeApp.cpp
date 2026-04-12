@@ -179,7 +179,7 @@ namespace Antelope::Editor
         ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
 
         m_ScenePanel.OnUIRender(m_EditorCamera);
-        m_HierarchyPanel.OnUIRender();
+        m_HierarchyPanel.OnUIRender(Application::Get().GetWorld().get(), m_ScenePanel.GetSelectedEntity());
         m_PropertiesPanel.OnUIRender(m_ScenePanel.GetSelectedEntity());
         m_ConsolePanel.OnUIRender();
         m_ProjectPanel.OnUIRender();

@@ -63,9 +63,13 @@ namespace Antelope
 
         if (m_ResolveImageView) { vkDestroyImageView(device, m_ResolveImageView, nullptr); }
         if (m_ResolveImage) { vmaDestroyImage(allocator, m_ResolveImage, m_ResolveAllocation); }
+
+        if (m_MaskImageView) { vkDestroyImageView(device, m_MaskImageView, nullptr); }
+        if (m_MaskImage) { vmaDestroyImage(allocator, m_MaskImage, m_MaskAllocation); }
         
-        m_ColorImageView = m_DepthImageView = m_ResolveImageView = VK_NULL_HANDLE;
-        m_ColorImage = m_DepthImage = m_ResolveImage = VK_NULL_HANDLE;
+        m_ColorImageView = m_DepthImageView = m_ResolveImageView = m_MaskImageView = VK_NULL_HANDLE;
+        m_ColorImage = m_DepthImage = m_ResolveImage = m_MaskImage = VK_NULL_HANDLE;
+
     }
 
     void RenderTexture::CreateResources()
@@ -88,10 +92,10 @@ namespace Antelope
         colorInfo.samples = msaaSamples;
         colorInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-        VmaAllocationCreateInfo allocInfo {};
-        allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+        VmaAllocationCreateInfo allocationInfo {};
+        allocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
-        vmaCreateImage(allocator, &colorInfo, &allocInfo, &m_ColorImage, &m_ColorAllocation, nullptr);
+        vmaCreateImage(allocator, &colorInfo, &allocationInfo, &m_ColorImage, &m_ColorAllocation, nullptr);
 
         VkImageViewCreateInfo colorViewInfo {};
         colorViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -105,25 +109,89 @@ namespace Antelope
         colorViewInfo.subresourceRange.layerCount = 1;
         vkCreateImageView(m_Context->GetDevice(), &colorViewInfo, nullptr, &m_ColorImageView);
 
-        VkImageCreateInfo depthInfo { colorInfo };
+        VkImageCreateInfo depthInfo {};
+        depthInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        depthInfo.imageType = VK_IMAGE_TYPE_2D;
+        depthInfo.extent.width = m_Width;
+        depthInfo.extent.height = m_Height;
+        depthInfo.extent.depth = 1;
+        depthInfo.mipLevels = 1;
+        depthInfo.arrayLayers = 1;
         depthInfo.format = m_DepthFormat;
+        depthInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        depthInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         depthInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-        vmaCreateImage(allocator, &depthInfo, &allocInfo, &m_DepthImage, &m_DepthAllocation, nullptr);
+        depthInfo.samples = msaaSamples;
+        depthInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        vmaCreateImage(allocator, &depthInfo, &allocationInfo, &m_DepthImage, &m_DepthAllocation, nullptr);
 
-        VkImageViewCreateInfo depthViewInfo { colorViewInfo };
+        VkImageViewCreateInfo depthViewInfo {};
+        depthViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         depthViewInfo.image = m_DepthImage;
+        depthViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
         depthViewInfo.format = m_DepthFormat;
         depthViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        depthViewInfo.subresourceRange.baseMipLevel = 0;
+        depthViewInfo.subresourceRange.levelCount = 1;
+        depthViewInfo.subresourceRange.baseArrayLayer = 0;
+        depthViewInfo.subresourceRange.layerCount = 1;
         vkCreateImageView(m_Context->GetDevice(), &depthViewInfo, nullptr, &m_DepthImageView);
 
-        VkImageCreateInfo resolveInfo { colorInfo };
-        resolveInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        VkImageCreateInfo resolveInfo {};
+        resolveInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        resolveInfo.imageType = VK_IMAGE_TYPE_2D;
+        resolveInfo.extent.width = m_Width;
+        resolveInfo.extent.height = m_Height;
+        resolveInfo.extent.depth = 1;
+        resolveInfo.mipLevels = 1;
+        resolveInfo.arrayLayers = 1;
+        resolveInfo.format = m_ColorFormat;
+        resolveInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        resolveInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         resolveInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-        vmaCreateImage(allocator, &resolveInfo, &allocInfo, &m_ResolveImage, &m_ResolveAllocation, nullptr);
+        resolveInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        resolveInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        vmaCreateImage(allocator, &resolveInfo, &allocationInfo, &m_ResolveImage, &m_ResolveAllocation, nullptr);
 
-        VkImageViewCreateInfo resolveViewInfo { colorViewInfo };
+        VkImageViewCreateInfo resolveViewInfo {};
+        resolveViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         resolveViewInfo.image = m_ResolveImage;
+        resolveViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        resolveViewInfo.format = m_ColorFormat;
+        resolveViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        resolveViewInfo.subresourceRange.baseMipLevel = 0;
+        resolveViewInfo.subresourceRange.levelCount = 1;
+        resolveViewInfo.subresourceRange.baseArrayLayer = 0;
+        resolveViewInfo.subresourceRange.layerCount = 1;
         vkCreateImageView(m_Context->GetDevice(), &resolveViewInfo, nullptr, &m_ResolveImageView);
+
+        VkImageCreateInfo maskInfo {};
+        maskInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        maskInfo.imageType = VK_IMAGE_TYPE_2D;
+        maskInfo.extent.width = m_Width;
+        maskInfo.extent.height = m_Height;
+        maskInfo.extent.depth = 1;
+        maskInfo.mipLevels = 1;
+        maskInfo.arrayLayers = 1;
+        maskInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+        maskInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        maskInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        maskInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+        maskInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        maskInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        vmaCreateImage(allocator, &maskInfo, &allocationInfo, &m_MaskImage, &m_MaskAllocation, nullptr);
+
+        VkImageViewCreateInfo maskViewInfo {};
+        maskViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        maskViewInfo.image = m_MaskImage;
+        maskViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        maskViewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+        maskViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        maskViewInfo.subresourceRange.baseMipLevel = 0;
+        maskViewInfo.subresourceRange.levelCount = 1;
+        maskViewInfo.subresourceRange.baseArrayLayer = 0;
+        maskViewInfo.subresourceRange.layerCount = 1;
+        vkCreateImageView(m_Context->GetDevice(), &maskViewInfo, nullptr, &m_MaskImageView);
 
         m_Context->ImmediateSubmit([this](VkCommandBuffer cmd)
         {
@@ -143,9 +211,9 @@ namespace Antelope
             toClear.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 
             vkCmdPipelineBarrier(cmd,
-                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT,
-                0, 0, nullptr, 0, nullptr, 1, &toClear);
+                                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                 VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                 0, 0, nullptr, 0, nullptr, 1, &toClear);
 
             VkClearColorValue clearColor {};
             clearColor.float32[0] = 0.1f;
@@ -161,7 +229,7 @@ namespace Antelope
             range.layerCount = 1;
 
             vkCmdClearColorImage(cmd, m_ResolveImage,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &range);
+                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &range);
 
             VkImageMemoryBarrier toReadable {};
             toReadable.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -175,9 +243,9 @@ namespace Antelope
             toReadable.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
             vkCmdPipelineBarrier(cmd,
-                VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                0, 0, nullptr, 0, nullptr, 1, &toReadable);
+                                 VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                 0, 0, nullptr, 0, nullptr, 1, &toReadable);
         });
     }
 

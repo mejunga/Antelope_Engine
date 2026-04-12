@@ -19,9 +19,6 @@ namespace Antelope
         glm::mat4 transform;
         glm::mat3 normalMatrix;
         MeshHandle mesh;
-        
-        bool IsSelected { false };
-        glm::vec4 OutlineColor { 1.0f, 0.6f, 0.0f, 1.0f };
 
     #ifdef ANTELOPE_EDITOR_MODE
         uint32_t entityID { 0 };

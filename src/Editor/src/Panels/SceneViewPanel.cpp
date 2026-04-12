@@ -152,6 +152,24 @@ namespace Antelope::Editor
             }
         }
 
+        auto renderer { Application::Get().GetRenderer() };
+
+        if (m_SelectedEntity)
+        {
+            bool isRoot { m_SelectedEntity.GetComponent<RelationshipComponent>().Parent == entt::null };
+            glm::vec4 color { isRoot
+                ? glm::vec4(0.3f, 0.6f, 1.0f, 1.0f)
+                : glm::vec4(1.0f, 0.6f, 0.0f, 1.0f) };
+
+            std::unordered_set<uint32_t> ids;
+            CollectMeshDescendants(m_SelectedEntity, ids);
+            renderer->SetSelectedEntityIDs(std::move(ids), color);
+        }
+        else
+        {
+            renderer->SetSelectedEntityIDs({});
+        }
+
         if (m_ViewportFocused && !m_IsCameraMoving) 
         {
             if (Input::IsKeyPressed(GLFW_KEY_Q)) { m_GizmoType = -1; }
@@ -210,5 +228,23 @@ namespace Antelope::Editor
 
         ImGui::End();
         ImGui::PopStyleVar();
+    }
+
+    void SceneViewPanel::CollectMeshDescendants(Entity entity, std::unordered_set<uint32_t>& ids)
+    {
+        if (entity.HasComponent<MeshComponent>())
+        {
+            ids.insert(static_cast<uint32_t>(entity.GetHandle()));
+        }
+
+        auto& rel { entity.GetComponent<RelationshipComponent>() };
+        auto child { rel.FirstChild };
+
+        while (child != entt::null)
+        {
+            Entity childEntity { child, Application::Get().GetWorld().get() };
+            CollectMeshDescendants(childEntity, ids);
+            child = childEntity.GetComponent<RelationshipComponent>().NextSibling;
+        }
     }
 }
