@@ -30,10 +30,7 @@ namespace Antelope::Editor
     void AntelopeApp::SetupMockData()
     {
         m_BearTexID = GetTextureManager()->LoadTexture("Assets/Bear.png");
-        m_BearMesh = ModelLoader::Load("Assets/Bear_DEMO.fbx");
-
-        m_GorillaTexID = GetTextureManager()->LoadTexture("Assets/gorilla.png");
-        m_GorillaMesh = ModelLoader::Load("Assets/Gorilla_hd.fbx");
+        m_BearMesh = ModelLoader::Load("Assets/Bear_DEMO.fbx", true); 
 
         GetRenderer()->UpdateTextureDescriptors(GetTextureManager()->GetGlobalTextures());
     }
@@ -43,64 +40,38 @@ namespace Antelope::Editor
         SetupMockData();
 
         Entity ground { GetWorld()->CreateEntity("Ground") };
-        auto& groundTransform { ground.GetComponent<TransformComponent>() };
-        groundTransform.Translation = glm::vec3(0.0f, -2.0f, 0.0f);
-        
+        ground.SetLocalPosition(glm::vec3(0.0f, -2.0f, 0.0f));
+
         auto& groundRb { ground.AddComponent<RigidBodyComponent>() };
-        groundRb.Type = RigidBodyType::Static;
-        
+        groundRb.Type = RigidBodyType::Kinematic;
+
         auto& groundCol { ground.AddComponent<ColliderComponent>() };
         groundCol.Type = ColliderType::Box;
         groundCol.Size = glm::vec3(20.0f, 1.0f, 20.0f);
 
         m_BearRoot = GetWorld()->CreateEntity("Bear_Sculpture_Root");
-        auto& rootTransform { m_BearRoot.GetComponent<TransformComponent>() };
-        rootTransform.Translation = glm::vec3(0.0f, 2.0f, 0.0f);
-        rootTransform.Rotation = glm::vec3(0.0f, 0.0f, glm::radians(15.0f)); 
-        
+        m_BearRoot.SetLocalPositionAndRotation(
+            glm::vec3(0.0f, 2.0f, 0.0f),
+            glm::vec3(0.0f, 0.0f, glm::radians(15.0f))
+        );
+
         auto& rootRb { m_BearRoot.AddComponent<RigidBodyComponent>() };
         rootRb.Type = RigidBodyType::Dynamic;
         rootRb.Mass = 500.0f;
 
-        Entity bear1Pivot { GetWorld()->CreateEntity("Bear1_Pivot") };
-        bear1Pivot.SetParent(m_BearRoot);
-        auto& bear1Transform { bear1Pivot.GetComponent<TransformComponent>() };
-        bear1Transform.Translation = glm::vec3(-5.0f, 0.0f, 0.0f);
-        
-        auto& bear1Col { bear1Pivot.AddComponent<ColliderComponent>() };
+        Entity bear1 { GetWorld()->SpawnModel(m_BearMesh, "Bear_1", m_BearRoot) };
+        bear1.SetLocalTransform(glm::vec3(-5.0f, 0.0f, 0.0f), glm::vec3(0.0f), glm::vec3(0.00125f));
+
+        auto& bear1Col { bear1.AddComponent<ColliderComponent>() };
         bear1Col.Type = ColliderType::Box;
         bear1Col.Size = glm::vec3(1.0f, 1.0f, 1.5f);
 
-        for (const auto& subMesh : m_BearMesh.SubMeshes)
-        {
-            MeshHandle handle { GetRenderer()->UploadMesh(subMesh.Data) };
-            handle.materialIndex = m_BearTexID;
+        Entity bear2 { GetWorld()->SpawnModel(m_BearMesh, "Bear_2", m_BearRoot) };
+        bear2.SetLocalTransform(glm::vec3(5.0f, 0.0f, 0.0f), glm::vec3(0.0f), glm::vec3(0.00125f));
 
-            Entity part { GetWorld()->CreateEntity(subMesh.Name.empty() ? "Bear1_Part" : subMesh.Name) };
-            part.AddComponent<MeshComponent>(handle);
-            part.GetComponent<TransformComponent>().Scale = glm::vec3(0.00125f);
-            part.SetParent(bear1Pivot);
-        }
-
-        Entity bear2Pivot { GetWorld()->CreateEntity("Bear2_Pivot") };
-        bear2Pivot.SetParent(m_BearRoot);
-        auto& bear2Transform { bear2Pivot.GetComponent<TransformComponent>() };
-        bear2Transform.Translation = glm::vec3(5.0f, 0.0f, 0.0f);
-        
-        auto& bear2Col { bear2Pivot.AddComponent<ColliderComponent>() };
+        auto& bear2Col { bear2.AddComponent<ColliderComponent>() };
         bear2Col.Type = ColliderType::Box;
-        bear2Col.Size = glm::vec3(1.0f, 1.0f, 1.5f); 
-
-        for (const auto& subMesh : m_BearMesh.SubMeshes)
-        {
-            MeshHandle handle { GetRenderer()->UploadMesh(subMesh.Data) };
-            handle.materialIndex = m_BearTexID;
-
-            Entity part { GetWorld()->CreateEntity(subMesh.Name.empty() ? "Bear2_Part" : subMesh.Name) };
-            part.AddComponent<MeshComponent>(handle);
-            part.GetComponent<TransformComponent>().Scale = glm::vec3(0.00125f);
-            part.SetParent(bear2Pivot);
-        }
+        bear2Col.Size = glm::vec3(1.0f, 1.0f, 1.5f);
     }
 
     void AntelopeApp::OnUpdate(float timeStep)

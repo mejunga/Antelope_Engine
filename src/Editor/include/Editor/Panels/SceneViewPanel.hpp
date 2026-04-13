@@ -34,7 +34,7 @@ namespace Antelope::Editor
             bool m_ViewportHovered { false };
             bool m_IsCameraMoving { false };
 
-            int m_GizmoType { -1 };
+            int m_GizmoType { ImGuizmo::OPERATION::TRANSLATE };
             Entity m_SelectedEntity;
                 
             std::unique_ptr<ScenePicker> m_ScenePicker;

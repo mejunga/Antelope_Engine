@@ -18,29 +18,40 @@ namespace Antelope
     void TransformSystem::OnUpdate(World& world)
     {
         auto& registry { world.GetRegistry() };
-        auto view { registry.view<TransformComponent, RelationshipComponent>() };
-        view.use<TransformComponent>();
-
-        for (auto [entity, transform, rel] : view.each())
+        
+        auto dirtyView { registry.view<TransformComponent, DirtyTransform>() };
+        for (auto [entity, transform] : dirtyView.each())
         {
-            if (registry.all_of<DirtyTransform>(entity))
-            {
-                transform.RebuildLocal();
-            }
-                
+            transform.RebuildLocal();
+        }
+
+        auto hierarchyView { registry.view<TransformComponent, RelationshipComponent>() };
+        hierarchyView.use<TransformComponent>();
+
+        for (auto [entity, transform, rel] : hierarchyView.each())
+        {
+            bool selfDirty { registry.all_of<DirtyTransform>(entity) };
+            bool parentDirty { rel.Parent != entt::null && registry.all_of<DirtyTransform>(rel.Parent) };
+
             if (rel.Parent == entt::null)
             {
-                transform.WorldMatrix = transform.LocalMatrix;
+                if (selfDirty) 
+                { 
+                    transform.WorldMatrix = transform.LocalMatrix; 
+                }
             }
             else
             {
-                const auto& parentTransform { registry.get<TransformComponent>(rel.Parent) };
-                transform.WorldMatrix = parentTransform.WorldMatrix * transform.LocalMatrix;
+                if (selfDirty || parentDirty)
+                {
+                    const auto& parentTransform { registry.get<TransformComponent>(rel.Parent) };
+                    transform.WorldMatrix = parentTransform.WorldMatrix * transform.LocalMatrix;
+                    registry.emplace_or_replace<DirtyTransform>(entity);
+                }
             }
         }
 
-        auto normalView { registry.view<TransformComponent, NormalMatrixComponent>() };
-        
+        auto normalView { registry.view<TransformComponent, NormalMatrixComponent, DirtyTransform>() };
         for (auto [entity, transform, normalMat] : normalView.each())
         {
             normalMat.Matrix = glm::transpose(glm::inverse(glm::mat3(transform.WorldMatrix)));

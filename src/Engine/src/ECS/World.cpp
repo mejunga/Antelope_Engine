@@ -8,6 +8,10 @@
 #include <Engine/Core/Application.hpp>
 #include <Engine/Debug/Log.hpp>
 
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/matrix_decompose.hpp>
+#include <Engine/Renderer/Graphics/Renderer.hpp>
+
 #include <vector>
 
 
@@ -42,8 +46,48 @@ namespace Antelope
         tag.Tag = name.empty() ? "Entity" : name;
         
         MarkTransformDirty(entity);
-        MarkHierarchyDirty();
         return entity;
+    }
+
+    Entity World::SpawnModel(const ModelData& modelData, const std::string& rootName)
+    {
+        return SpawnModel(modelData, rootName, Entity{});
+    }
+
+    Entity World::SpawnModel(const ModelData& modelData, const std::string& rootName, Entity parentEntity)
+    {
+        Entity rootEntity { CreateEntity(rootName) };
+
+        if (parentEntity) { rootEntity.SetParent(parentEntity); }
+
+        glm::vec3 scale, translation, skew;
+        glm::quat rotation;
+        glm::vec4 perspective;
+        glm::decompose(modelData.RootNode.LocalTransform, scale, rotation, translation, skew, perspective);
+
+        auto& rootTransform { rootEntity.GetComponent<TransformComponent>() };
+        rootTransform.Translation = translation;
+        rootTransform.Rotation = glm::eulerAngles(rotation);
+        rootTransform.Scale = scale;
+        MarkTransformDirty(rootEntity);
+
+        if (!modelData.RootNode.Children.empty())
+        {
+            for (const auto& childNode : modelData.RootNode.Children)
+                SpawnModelNodeRecursive(childNode, modelData, rootEntity);
+            return rootEntity;
+        }
+
+        auto renderer { Application::Get().GetRenderer() };
+        for (const auto& subMesh : modelData.SubMeshes)
+        {
+            Entity part { CreateEntity(subMesh.Name.empty() ? rootName + "_Part" : subMesh.Name) };
+            part.SetParent(rootEntity);
+            auto& meshComp { part.AddComponent<MeshComponent>() };
+            meshComp.Handle = renderer->UploadMesh(subMesh.Data);
+            meshComp.Handle.materialIndex = subMesh.MaterialIndex;
+        }
+        return rootEntity;
     }
 
     void World::DestroyEntity(Entity entity)
@@ -64,6 +108,11 @@ namespace Antelope
 
         m_Registry.destroy(entity);
         MarkHierarchyDirty();
+    }
+
+    void World::MarkTransformDirty(Entity entity)
+    {
+        m_Registry.emplace_or_replace<DirtyTransform>(entity);
     }
 
     void World::OnSimulationStart()
@@ -129,8 +178,48 @@ namespace Antelope
         RenderSystem::RenderRuntime(*this, renderer);
     }
 
-    void World::MarkTransformDirty(Entity entity)
+    Entity World::SpawnModelNodeRecursive(const ModelNode& node, const ModelData& modelData, Entity parentEntity)
     {
-        m_Registry.emplace_or_replace<DirtyTransform>(entity);
+        Entity entity { CreateEntity(node.Name) };
+
+        if (parentEntity)
+        {
+            entity.SetParent(parentEntity);
+        }
+
+        auto& transform { entity.GetComponent<TransformComponent>() };
+        
+        glm::vec3 scale;
+        glm::quat rotation;
+        glm::vec3 translation;
+        glm::vec3 skew;
+        glm::vec4 perspective;
+
+        glm::decompose(node.LocalTransform, scale, rotation, translation, skew, perspective);
+        
+        transform.Translation = translation;
+        transform.Rotation = glm::eulerAngles(rotation);
+        transform.Scale = scale;
+        transform.LocalMatrix = node.LocalTransform;
+        MarkTransformDirty(entity);
+
+        if (!node.MeshIndices.empty())
+        {
+            auto& meshComp { entity.AddComponent<MeshComponent>() };
+            uint32_t firstMeshIndex { node.MeshIndices[0] };
+            
+            const auto& subMesh { modelData.SubMeshes[firstMeshIndex] };
+
+            auto renderer { Application::Get().GetRenderer() };
+            meshComp.Handle = renderer->UploadMesh(subMesh.Data);
+            meshComp.Handle.materialIndex = subMesh.MaterialIndex;
+        }
+
+        for (const auto& childNode : node.Children)
+        {
+            SpawnModelNodeRecursive(childNode, modelData, entity);
+        }
+
+        return entity;
     }
 }

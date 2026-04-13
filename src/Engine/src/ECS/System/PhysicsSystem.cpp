@@ -31,7 +31,6 @@ namespace Antelope
         for (auto [entity, transform, rb] : view.each())
         {
             JPH::ShapeRefC shape;
-            
             std::vector<std::pair<glm::vec3, JPH::ShapeRefC>> childShapes;
 
             if (registry.all_of<RelationshipComponent>(entity))
@@ -42,24 +41,24 @@ namespace Antelope
                 {
                     if (registry.all_of<ColliderComponent>(child) && registry.all_of<TransformComponent>(child))
                     {
-                        auto& childCol { registry.get<ColliderComponent>(child) };
+                        auto& childCol   { registry.get<ColliderComponent>(child) };
                         auto& childTrans { registry.get<TransformComponent>(child) };
                         
                         JPH::ShapeRefC childShape;
 
                         if (childCol.Type == ColliderType::Box)
                         {
-                            childShape = JPH::BoxShapeSettings(ToJoltVec3(childCol.Size * childTrans.Scale)).Create().Get();
+                            childShape = JPH::BoxShapeSettings(ToJoltVec3(childCol.Size)).Create().Get();
                         }
                         else if (childCol.Type == ColliderType::Sphere)
                         {
-                            childShape = JPH::SphereShapeSettings(childCol.Size.x * childTrans.Scale.x).Create().Get();
+                            childShape = JPH::SphereShapeSettings(childCol.Size.x).Create().Get();
                         }
                         else if (childCol.Type == ColliderType::Capsule)
                         {
-                            childShape = JPH::CapsuleShapeSettings(childCol.Size.y, childCol.Size.x * childTrans.Scale.x).Create().Get();
+                            childShape = JPH::CapsuleShapeSettings(childCol.Size.y, childCol.Size.x).Create().Get();
                         }
-                            
+
                         if (childShape)
                         {
                             childShapes.push_back({ childTrans.Translation + childCol.Offset, childShape });
@@ -73,29 +72,25 @@ namespace Antelope
             if (!childShapes.empty())
             {
                 JPH::StaticCompoundShapeSettings compoundSettings;
-                
                 for (const auto& cs : childShapes)
-                {
                     compoundSettings.AddShape(ToJoltVec3(cs.first), JPH::Quat::sIdentity(), cs.second);
-                }
-                
                 shape = compoundSettings.Create().Get();
-            } 
+            }
             else if (registry.all_of<ColliderComponent>(entity))
             {
                 auto& collider { registry.get<ColliderComponent>(entity) };
-                
+
                 if (collider.Type == ColliderType::Box)
                 {
-                    shape = JPH::BoxShapeSettings(ToJoltVec3(collider.Size * transform.Scale)).Create().Get();
+                    shape = JPH::BoxShapeSettings(ToJoltVec3(collider.Size)).Create().Get();
                 }
                 else if (collider.Type == ColliderType::Sphere)
                 {
-                    shape = JPH::SphereShapeSettings(collider.Size.x * transform.Scale.x).Create().Get();
+                    shape = JPH::SphereShapeSettings(collider.Size.x).Create().Get();
                 }
                 else if (collider.Type == ColliderType::Capsule)
                 {
-                    shape = JPH::CapsuleShapeSettings(collider.Size.y, collider.Size.x * transform.Scale.x).Create().Get();
+                    shape = JPH::CapsuleShapeSettings(collider.Size.y, collider.Size.x).Create().Get();
                 }
 
                 if (shape && glm::length(collider.Offset) > 0.001f)
@@ -104,37 +99,43 @@ namespace Antelope
                     offsetSettings.AddShape(ToJoltVec3(collider.Offset), JPH::Quat::sIdentity(), shape);
                     shape = offsetSettings.Create().Get();
                 }
-            } 
+            }
             else
             {
                 shape = JPH::BoxShapeSettings(ToJoltVec3(transform.Scale * 0.5f)).Create().Get();
             }
 
+            if (!shape)
+            {
+                AE_ENGINE_ERROR("PhysicsSystem: Shape creation failed for entity, skipping body.");
+                continue;
+            }
+
             JPH::ObjectLayer layer { rb.Type == RigidBodyType::Static ? Layers::NON_MOVING : Layers::MOVING };
             JPH::EMotionType motionType { JPH::EMotionType::Dynamic };
-            
-            if (rb.Type == RigidBodyType::Static) 
-            { 
-                motionType = JPH::EMotionType::Static; 
+
+            if (rb.Type == RigidBodyType::Static)
+            {
+                motionType = JPH::EMotionType::Static;
             }
-            else if (rb.Type == RigidBodyType::Kinematic) 
-            { 
-                motionType = JPH::EMotionType::Kinematic; 
+            else if (rb.Type == RigidBodyType::Kinematic)
+            {
+                motionType = JPH::EMotionType::Kinematic;
             }
 
             glm::vec3 worldPosition { transform.WorldMatrix[3] };
             glm::quat worldRotation { glm::normalize(glm::quat_cast(transform.WorldMatrix)) };
-            
+
             JPH::BodyCreationSettings bodySettings(
-                shape, 
-                ToJoltVec3(worldPosition), 
-                ToJoltQuat(worldRotation), 
-                motionType, 
+                shape,
+                ToJoltVec3(worldPosition),
+                ToJoltQuat(worldRotation),
+                motionType,
                 layer
             );
 
             bodySettings.mRestitution = rb.Restitution;
-            bodySettings.mFriction = rb.Friction;
+            bodySettings.mFriction    = rb.Friction;
 
             if (rb.Type == RigidBodyType::Dynamic && rb.Mass > 0.0f)
             {
@@ -143,11 +144,10 @@ namespace Antelope
             }
 
             JPH::Body* body { bodyInterface.CreateBody(bodySettings) };
-            
+
             if (body)
             {
                 rb.RuntimeBodyID = body->GetID().GetIndexAndSequenceNumber();
-
                 if (!registry.all_of<DisabledComponent>(entity))
                 {
                     bodyInterface.AddBody(body->GetID(), JPH::EActivation::Activate);
@@ -170,46 +170,32 @@ namespace Antelope
         auto rbView { registry.view<RigidBodyComponent>() };
         for (auto [entity, rb] : rbView.each())
         {
-            if (rb.RuntimeBodyID != 0xFFFFFFFF)
-            {
-                JPH::BodyID bodyID(rb.RuntimeBodyID);
-                
-                bool isActive { !registry.all_of<DisabledComponent>(entity) };
-                bool isAdded { bodyInterface.IsAdded(bodyID) };
+            if (rb.RuntimeBodyID == 0xFFFFFFFF) { continue; }
 
-                if (isActive && !isAdded)
-                {
-                    bodyInterface.AddBody(bodyID, JPH::EActivation::Activate);
-                }
-                else if (!isActive && isAdded)
-                {
-                    bodyInterface.RemoveBody(bodyID);
-                }
-            }
+            JPH::BodyID bodyID(rb.RuntimeBodyID);
+            bool isActive { !registry.all_of<DisabledComponent>(entity) };
+            bool isAdded { bodyInterface.IsAdded(bodyID) };
+
+            if (isActive && !isAdded) { bodyInterface.AddBody(bodyID, JPH::EActivation::Activate); }
+            else if (!isActive && isAdded) { bodyInterface.RemoveBody(bodyID); }
         }
 
         physicsContext.GetSystem().Update(timeStep, 1, physicsContext.GetTempAllocator(), physicsContext.GetJobSystem());
 
-        auto view { registry.view<TransformComponent, RigidBodyComponent>() };
-
-        for (auto [entity, transform, rb] : view.each())
+        for (auto [entity, rb] : rbView.each())
         {
             if (registry.all_of<DisabledComponent>(entity)) { continue; }
+            if (rb.Type == RigidBodyType::Static) { continue; }
+            if (rb.RuntimeBodyID == 0xFFFFFFFF) { continue; }
 
-            if (rb.Type != RigidBodyType::Static && rb.RuntimeBodyID != 0xFFFFFFFF)
+            JPH::BodyID bodyID(rb.RuntimeBodyID);
+
+            if (bodyInterface.IsActive(bodyID))
             {
-                JPH::BodyID bodyID(rb.RuntimeBodyID);
-                
-                if (bodyInterface.IsActive(bodyID))
-                {
-                    JPH::Vec3 position { bodyInterface.GetPosition(bodyID) };
-                    JPH::Quat rotation { bodyInterface.GetRotation(bodyID) };
-
-                    transform.Translation = ToGlmVec3(position);
-                    transform.Rotation = glm::eulerAngles(ToGlmQuat(rotation)); 
-
-                    registry.emplace_or_replace<DirtyTransform>(entity);
-                }
+                auto& transform { registry.get<TransformComponent>(entity) };
+                transform.Translation = ToGlmVec3(bodyInterface.GetPosition(bodyID));
+                transform.Rotation = glm::eulerAngles(ToGlmQuat(bodyInterface.GetRotation(bodyID)));
+                registry.emplace_or_replace<DirtyTransform>(entity);
             }
         }
     }
@@ -244,9 +230,13 @@ namespace Antelope
         while (rbEntity != entt::null && !registry.all_of<RigidBodyComponent>(rbEntity))
         {
             if (registry.all_of<RelationshipComponent>(rbEntity))
+            {
                 rbEntity = registry.get<RelationshipComponent>(rbEntity).Parent;
+            }
             else
+            {
                 rbEntity = entt::null;
+            }
         }
 
         if (rbEntity == entt::null) { return; }
@@ -255,11 +245,25 @@ namespace Antelope
         if (rb.RuntimeBodyID == 0xFFFFFFFF) { return; }
 
         auto& transform { registry.get<TransformComponent>(rbEntity) };
+        transform.RebuildLocal();
+
+        glm::mat4 worldMat { transform.LocalMatrix };
+
+        if (registry.all_of<RelationshipComponent>(rbEntity))
+        {
+            entt::entity parent { registry.get<RelationshipComponent>(rbEntity).Parent };
+            if (parent != entt::null)
+            {
+                auto& parentTransform { registry.get<TransformComponent>(parent) };
+                worldMat = parentTransform.WorldMatrix * transform.LocalMatrix;
+            }
+        }
+
         JPH::BodyInterface& bodyInterface { physicsContext.GetBodyInterface() };
         JPH::BodyID bodyID(rb.RuntimeBodyID);
 
-        glm::vec3 worldPosition { transform.Translation };
-        glm::quat worldRotation { glm::normalize(glm::quat(transform.Rotation)) };
+        glm::vec3 worldPosition { worldMat[3] };
+        glm::quat worldRotation { glm::normalize(glm::quat_cast(glm::mat3(worldMat))) };
 
         bodyInterface.SetPositionAndRotation(
             bodyID,

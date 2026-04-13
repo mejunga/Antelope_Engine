@@ -28,9 +28,7 @@ namespace Antelope
             static_cast<float>(renderExtent.height)
         );
 
-        static std::vector<RenderCommand> renderList;
-        renderList.clear();
-
+        std::vector<RenderCommand> renderList;
         auto& registry { world.GetRegistry() };
         auto view { registry.view<TransformComponent, MeshComponent, NormalMatrixComponent>(entt::exclude<DisabledComponent>) };
         renderList.reserve(view.size_hint());
@@ -85,9 +83,7 @@ namespace Antelope
         cameraUBO.view = viewMatrix;
         cameraUBO.proj = projMatrix;
 
-        static std::vector<RenderCommand> renderList;
-        renderList.clear();
-
+        std::vector<RenderCommand> renderList;
         auto meshView { registry.view<TransformComponent, MeshComponent, NormalMatrixComponent>(entt::exclude<DisabledComponent>) };
         renderList.reserve(meshView.size_hint());
 

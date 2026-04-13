@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Engine/Renderer/Graphics/Model.hpp>
+
 #include <entt/entt.hpp>
 
 #include <string>
@@ -10,7 +12,6 @@ namespace Antelope
 {
     class Entity;
     class PhysicsContext;
-
 #ifdef ANTELOPE_EDITOR_MODE
     class EditorCamera;
 #endif
@@ -23,28 +24,31 @@ namespace Antelope
 
             Entity CreateEntity(const std::string& name = std::string());
             void DestroyEntity(Entity entity);
+            Entity SpawnModel(const ModelData& modelData, const std::string& rootName);
+            Entity SpawnModel(const ModelData& modelData, const std::string& rootName, Entity parentEntity);
+            void MarkTransformDirty(Entity entity);
+            void MarkHierarchyDirty() { m_HierarchyDirty = true; }
 
             void OnSimulationStart();
             void OnSimulationStop();
             void StepSimulation(float timeStep);
-            inline bool IsSimulating() const { return m_IsSimulating; }
-
         #ifdef ANTELOPE_EDITOR_MODE
             void OnUpdateEditor(float timeStep, const EditorCamera& camera);
         #endif
             void OnUpdateRuntime(float timeStep);
             
-            void MarkTransformDirty(Entity entity);
-            void MarkHierarchyDirty() { m_HierarchyDirty = true; }
-            
             inline entt::registry& GetRegistry() { return m_Registry; }
             inline PhysicsContext* GetPhysicsContext() { return m_PhysicsContext.get(); }
+            inline bool IsSimulating() const { return m_IsSimulating; }
 
         private:
+            Entity SpawnModelNodeRecursive(const ModelNode& node, const ModelData& modelData, Entity parentEntity);
+
+        private:
+            std::unique_ptr<PhysicsContext> m_PhysicsContext;
+
             entt::registry m_Registry;
             bool m_HierarchyDirty { true };
-
-            std::unique_ptr<PhysicsContext> m_PhysicsContext;
             bool m_IsSimulating { false }; 
 
             friend class Entity;

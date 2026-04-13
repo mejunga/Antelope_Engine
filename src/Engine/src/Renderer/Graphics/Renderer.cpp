@@ -294,7 +294,7 @@ namespace Antelope
             m_GlobalImageInfos.push_back({tex.Sampler, tex.ImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
         }
 
-        AE_ENGINE_INFO("Global texture array updated. Pending descriptor writes for in-flight frames.");
+        std::fill(m_LastUpdatedTextureCount.begin(), m_LastUpdatedTextureCount.end(), 0);
     }
 
     VkCommandBuffer Renderer::BeginAsyncGraphicsCommand()

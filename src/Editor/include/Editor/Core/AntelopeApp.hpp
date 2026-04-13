@@ -34,15 +34,10 @@ namespace Antelope::Editor
             ModelData m_BearMesh;
             uint32_t m_BearTexID { 0 };
 
-            ModelData m_GorillaMesh;
-            uint32_t m_GorillaTexID { 0 };
-
             float m_DebounceTimer { 0.0f };
             const float DEBOUNCE_DELAY { 0.2f };
 
             Entity m_BearRoot;
-            Entity m_GorillaRoot;
-            std::vector<Entity> m_GorillaParts;
 
             EditorCamera m_EditorCamera;
             SceneViewPanel m_ScenePanel;

@@ -10,6 +10,6 @@ namespace Antelope
     class ModelLoader
     {
         public:
-            static ModelData Load(const std::string& filepath);
+            static ModelData Load(const std::string& filepath, bool preserveSkeleton = false);
     };
 }

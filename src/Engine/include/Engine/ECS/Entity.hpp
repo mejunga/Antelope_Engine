@@ -29,6 +29,46 @@ namespace Antelope
             inline bool IsActive() { return !m_World->GetRegistry().all_of<DisabledComponent>(m_EntityHandle); }
             inline entt::entity GetHandle() const { return m_EntityHandle; }
             inline World* GetWorld() const { return m_World; }
+            
+            void SetLocalPosition(const glm::vec3& pos)
+            {
+                GetComponent<TransformComponent>().Translation = pos;
+                m_World->MarkTransformDirty(*this);
+            }
+
+            void SetLocalRotation(const glm::vec3& euler)
+            {
+                GetComponent<TransformComponent>().Rotation = euler;
+                m_World->MarkTransformDirty(*this);
+            }
+
+            void SetLocalScale(const glm::vec3& scale)
+            {
+                GetComponent<TransformComponent>().Scale = scale;
+                m_World->MarkTransformDirty(*this);
+            }
+
+            void SetLocalPositionAndRotation(const glm::vec3& pos, const glm::vec3& euler)
+            {
+                auto& t { GetComponent<TransformComponent>() };
+                t.Translation = pos;
+                t.Rotation = euler;
+                m_World->MarkTransformDirty(*this);
+            }
+
+            void SetLocalTransform(const glm::vec3& pos, const glm::vec3& euler, const glm::vec3& scale)
+            {
+                auto& t { GetComponent<TransformComponent>() };
+                t.Translation = pos;
+                t.Rotation = euler;
+                t.Scale = scale;
+                m_World->MarkTransformDirty(*this);
+            }
+
+            const glm::vec3& GetLocalPosition() const { return GetComponent<TransformComponent>().Translation; }
+            const glm::vec3& GetLocalRotation() const { return GetComponent<TransformComponent>().Rotation; }
+            const glm::vec3& GetLocalScale() const { return GetComponent<TransformComponent>().Scale; }
+            glm::vec3 GetWorldPosition() const { return glm::vec3(GetComponent<TransformComponent>().WorldMatrix[3]); }
 
             template<typename T, typename... Args>
             T& AddComponent(Args&&... args)
@@ -38,6 +78,12 @@ namespace Antelope
 
             template<typename T>
             T& GetComponent()
+            {
+                return m_World->m_Registry.get<T>(m_EntityHandle);
+            }
+
+            template<typename T>
+            const T& GetComponent() const
             {
                 return m_World->m_Registry.get<T>(m_EntityHandle);
             }
