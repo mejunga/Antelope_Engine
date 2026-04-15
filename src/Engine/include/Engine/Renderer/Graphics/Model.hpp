@@ -27,6 +27,7 @@ namespace Antelope
     struct ModelData
     {
         std::vector<SubMeshData> SubMeshes;
+        std::vector<std::string> MaterialTextures;
         ModelNode RootNode;
     };
 }

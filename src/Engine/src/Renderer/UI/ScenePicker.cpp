@@ -2,11 +2,12 @@
 #include <Engine/Renderer/UI/ScenePicker.hpp>
 #include <Engine/Core/Application.hpp>
 #include <Engine/Renderer/Graphics/Renderer.hpp>
-#include <Engine/Renderer/Vulkan/VulkanBuffer.hpp>
+#include <Engine/Renderer/Vulkan/Buffer.hpp>
 #include <Engine/Renderer/Vulkan/VulkanContext.hpp>
+#include <Engine/Renderer/Vulkan/GpuMemoryAllocator.hpp>
 #include <Engine/Renderer/Graphics/EditorCamera.hpp>
 #include <Engine/Renderer/Vulkan/Pipeline.hpp>
-#include <Engine/Renderer/Vulkan/VulkanDescriptor.hpp>
+#include <Engine/Renderer/Vulkan/Descriptor.hpp>
 #include <Engine/Debug/Log.hpp>
 
 #include <array>
@@ -150,8 +151,8 @@ namespace Antelope
             if (renderer->m_PendingMeshIDs.count(command.mesh.MeshID) > 0) { continue; }
 
             objectDataMap[objectCount].model = command.transform;
-            objectDataMap[objectCount].posOffset = command.mesh.posAllocation.Offset / sizeof(VertexPosition);
-            objectDataMap[objectCount].faceOffset = command.mesh.faceAllocation.Offset / sizeof(Face);
+            objectDataMap[objectCount].posOffset = command.mesh.posOffset;
+            objectDataMap[objectCount].faceOffset = command.mesh.faceOffset;
             objectDataMap[objectCount].entityID = command.entityID;
 
             indirectMap[objectCount].vertexCount = command.mesh.faceCount * 3;
@@ -449,7 +450,7 @@ namespace Antelope
     {
         auto renderer { Application::Get().GetRenderer() };
 
-        m_PickingObjectBuffer = std::make_unique<VulkanBuffer>(
+        m_PickingObjectBuffer = std::make_unique<Buffer>(
             m_Context,
             sizeof(ObjectData) * Renderer::MAX_OBJECTS,
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
@@ -457,7 +458,7 @@ namespace Antelope
             VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT
         );
 
-        m_PickingIndirectBuffer = std::make_unique<VulkanBuffer>(
+        m_PickingIndirectBuffer = std::make_unique<Buffer>(
             m_Context,
             sizeof(VkDrawIndirectCommand) * Renderer::MAX_OBJECTS,
             VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
@@ -469,11 +470,11 @@ namespace Antelope
 
         DescriptorWriter writer;
         writer.WriteBuffer(0, renderer->m_UniformBuffers[0]->GetBuffer(), sizeof(UniformBufferObject), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        writer.WriteBuffer(1, renderer->m_GpuAllocator->GetPosBuffer()->GetBuffer(0), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-        writer.WriteBuffer(2, renderer->m_GpuAllocator->GetColorBuffer()->GetBuffer(0), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-        writer.WriteBuffer(3, renderer->m_GpuAllocator->GetNormalBuffer()->GetBuffer(0), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-        writer.WriteBuffer(4, renderer->m_GpuAllocator->GetFaceBuffer()->GetBuffer(0), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-        writer.WriteBuffer(5, renderer->m_GpuAllocator->GetUvBuffer()->GetBuffer(0), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+        writer.WriteBuffer(1, renderer->m_GpuAllocator->GetPosBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+        writer.WriteBuffer(2, renderer->m_GpuAllocator->GetColorBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+        writer.WriteBuffer(3, renderer->m_GpuAllocator->GetNormalBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+        writer.WriteBuffer(4, renderer->m_GpuAllocator->GetFaceBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+        writer.WriteBuffer(5, renderer->m_GpuAllocator->GetUvBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
         writer.WriteBuffer(6, m_PickingObjectBuffer->GetBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
         writer.UpdateSet(m_Context, m_PickingDescriptorSet);
     }

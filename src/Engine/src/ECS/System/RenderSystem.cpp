@@ -35,7 +35,7 @@ namespace Antelope
 
         for (auto [entityID, transform, meshComponent, normalMat] : view.each())
         {
-            RenderCommand cmd{};
+            RenderCommand cmd {};
             cmd.transform = transform.WorldMatrix;
             cmd.normalMatrix = normalMat.Matrix;
             cmd.mesh = meshComponent.Handle;
@@ -89,7 +89,7 @@ namespace Antelope
 
         for (auto [entityID, transform, meshComponent, normalMat] : meshView.each()) 
         {
-            RenderCommand cmd{};
+            RenderCommand cmd {};
             cmd.transform = transform.WorldMatrix;
             cmd.normalMatrix = normalMat.Matrix;
             cmd.mesh = meshComponent.Handle;

@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <unordered_map>
 
 
 namespace Antelope
@@ -44,5 +45,6 @@ namespace Antelope
             std::shared_ptr<Renderer> m_Renderer;
             
             std::vector<Texture> m_Textures;
+            std::unordered_map<std::string, uint32_t> m_PathToIndex;
     };
 }

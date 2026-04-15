@@ -123,7 +123,7 @@ namespace Antelope::Editor
     {
         bool changed { false };
         ImGuiIO& io { ImGui::GetIO() };
-        auto boldFont { io.Fonts->Fonts[0] };
+        auto boldFont { io.Fonts->Fonts[1] };
 
         ImGui::PushID(label.c_str());
 

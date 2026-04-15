@@ -194,7 +194,8 @@ namespace Antelope
         ImFontConfig fontConfig;
         fontConfig.OversampleH = 3;
         fontConfig.OversampleV = 3;
-        io.Fonts->AddFontFromFileTTF("Assets/Fonts/Inter-Regular.ttf", 24.0f, &fontConfig);
+        io.Fonts->AddFontFromFileTTF("Assets/Fonts/FiraMono-Regular.ttf", 24.0f, &fontConfig);
+        io.Fonts->AddFontFromFileTTF("Assets/Fonts/FiraMono-Bold.ttf", 24.0f, &fontConfig);
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
         io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;

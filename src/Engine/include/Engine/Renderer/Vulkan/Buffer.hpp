@@ -10,14 +10,14 @@ namespace Antelope
 {
     class VulkanContext;
     
-    class VulkanBuffer
+    class Buffer
     {
         public:
-            VulkanBuffer(std::shared_ptr<VulkanContext> context, VkDeviceSize size, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage, VmaAllocationCreateFlags flags = 0);
-            ~VulkanBuffer();
+            Buffer(std::shared_ptr<VulkanContext> context, VkDeviceSize size, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage, VmaAllocationCreateFlags flags = 0);
+            ~Buffer();
 
-            VulkanBuffer(const VulkanBuffer&) = delete;
-            VulkanBuffer& operator=(const VulkanBuffer&) = delete;
+            Buffer(const Buffer&) = delete;
+            Buffer& operator=(const Buffer&) = delete;
 
             void WriteToBuffer(void* data, VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0);
 

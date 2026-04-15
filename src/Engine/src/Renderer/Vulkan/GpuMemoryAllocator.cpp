@@ -1,5 +1,6 @@
 #include <Engine/Renderer/Vulkan/GpuMemoryAllocator.hpp>
 #include <Engine/Renderer/Vulkan/VulkanContext.hpp>
+#include <Engine/Renderer/Graphics/Mesh.hpp>
 #include <Engine/Debug/Log.hpp>
 
 #include <stdexcept>
@@ -133,15 +134,45 @@ namespace Antelope
         AE_ENGINE_INFO("GpuMemoryAllocator initialized with 128 MB page size.");
     }
 
-    VirtualAllocation GpuMemoryAllocator::AllocatePosition(VkDeviceSize size) { return m_PosBuffer->Allocate(size); }
-    VirtualAllocation GpuMemoryAllocator::AllocateColor(VkDeviceSize size) { return m_ColorBuffer->Allocate(size); }
-    VirtualAllocation GpuMemoryAllocator::AllocateNormal(VkDeviceSize size) { return m_NormalBuffer->Allocate(size); }
-    VirtualAllocation GpuMemoryAllocator::AllocateUV(VkDeviceSize size) { return m_UvBuffer->Allocate(size); }
-    VirtualAllocation GpuMemoryAllocator::AllocateFace(VkDeviceSize size) { return m_FaceBuffer->Allocate(size); }
+    MeshAllocationResult GpuMemoryAllocator::AllocateMesh(VkDeviceSize posSize, VkDeviceSize colorSize, VkDeviceSize normalSize, VkDeviceSize uvSize, VkDeviceSize faceSize, uint32_t meshID)
+    {
+        VirtualAllocation posAlloc { m_PosBuffer->Allocate(posSize) };
+        VirtualAllocation colorAlloc { m_ColorBuffer->Allocate(colorSize) };
+        VirtualAllocation normalAlloc { m_NormalBuffer->Allocate(normalSize) };
+        VirtualAllocation uvAlloc { m_UvBuffer->Allocate(uvSize) };
+        VirtualAllocation faceAlloc { m_FaceBuffer->Allocate(faceSize) };
 
-    void GpuMemoryAllocator::FreePosition(const VirtualAllocation& allocation) { m_PosBuffer->Free(allocation); }
-    void GpuMemoryAllocator::FreeColor(const VirtualAllocation& allocation) { m_ColorBuffer->Free(allocation); }
-    void GpuMemoryAllocator::FreeNormal(const VirtualAllocation& allocation) { m_NormalBuffer->Free(allocation); }
-    void GpuMemoryAllocator::FreeUV(const VirtualAllocation& allocation) { m_UvBuffer->Free(allocation); }
-    void GpuMemoryAllocator::FreeFace(const VirtualAllocation& allocation) { m_FaceBuffer->Free(allocation); }
+        m_FreeDataMap[meshID] = { posAlloc, colorAlloc, normalAlloc, uvAlloc, faceAlloc };
+
+        MeshAllocationResult result {};
+        result.MeshID = meshID;
+        result.posOffset = static_cast<uint32_t>(posAlloc.Offset / sizeof(VertexPosition));
+        result.colorOffset = static_cast<uint32_t>(colorAlloc.Offset / sizeof(VertexColor));
+        result.normalOffset = static_cast<uint32_t>(normalAlloc.Offset / sizeof(VertexNormal));
+        result.uvOffset = static_cast<uint32_t>(uvAlloc.Offset / sizeof(VertexUV));
+        result.faceOffset = static_cast<uint32_t>(faceAlloc.Offset / sizeof(Face));
+
+        result.pos = { m_PosBuffer->GetBuffer(posAlloc.PageIndex), posAlloc.Offset };
+        result.color = { m_ColorBuffer->GetBuffer(colorAlloc.PageIndex), colorAlloc.Offset };
+        result.normal = { m_NormalBuffer->GetBuffer(normalAlloc.PageIndex), normalAlloc.Offset };
+        result.uv = { m_UvBuffer->GetBuffer(uvAlloc.PageIndex), uvAlloc.Offset };
+        result.face = { m_FaceBuffer->GetBuffer(faceAlloc.PageIndex), faceAlloc.Offset };
+
+        return result;
+    }
+
+    void GpuMemoryAllocator::FreeMesh(uint32_t meshID)
+    {
+        auto it { m_FreeDataMap.find(meshID) };
+        if (it == m_FreeDataMap.end()) { return; }
+
+        const MeshFreeData& data { it->second };
+        m_PosBuffer->Free(data.pos);
+        m_ColorBuffer->Free(data.color);
+        m_NormalBuffer->Free(data.normal);
+        m_UvBuffer->Free(data.uv);
+        m_FaceBuffer->Free(data.face);
+
+        m_FreeDataMap.erase(it);
+    }
 }

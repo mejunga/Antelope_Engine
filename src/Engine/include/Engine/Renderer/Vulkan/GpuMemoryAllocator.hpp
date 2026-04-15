@@ -6,13 +6,14 @@
 #include <vector>
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 
 namespace Antelope
 {
     class VulkanContext;
 
-    struct VirtualAllocation 
+    struct VirtualAllocation
     {
         uint32_t PageIndex { 0 };
         VmaVirtualAllocation Handle { VK_NULL_HANDLE };
@@ -20,7 +21,7 @@ namespace Antelope
         VkDeviceSize Size { 0 };
     };
 
-    struct BufferPage 
+    struct BufferPage
     {
         VkBuffer Buffer { VK_NULL_HANDLE };
         VmaAllocation Memory { VK_NULL_HANDLE };
@@ -28,7 +29,38 @@ namespace Antelope
         void* MappedData { nullptr };
     };
 
-    class PagedVirtualBuffer 
+    struct MeshFreeData
+    {
+        VirtualAllocation pos;
+        VirtualAllocation color;
+        VirtualAllocation normal;
+        VirtualAllocation uv;
+        VirtualAllocation face;
+    };
+
+    struct MeshAllocationResult
+    {
+        struct AttribCopyInfo
+        {
+            VkBuffer Buffer { VK_NULL_HANDLE };
+            VkDeviceSize Offset { 0 };
+        };
+
+        uint32_t MeshID { 0 };
+        uint32_t posOffset { 0 };
+        uint32_t colorOffset { 0 };
+        uint32_t normalOffset { 0 };
+        uint32_t uvOffset { 0 };
+        uint32_t faceOffset { 0 };
+
+        AttribCopyInfo pos;
+        AttribCopyInfo color;
+        AttribCopyInfo normal;
+        AttribCopyInfo uv;
+        AttribCopyInfo face;
+    };
+
+    class PagedVirtualBuffer
     {
         public:
             PagedVirtualBuffer(std::shared_ptr<VulkanContext> context, VkDeviceSize pageSize, VkBufferUsageFlags usage, bool hostVisible, const std::string& name);
@@ -54,39 +86,32 @@ namespace Antelope
             std::vector<BufferPage> m_Pages;
     };
 
-    class GpuMemoryAllocator 
+    class GpuMemoryAllocator
     {
         public:
             GpuMemoryAllocator(std::shared_ptr<VulkanContext> context);
             ~GpuMemoryAllocator() = default;
 
-            VirtualAllocation AllocatePosition(VkDeviceSize size);
-            VirtualAllocation AllocateColor(VkDeviceSize size);
-            VirtualAllocation AllocateNormal(VkDeviceSize size);
-            VirtualAllocation AllocateUV(VkDeviceSize size);
-            VirtualAllocation AllocateFace(VkDeviceSize size);
+            MeshAllocationResult AllocateMesh(VkDeviceSize posSize, VkDeviceSize colorSize, VkDeviceSize normalSize, VkDeviceSize uvSize, VkDeviceSize faceSize, uint32_t meshID);
+            void FreeMesh(uint32_t meshID);
 
-            void FreePosition(const VirtualAllocation& allocation);
-            void FreeColor(const VirtualAllocation& allocation);
-            void FreeNormal(const VirtualAllocation& allocation);
-            void FreeUV(const VirtualAllocation& allocation);
-            void FreeFace(const VirtualAllocation& allocation);
-
-            inline std::shared_ptr<PagedVirtualBuffer> GetPosBuffer() const { return m_PosBuffer; }
-            inline std::shared_ptr<PagedVirtualBuffer> GetColorBuffer() const { return m_ColorBuffer; }
-            inline std::shared_ptr<PagedVirtualBuffer> GetNormalBuffer() const { return m_NormalBuffer; }
-            inline std::shared_ptr<PagedVirtualBuffer> GetUvBuffer() const { return m_UvBuffer; }
-            inline std::shared_ptr<PagedVirtualBuffer> GetFaceBuffer() const { return m_FaceBuffer; }
+            inline VkBuffer GetPosBuffer(uint32_t pageIndex = 0) const { return m_PosBuffer->GetBuffer(pageIndex); }
+            inline VkBuffer GetColorBuffer(uint32_t pageIndex = 0) const { return m_ColorBuffer->GetBuffer(pageIndex); }
+            inline VkBuffer GetNormalBuffer(uint32_t pageIndex = 0) const { return m_NormalBuffer->GetBuffer(pageIndex); }
+            inline VkBuffer GetUvBuffer(uint32_t pageIndex = 0) const { return m_UvBuffer->GetBuffer(pageIndex); }
+            inline VkBuffer GetFaceBuffer(uint32_t pageIndex = 0) const { return m_FaceBuffer->GetBuffer(pageIndex); }
 
         private:
             std::shared_ptr<VulkanContext> m_Context;
 
-            const VkDeviceSize PAGE_SIZE = 128 * 1024 * 1024;
+            const VkDeviceSize PAGE_SIZE { 128 * 1024 * 1024 };
 
             std::shared_ptr<PagedVirtualBuffer> m_PosBuffer;
             std::shared_ptr<PagedVirtualBuffer> m_ColorBuffer;
             std::shared_ptr<PagedVirtualBuffer> m_NormalBuffer;
             std::shared_ptr<PagedVirtualBuffer> m_UvBuffer;
             std::shared_ptr<PagedVirtualBuffer> m_FaceBuffer;
+
+            std::unordered_map<uint32_t, MeshFreeData> m_FreeDataMap;
     };
 }

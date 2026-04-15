@@ -1,6 +1,5 @@
 #define STB_IMAGE_IMPLEMENTATION
-
-#include <Engine/AssetImport/TextureManager.hpp>
+#include <Engine/Asset/TextureManager.hpp>
 #include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 #include <Engine/Renderer/Graphics/Renderer.hpp>
 #include <Engine/Debug/Log.hpp>
@@ -43,6 +42,9 @@ namespace Antelope
 
     uint32_t TextureManager::LoadTexture(const std::string& filepath)
     {
+        auto it { m_PathToIndex.find(filepath) };
+        if (it != m_PathToIndex.end()) { return it->second; }
+
         int texWidth { 0 }, texHeight { 0 }, texChannels { 0 };
         stbi_uc* pixels { stbi_load(filepath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha) };
 
@@ -81,6 +83,7 @@ namespace Antelope
         newTexture.Sampler = CreateTextureSampler();
 
         m_Textures.push_back(newTexture);
+        m_PathToIndex[filepath] = newTexture.GlobalIndex;
         m_Renderer->UpdateTextureDescriptors(m_Textures);
 
         AE_ENGINE_TRACE("Texture transfer dispatched for: {0}", filepath);

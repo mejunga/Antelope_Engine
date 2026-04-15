@@ -1,5 +1,10 @@
 #pragma once
 
+#ifdef ANTELOPE_EDITOR_MODE
+#include <Engine/Asset/FileWatcher.hpp>
+#endif
+
+
 #include <memory>
 #include <string>
 
@@ -44,6 +49,7 @@ namespace Antelope
             inline std::shared_ptr<World> GetWorld() const { return m_World; }
         #ifdef ANTELOPE_EDITOR_MODE
             inline std::shared_ptr<UIContext> GetUIContext() const { return m_UIContext; }
+            inline FileWatcher& GetFileWatcher() { return m_FileWatcher; }
         #endif
 
         protected:
@@ -61,7 +67,13 @@ namespace Antelope
 
         private:
             static Application *s_Instance;
+
+        #ifdef ANTELOPE_EDITOR_MODE
+            FileWatcher m_FileWatcher;
+            uint32_t m_FileWatchFrameCount { 0 };
+            static constexpr uint32_t FILE_WATCH_INTERVAL { 120 };
+        #endif
     };
 
-    Application* CreateApplication();
+    Application* CreateApplication(int argc, char** argv);
 }

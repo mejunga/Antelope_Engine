@@ -19,7 +19,7 @@
 namespace Antelope
 {
     class VulkanContext;
-    class VulkanBuffer;
+    class Buffer;
     class Pipeline;
     class DescriptorAllocator;
     class SwapChain;
@@ -146,9 +146,9 @@ namespace Antelope
         #endif
 
             std::vector<VkCommandBuffer> m_CommandBuffers;
-            std::vector<std::unique_ptr<VulkanBuffer>> m_UniformBuffers;
-            std::vector<std::unique_ptr<VulkanBuffer>> m_ObjectBuffers;
-            std::vector<std::unique_ptr<VulkanBuffer>> m_IndirectBuffers;
+            std::vector<std::unique_ptr<Buffer>> m_UniformBuffers;
+            std::vector<std::unique_ptr<Buffer>> m_ObjectBuffers;
+            std::vector<std::unique_ptr<Buffer>> m_IndirectBuffers;
             std::vector<VkDescriptorSet> m_DescriptorSets;
             std::vector<PendingTransfer> m_PendingTransfers;
             std::vector<VkDescriptorImageInfo> m_GlobalImageInfos;

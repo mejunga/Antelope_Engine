@@ -1,4 +1,4 @@
-#include <Engine/Renderer/Vulkan/VulkanDescriptor.hpp>
+#include <Engine/Renderer/Vulkan/Descriptor.hpp>
 #include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 #include <Engine/Debug/Log.hpp>
 

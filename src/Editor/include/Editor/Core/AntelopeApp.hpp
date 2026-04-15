@@ -5,12 +5,15 @@
 #include <Editor/Panels/PropertiesPanel.hpp>
 #include <Editor/Panels/ConsolePanel.hpp>
 #include <Editor/Panels/ProjectPanel.hpp>
+#include <Editor/Core/Project.hpp>
 
 #include <Engine/Core/Application.hpp>
-#include <Engine/Renderer/Graphics/Model.hpp>
 #include <Engine/ECS/Entity.hpp>
 #include <Engine/Renderer/Graphics/EditorCamera.hpp>
+#include <Engine/Scene/SceneSerializer.hpp>
 
+#include <filesystem>
+#include <string>
 #include <vector>
 
 
@@ -19,7 +22,7 @@ namespace Antelope::Editor
     class AntelopeApp : public Application
     {
         public:
-            AntelopeApp();
+            explicit AntelopeApp(const std::string& projectRoot);
             ~AntelopeApp();
 
             void OnInit() override;
@@ -28,16 +31,27 @@ namespace Antelope::Editor
             void OnShutdown() override;
 
         private:
-            void SetupMockData();
+            void LoadScene(const std::string& virtualPath);
+            void SaveScene(const std::string& virtualPath);
+            void NewUnnamedScene();
+            void FreeSceneMeshes();
+            void RenderSaveAsPopup();
+            void PopulateAssetRecords();
 
         private:
-            ModelData m_BearMesh;
-            uint32_t m_BearTexID { 0 };
+            std::filesystem::path m_ProjectRoot;
+            std::filesystem::path m_ProjectFilePath;
+            ProjectState m_ProjectState;
+
+            std::string m_CurrentScenePath;
+            bool m_SceneIsUntitled { false };
+            bool m_OpenSaveAsPopup { false };
+            char m_SaveAsNameBuf[128] { "Unnamed" };
+
+            std::vector<AssetBinding> m_AssetBindings;
 
             float m_DebounceTimer { 0.0f };
-            const float DEBOUNCE_DELAY { 0.2f };
-
-            Entity m_BearRoot;
+            static constexpr float DEBOUNCE_DELAY { 0.2f };
 
             EditorCamera m_EditorCamera;
             SceneViewPanel m_ScenePanel;

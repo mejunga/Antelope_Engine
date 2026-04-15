@@ -1,25 +1,31 @@
 #include <Editor/Core/AntelopeApp.hpp>
 
-#include <Engine/AssetImport/ModelLoader.hpp>
-#include <Engine/AssetImport/TextureManager.hpp>
+#include <Engine/Asset/ModelLoader.hpp>
+#include <Engine/Asset/TextureManager.hpp>
+#include <Engine/Asset/AssetManager.hpp>
 #include <Engine/Renderer/Graphics/Renderer.hpp>
 #include <Engine/ECS/World.hpp>
 #include <Engine/ECS/BaseComponents.hpp>
 #include <Engine/Platform/Input.hpp>
 #include <Engine/Debug/Log.hpp>
-#include <Engine/Renderer/UI/UIContext.hpp>
+#include <Engine/Core/FileSystem.hpp>
 
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <GLFW/glfw3.h>
 
+#include <filesystem>
+#include <unordered_map>
+#include <algorithm> 
+
 
 namespace Antelope::Editor
 {
-    AntelopeApp::AntelopeApp() 
-        : m_EditorCamera(glm::vec3(0.0f, 2.0f, 20.0f))
+    AntelopeApp::AntelopeApp(const std::string& projectRoot)
+        : m_ProjectRoot(std::filesystem::absolute(projectRoot))
+        , m_EditorCamera(glm::vec3(0.0f, 2.0f, 20.0f))
     {
-        AE_CLIENT_INFO("Antelope Editor instance created.");
+        AE_CLIENT_INFO("Antelope Editor instance created. Project root: '{0}'", m_ProjectRoot.string());
     }
 
     AntelopeApp::~AntelopeApp()
@@ -27,61 +33,106 @@ namespace Antelope::Editor
         AE_CLIENT_INFO("Antelope Editor instance destroyed.");
     }
 
-    void AntelopeApp::SetupMockData()
-    {
-        m_BearTexID = GetTextureManager()->LoadTexture("Assets/Bear.png");
-        m_BearMesh = ModelLoader::Load("Assets/Bear_DEMO.fbx", true); 
-
-        GetRenderer()->UpdateTextureDescriptors(GetTextureManager()->GetGlobalTextures());
-    }
-
     void AntelopeApp::OnInit()
     {
-        SetupMockData();
+        FileSystem::Mount("engine", "Assets");
 
-        Entity ground { GetWorld()->CreateEntity("Ground") };
-        ground.SetLocalPosition(glm::vec3(0.0f, -2.0f, 0.0f));
+        std::filesystem::path assetsDir { m_ProjectRoot / "Assets" };
+        FileSystem::Mount("assets", assetsDir);
 
-        auto& groundRb { ground.AddComponent<RigidBodyComponent>() };
-        groundRb.Type = RigidBodyType::Kinematic;
+        m_ProjectFilePath = Project::FindProjectFile(m_ProjectRoot);
 
-        auto& groundCol { ground.AddComponent<ColliderComponent>() };
-        groundCol.Type = ColliderType::Box;
-        groundCol.Size = glm::vec3(20.0f, 1.0f, 20.0f);
+        if (m_ProjectFilePath.empty())
+        {
+            AE_CLIENT_WARN("No .antelopeproject found in '{0}'. Using defaults.", m_ProjectRoot.string());
+            m_ProjectFilePath = m_ProjectRoot / (m_ProjectRoot.filename().string() + ".antelopeproject");
+            m_ProjectState = ProjectState {};
+            m_ProjectState.ProjectName = m_ProjectRoot.filename().string();
+        }
+        else
+        {
+            Project::Load(m_ProjectFilePath, m_ProjectState);
+            AE_CLIENT_INFO("Loaded project: '{0}'", m_ProjectState.ProjectName);
+        }
 
-        m_BearRoot = GetWorld()->CreateEntity("Bear_Sculpture_Root");
-        m_BearRoot.SetLocalPositionAndRotation(
-            glm::vec3(0.0f, 2.0f, 0.0f),
-            glm::vec3(0.0f, 0.0f, glm::radians(15.0f))
+        AssetManager::LoadAssetRegistry(assetsDir, m_ProjectState.LastKnownAssets);
+        GetFileWatcher().BuildFrom(assetsDir, AssetManager::GetRegistry());
+
+        m_EditorCamera.SetState(
+            m_ProjectState.CameraPosition,
+            m_ProjectState.CameraYaw,
+            m_ProjectState.CameraPitch
         );
 
-        auto& rootRb { m_BearRoot.AddComponent<RigidBodyComponent>() };
-        rootRb.Type = RigidBodyType::Dynamic;
-        rootRb.Mass = 500.0f;
+        if (!m_ProjectState.LastScene.empty())
+        {
+            std::filesystem::path scenePath { FileSystem::Resolve(m_ProjectState.LastScene) };
 
-        Entity bear1 { GetWorld()->SpawnModel(m_BearMesh, "Bear_1", m_BearRoot) };
-        bear1.SetLocalTransform(glm::vec3(-5.0f, 0.0f, 0.0f), glm::vec3(0.0f), glm::vec3(0.00125f));
+            if (std::filesystem::exists(scenePath))
+            {
+                LoadScene(m_ProjectState.LastScene);
+                return;
+            }
 
-        auto& bear1Col { bear1.AddComponent<ColliderComponent>() };
-        bear1Col.Type = ColliderType::Box;
-        bear1Col.Size = glm::vec3(1.0f, 1.0f, 1.5f);
+            AE_CLIENT_WARN("Last scene not found: '{0}'. Searching for another.", m_ProjectState.LastScene);
+        }
 
-        Entity bear2 { GetWorld()->SpawnModel(m_BearMesh, "Bear_2", m_BearRoot) };
-        bear2.SetLocalTransform(glm::vec3(5.0f, 0.0f, 0.0f), glm::vec3(0.0f), glm::vec3(0.00125f));
+        for (auto& [uuid, meta] : AssetManager::GetRegistry())
+        {
+            if (meta.Type != AssetType::Scene) { continue; }
 
-        auto& bear2Col { bear2.AddComponent<ColliderComponent>() };
-        bear2Col.Type = ColliderType::Box;
-        bear2Col.Size = glm::vec3(1.0f, 1.0f, 1.5f);
+            std::string relative { std::filesystem::relative(meta.FilePath, assetsDir).string() };
+            std::replace(relative.begin(), relative.end(), '\\', '/');
+            std::string virtualPath { "assets://" + relative };
+
+            AE_CLIENT_INFO("Auto-loading scene from registry: '{0}'", virtualPath);
+            LoadScene(virtualPath);
+            return;
+        }
+
+        NewUnnamedScene();
     }
 
     void AntelopeApp::OnUpdate(float timeStep)
     {
+        for (auto& change : GetFileWatcher().FlushChanges())
+        {
+            switch (change.Type)
+            {
+                case AssetChangeType::Modified: AE_CLIENT_INFO("Asset modified: '{0}'", change.NewPath.filename().string()); break;
+                case AssetChangeType::Moved: AE_CLIENT_INFO("Asset moved: '{0}' -> '{1}'", change.OldPath.filename().string(), change.NewPath.string()); break;
+                case AssetChangeType::Deleted:
+                {
+                    AE_CLIENT_WARN("Asset deleted: '{0}'", change.OldPath.filename().string());
+                    std::error_code ec;
+                    std::filesystem::remove(change.OldPath.string() + ".meta", ec);
+                    break;
+                }
+                case AssetChangeType::Imported: AE_CLIENT_INFO("Asset imported: '{0}'", change.NewPath.filename().string()); break;
+            }
+        }
+
         if (m_DebounceTimer > 0.0f) { m_DebounceTimer -= timeStep; }
+
+        if (Input::IsKeyPressed(GLFW_KEY_LEFT_CONTROL) && Input::IsKeyPressed(GLFW_KEY_S)
+            && m_DebounceTimer <= 0.0f)
+        {
+            m_DebounceTimer = DEBOUNCE_DELAY;
+
+            if (m_SceneIsUntitled || m_CurrentScenePath.empty())
+            {
+                m_OpenSaveAsPopup = true;
+            }
+            else
+            {
+                SaveScene(m_CurrentScenePath);
+            }
+        }
 
         if (Input::IsKeyPressed(GLFW_KEY_X) && m_DebounceTimer <= 0.0f)
         {
             m_DebounceTimer = DEBOUNCE_DELAY;
-            
+
             if (GetWorld()->IsSimulating())
             {
                 GetWorld()->OnSimulationStop();
@@ -94,10 +145,7 @@ namespace Antelope::Editor
             }
         }
 
-        if (GetWorld()->IsSimulating())
-        {
-            GetWorld()->StepSimulation(timeStep);
-        }
+        if (GetWorld()->IsSimulating()) { GetWorld()->StepSimulation(timeStep); }
 
         m_EditorCamera.OnUpdate(timeStep);
         GetWorld()->OnUpdateEditor(timeStep, m_EditorCamera);
@@ -106,30 +154,30 @@ namespace Antelope::Editor
     void AntelopeApp::OnUIRender()
     {
         static ImGuiDockNodeFlags dockspace_flags { ImGuiDockNodeFlags_None };
-        ImGuiWindowFlags window_flags { ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking 
-                                      | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse 
-                                      | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove 
+        ImGuiWindowFlags window_flags { ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking
+                                      | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse
+                                      | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
                                       | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus };
 
         ImGuiViewport* viewport { ImGui::GetMainViewport() };
         ImGui::SetNextWindowPos(viewport->WorkPos);
         ImGui::SetNextWindowSize(viewport->WorkSize);
         ImGui::SetNextWindowViewport(viewport->ID);
-        
+
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        
+
         ImGui::Begin("Antelope Editor", nullptr, window_flags);
         ImGui::PopStyleVar(3);
 
         ImGuiID dockspace_id { ImGui::GetID("AntelopeDockSpace") };
-        
+
         static bool first_time { true };
         if (first_time)
         {
             first_time = false;
-            ImGui::DockBuilderRemoveNode(dockspace_id); 
+            ImGui::DockBuilderRemoveNode(dockspace_id);
             ImGui::DockBuilderAddNode(dockspace_id, dockspace_flags | ImGuiDockNodeFlags_DockSpace);
             ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->WorkSize);
 
@@ -155,19 +203,199 @@ namespace Antelope::Editor
         m_ConsolePanel.OnUIRender();
         m_ProjectPanel.OnUIRender();
 
+        RenderSaveAsPopup();
+
         ImGui::End();
     }
 
     void AntelopeApp::OnShutdown()
     {
+        m_ProjectState.CameraPosition = m_EditorCamera.GetPosition();
+        m_ProjectState.CameraYaw = m_EditorCamera.GetYaw();
+        m_ProjectState.CameraPitch = m_EditorCamera.GetPitch();
+        m_ProjectState.LastScene = m_CurrentScenePath;
+
+        PopulateAssetRecords();
+        Project::Save(m_ProjectFilePath, m_ProjectState);
+        AE_CLIENT_INFO("Project state saved to '{0}'.", m_ProjectFilePath.string());
+
+        FreeSceneMeshes();
+    }
+
+    void AntelopeApp::FreeSceneMeshes()
+    {
         auto& registry { GetWorld()->GetRegistry() };
         auto view { registry.view<MeshComponent>() };
 
-        for (auto [entity, mesh] : view.each()) 
+        for (auto [entity, mesh] : view.each())
         {
-            GetRenderer()->FreeMesh(mesh.Handle); 
+            GetRenderer()->FreeMesh(mesh.Handle);
         }
 
         AE_CLIENT_INFO("All meshes freed from GPU.");
+    }
+
+    void AntelopeApp::NewUnnamedScene()
+    {
+        FreeSceneMeshes();
+        GetWorld()->Clear();
+        m_AssetBindings.clear();
+        m_CurrentScenePath = "";
+        m_SceneIsUntitled  = true;
+        std::strncpy(m_SaveAsNameBuf, "Untitled", sizeof(m_SaveAsNameBuf) - 1);
+
+        std::filesystem::path templatePath { FileSystem::Resolve("engine://TemplateScene.antelope") };
+
+        if (std::filesystem::exists(templatePath))
+        {
+            m_AssetBindings = SceneSerializer::Deserialize("engine://TemplateScene.antelope", *GetWorld());
+        }
+
+        AE_CLIENT_INFO("New unnamed scene opened.");
+    }
+
+    void AntelopeApp::LoadScene(const std::string& virtualPath)
+    {
+        FreeSceneMeshes();
+        GetWorld()->Clear();
+        m_AssetBindings.clear();
+
+        m_AssetBindings = SceneSerializer::Deserialize(virtualPath, *GetWorld());
+
+        std::unordered_map<uint64_t, ModelData> loadedModels;
+        auto& registry { GetWorld()->GetRegistry() };
+
+        for (auto& binding : m_AssetBindings)
+        {
+            if (binding.ComponentType != "MeshComponent") { continue; }
+
+            uint64_t uuid { (uint64_t)binding.AssetUUID };
+
+            if (loadedModels.find(uuid) == loadedModels.end())
+            {
+                const auto& meta { AssetManager::GetMetadata(binding.AssetUUID) };
+                if (!meta.IsValid()) { continue; }
+                loadedModels[uuid] = ModelLoader::Load(meta.FilePath.string(), true);
+            }
+
+            const auto& modelData { loadedModels[uuid] };
+            if (binding.MeshIndex >= modelData.SubMeshes.size()) { continue; }
+
+            const auto& subMesh { modelData.SubMeshes[binding.MeshIndex] };
+            MeshHandle handle { GetRenderer()->UploadMesh(subMesh.Data) };
+
+            auto view { registry.view<IDComponent>() };
+
+            for (auto e : view)
+            {
+                if (registry.get<IDComponent>(e).ID == binding.EntityID)
+                {
+                    if (registry.all_of<MeshComponent>(e)) { registry.get<MeshComponent>(e).Handle = handle; }
+                    break;
+                }
+            }
+        }
+
+        for (auto& binding : m_AssetBindings)
+        {
+            if (binding.ComponentType != "MaterialSlot") { continue; }
+
+            const auto& meta { AssetManager::GetMetadata(binding.AssetUUID) };
+            if (!meta.IsValid()) { continue; }
+
+            uint32_t texIndex { GetTextureManager()->LoadTexture(meta.FilePath.string()) };
+
+            auto view { registry.view<IDComponent>() };
+
+            for (auto e : view)
+            {
+                if (registry.get<IDComponent>(e).ID == binding.EntityID)
+                {
+                    if (registry.all_of<MeshComponent>(e))
+                    {
+                        registry.get<MeshComponent>(e).Handle.materialIndex = texIndex;
+                    }
+                    break;
+                }
+            }
+        }
+
+        m_CurrentScenePath = virtualPath;
+        m_SceneIsUntitled  = false;
+        AE_CLIENT_INFO("Scene loaded: '{0}'", virtualPath);
+    }
+
+    void AntelopeApp::SaveScene(const std::string& virtualPath)
+    {
+        SceneSerializer::Serialize(virtualPath, *GetWorld(), m_AssetBindings);
+        AE_CLIENT_INFO("Scene saved: '{0}'", virtualPath);
+    }
+
+    void AntelopeApp::RenderSaveAsPopup()
+    {
+        if (m_OpenSaveAsPopup)
+        {
+            ImGui::OpenPopup("Save Scene As");
+            m_OpenSaveAsPopup = false;
+        }
+
+        ImVec2 center { ImGui::GetMainViewport()->GetCenter() };
+        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+        if (ImGui::BeginPopupModal("Save Scene As", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::Text("Scene Name:");
+            ImGui::SetNextItemWidth(300.0f);
+            ImGui::InputText("##scenename", m_SaveAsNameBuf, sizeof(m_SaveAsNameBuf));
+
+            std::string previewPath { std::string("assets://Scenes/") + m_SaveAsNameBuf + ".antelope" };
+            ImGui::TextDisabled("%s", previewPath.c_str());
+            ImGui::Spacing();
+
+            bool nameValid { m_SaveAsNameBuf[0] != '\0' };
+
+            if (!nameValid) { ImGui::BeginDisabled(); }
+
+            if (ImGui::Button("Save", ImVec2(120.0f, 0.0f)))
+            {
+                SaveScene(previewPath);
+                m_CurrentScenePath = previewPath;
+                m_ProjectState.LastScene = previewPath;
+                m_SceneIsUntitled = false;
+                ImGui::CloseCurrentPopup();
+            }
+
+            if (!nameValid) { ImGui::EndDisabled(); }
+
+            ImGui::SameLine();
+
+            if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f))) { ImGui::CloseCurrentPopup(); }
+
+            ImGui::EndPopup();
+        }
+    }
+
+    void AntelopeApp::PopulateAssetRecords()
+    {
+        std::filesystem::path assetsDir { m_ProjectRoot / "Assets" };
+        std::error_code ec;
+
+        m_ProjectState.LastKnownAssets.clear();
+
+        for (const auto& [uuid, meta] : AssetManager::GetRegistry())
+        {
+            if (meta.Type == AssetType::None) { continue; }
+
+            AssetRecord record;
+            record.Handle = uuid;
+            record.Type = meta.Type;
+            record.LastModified = std::filesystem::last_write_time(meta.FilePath, ec).time_since_epoch().count();
+
+            std::string rel { std::filesystem::relative(meta.FilePath, assetsDir, ec).string() };
+            std::replace(rel.begin(), rel.end(), '\\', '/');
+            record.RelativePath = rel;
+
+            m_ProjectState.LastKnownAssets.push_back(record);
+        }
     }
 }

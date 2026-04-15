@@ -7,6 +7,7 @@
 #include <Engine/Physics/PhysicsContext.hpp>
 #include <Engine/Core/Application.hpp>
 #include <Engine/Debug/Log.hpp>
+#include <Engine/Asset/AssetManager.hpp>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
@@ -35,11 +36,12 @@ namespace Antelope
         }
     }
 
-    Entity World::CreateEntity(const std::string& name)
+    Entity World::CreateEntity(const std::string& name, UUID uuid)
     {
         entt::entity handle { m_Registry.create() };
         Entity entity { handle, this };
 
+        entity.AddComponent<IDComponent>().ID = uuid;
         entity.AddComponent<TransformComponent>();
         entity.AddComponent<RelationshipComponent>();
         auto& tag { entity.AddComponent<TagComponent>() };
@@ -49,12 +51,12 @@ namespace Antelope
         return entity;
     }
 
-    Entity World::SpawnModel(const ModelData& modelData, const std::string& rootName)
+    Entity World::SpawnModel(const ModelData& modelData, const std::string& rootName, UUID modelAssetUUID, std::vector<AssetBinding>* outBindings)
     {
-        return SpawnModel(modelData, rootName, Entity{});
+        return SpawnModel(modelData, rootName, modelAssetUUID, Entity{}, outBindings);
     }
 
-    Entity World::SpawnModel(const ModelData& modelData, const std::string& rootName, Entity parentEntity)
+    Entity World::SpawnModel(const ModelData& modelData, const std::string& rootName, UUID modelAssetUUID, Entity parentEntity, std::vector<AssetBinding>* outBindings)
     {
         Entity rootEntity { CreateEntity(rootName) };
 
@@ -74,19 +76,44 @@ namespace Antelope
         if (!modelData.RootNode.Children.empty())
         {
             for (const auto& childNode : modelData.RootNode.Children)
-                SpawnModelNodeRecursive(childNode, modelData, rootEntity);
+            {
+                SpawnModelNodeRecursive(childNode, modelData, modelAssetUUID, rootEntity, outBindings);
+            }
+
             return rootEntity;
         }
 
         auto renderer { Application::Get().GetRenderer() };
-        for (const auto& subMesh : modelData.SubMeshes)
+
+        for (uint32_t i { 0 }; i < modelData.SubMeshes.size(); ++i)
         {
+            const auto& subMesh { modelData.SubMeshes[i] };
             Entity part { CreateEntity(subMesh.Name.empty() ? rootName + "_Part" : subMesh.Name) };
             part.SetParent(rootEntity);
             auto& meshComp { part.AddComponent<MeshComponent>() };
             meshComp.Handle = renderer->UploadMesh(subMesh.Data);
-            meshComp.Handle.materialIndex = subMesh.MaterialIndex;
+
+            if (outBindings)
+            {
+                UUID entityUUID { m_Registry.get<IDComponent>(part.GetHandle()).ID };
+                outBindings->push_back({ entityUUID, modelAssetUUID, "MeshComponent", i });
+
+                uint32_t matIdx { subMesh.MaterialIndex };
+                if (matIdx < modelData.MaterialTextures.size() && !modelData.MaterialTextures[matIdx].empty())
+                {
+                    for (auto& [texUUID, texMeta] : AssetManager::GetRegistry())
+                    {
+                        if (texMeta.Type == AssetType::Texture2D
+                            && texMeta.FilePath.filename().string() == modelData.MaterialTextures[matIdx])
+                        {
+                            outBindings->push_back({ entityUUID, texUUID, "MaterialSlot", 0 });
+                            break;
+                        }
+                    }
+                }
+            }
         }
+
         return rootEntity;
     }
 
@@ -113,6 +140,13 @@ namespace Antelope
     void World::MarkTransformDirty(Entity entity)
     {
         m_Registry.emplace_or_replace<DirtyTransform>(entity);
+    }
+
+    void World::Clear()
+    {
+        if (m_IsSimulating) { OnSimulationStop(); }
+        m_Registry.clear();
+        m_HierarchyDirty = true;
     }
 
     void World::OnSimulationStart()
@@ -178,25 +212,19 @@ namespace Antelope
         RenderSystem::RenderRuntime(*this, renderer);
     }
 
-    Entity World::SpawnModelNodeRecursive(const ModelNode& node, const ModelData& modelData, Entity parentEntity)
+    Entity World::SpawnModelNodeRecursive(const ModelNode& node, const ModelData& modelData, UUID modelAssetUUID, Entity parentEntity, std::vector<AssetBinding>* outBindings)
     {
         Entity entity { CreateEntity(node.Name) };
 
-        if (parentEntity)
-        {
-            entity.SetParent(parentEntity);
-        }
+        if (parentEntity) { entity.SetParent(parentEntity); }
 
         auto& transform { entity.GetComponent<TransformComponent>() };
-        
-        glm::vec3 scale;
-        glm::quat rotation;
-        glm::vec3 translation;
-        glm::vec3 skew;
-        glm::vec4 perspective;
 
+        glm::vec3 scale, translation, skew;
+        glm::quat rotation;
+        glm::vec4 perspective;
         glm::decompose(node.LocalTransform, scale, rotation, translation, skew, perspective);
-        
+
         transform.Translation = translation;
         transform.Rotation = glm::eulerAngles(rotation);
         transform.Scale = scale;
@@ -205,19 +233,36 @@ namespace Antelope
 
         if (!node.MeshIndices.empty())
         {
-            auto& meshComp { entity.AddComponent<MeshComponent>() };
             uint32_t firstMeshIndex { node.MeshIndices[0] };
-            
             const auto& subMesh { modelData.SubMeshes[firstMeshIndex] };
-
+            auto& meshComp { entity.AddComponent<MeshComponent>() };
             auto renderer { Application::Get().GetRenderer() };
             meshComp.Handle = renderer->UploadMesh(subMesh.Data);
-            meshComp.Handle.materialIndex = subMesh.MaterialIndex;
+
+            if (outBindings)
+            {
+                UUID entityUUID { m_Registry.get<IDComponent>(entity.GetHandle()).ID };
+                outBindings->push_back({ entityUUID, modelAssetUUID, "MeshComponent", firstMeshIndex });
+
+                uint32_t matIdx { subMesh.MaterialIndex };
+                if (matIdx < modelData.MaterialTextures.size() && !modelData.MaterialTextures[matIdx].empty())
+                {
+                    for (auto& [texUUID, texMeta] : AssetManager::GetRegistry())
+                    {
+                        if (texMeta.Type == AssetType::Texture2D
+                            && texMeta.FilePath.filename().string() == modelData.MaterialTextures[matIdx])
+                        {
+                            outBindings->push_back({ entityUUID, texUUID, "MaterialSlot", 0 });
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
         for (const auto& childNode : node.Children)
         {
-            SpawnModelNodeRecursive(childNode, modelData, entity);
+            SpawnModelNodeRecursive(childNode, modelData, modelAssetUUID, entity, outBindings);
         }
 
         return entity;

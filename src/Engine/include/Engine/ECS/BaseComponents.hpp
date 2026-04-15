@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Engine/Renderer/Graphics/Mesh.hpp>
+#include <Engine/Core/UUID.hpp>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -21,6 +22,14 @@ namespace Antelope
         TagComponent() = default;
         TagComponent(const TagComponent&) = default;
         TagComponent(const std::string& tag) : Tag(tag) {}
+    };
+
+    struct IDComponent
+    {
+        UUID ID;
+
+        IDComponent() = default;
+        IDComponent(const IDComponent&) = default;
     };
 
     struct DirtyTransform {};

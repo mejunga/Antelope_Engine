@@ -1,4 +1,4 @@
-#include <Engine/Renderer/Vulkan/VulkanBuffer.hpp>
+#include <Engine/Renderer/Vulkan/Buffer.hpp>
 #include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 #include <Engine/Debug/Log.hpp>
 
@@ -8,7 +8,7 @@
 
 namespace Antelope
 {
-    VulkanBuffer::VulkanBuffer(std::shared_ptr<VulkanContext> context, VkDeviceSize size, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage, VmaAllocationCreateFlags flags)
+    Buffer::Buffer(std::shared_ptr<VulkanContext> context, VkDeviceSize size, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage, VmaAllocationCreateFlags flags)
         : m_Context(context), m_BufferSize(size)
     {
         VkBufferCreateInfo bufferInfo {};
@@ -34,7 +34,7 @@ namespace Antelope
         }
     }
 
-    VulkanBuffer::~VulkanBuffer()
+    Buffer::~Buffer()
     {
         if (m_Buffer != VK_NULL_HANDLE)
         {
@@ -42,7 +42,7 @@ namespace Antelope
         }
     }
 
-    void VulkanBuffer::WriteToBuffer(void* data, VkDeviceSize size, VkDeviceSize offset)
+    void Buffer::WriteToBuffer(void* data, VkDeviceSize size, VkDeviceSize offset)
     {
         if (m_MappedData == nullptr) { return; }
 

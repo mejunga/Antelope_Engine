@@ -1,0 +1,6 @@
+Project: NewProject
+LastScene: Scenes/DefaultScene.antelope
+EditorCamera:
+  Position: [0.0, 2.0, 20.0]
+  Yaw: -90.0
+  Pitch: 0.0

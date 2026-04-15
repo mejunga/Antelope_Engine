@@ -1,10 +1,12 @@
-#include <Engine/AssetImport/ModelLoader.hpp>
+#include <Engine/Asset/ModelLoader.hpp>
 #include <Engine/Renderer/Graphics/Model.hpp>
 #include <Engine/Debug/Log.hpp>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
+
+#include <filesystem>
 
 
 namespace Antelope
@@ -85,6 +87,20 @@ namespace Antelope
             }
 
             model.SubMeshes.push_back(subMesh);            
+        }
+
+        for (unsigned int m { 0 }; m < scene->mNumMaterials; m++)
+        {
+            aiString texPath;
+            
+            if (scene->mMaterials[m]->GetTexture(aiTextureType_DIFFUSE, 0, &texPath) == AI_SUCCESS)
+            {
+                model.MaterialTextures.push_back(std::filesystem::path(texPath.C_Str()).filename().string());
+            }
+            else
+            {
+                model.MaterialTextures.push_back("");
+            }
         }
 
         if (preserveSkeleton) 

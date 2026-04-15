@@ -71,6 +71,14 @@ namespace Antelope
         }
     }
 
+    void EditorCamera::SetState(const glm::vec3& position, float yaw, float pitch)
+    {
+        m_Position = position;
+        m_Yaw = yaw;
+        m_Pitch = pitch;
+        UpdateCameraVectors();
+    }
+
     void EditorCamera::UpdateCameraVectors()
     {
         glm::vec3 front 

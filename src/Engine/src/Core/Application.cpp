@@ -4,7 +4,7 @@
 #include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 #include <Engine/Renderer/Vulkan/SwapChain.hpp>
 #include <Engine/Renderer/Graphics/Renderer.hpp>
-#include <Engine/AssetImport/TextureManager.hpp>
+#include <Engine/Asset/TextureManager.hpp>
 #include <Engine/ECS/World.hpp>
 #ifdef ANTELOPE_EDITOR_MODE
 #include <Engine/Renderer/UI/UIContext.hpp>
@@ -62,8 +62,14 @@ namespace Antelope
                 OnUIRender();
                 m_UIContext->EndFrame();
             }
+            
+            if (++m_FileWatchFrameCount >= FILE_WATCH_INTERVAL)
+            {
+                m_FileWatchFrameCount = 0;
+                m_FileWatcher.Poll();
+            }
         #endif
-
+            
             OnUpdate(timeStep);
 
         #ifdef ANTELOPE_EDITOR_MODE

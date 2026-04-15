@@ -1,11 +1,15 @@
 #pragma once
 
 #include <Engine/Renderer/Graphics/Model.hpp>
+#include <Engine/Scene/SceneSerializer.hpp>
+#include <Engine/Core/UUID.hpp>
 
 #include <entt/entt.hpp>
 
 #include <string>
 #include <memory>
+#include <utility>
+#include <vector>
 
 
 namespace Antelope
@@ -22,12 +26,13 @@ namespace Antelope
             World();
             ~World();
 
-            Entity CreateEntity(const std::string& name = std::string());
+            Entity CreateEntity(const std::string& name = "Entity", UUID uuid = UUID());
             void DestroyEntity(Entity entity);
-            Entity SpawnModel(const ModelData& modelData, const std::string& rootName);
-            Entity SpawnModel(const ModelData& modelData, const std::string& rootName, Entity parentEntity);
+            Entity SpawnModel(const ModelData& modelData, const std::string& rootName, UUID modelAssetUUID, std::vector<AssetBinding>* outBindings = nullptr);
+            Entity SpawnModel(const ModelData& modelData, const std::string& rootName, UUID modelAssetUUID, Entity parentEntity, std::vector<AssetBinding>* outBindings = nullptr);
             void MarkTransformDirty(Entity entity);
             void MarkHierarchyDirty() { m_HierarchyDirty = true; }
+            void Clear();
 
             void OnSimulationStart();
             void OnSimulationStop();
@@ -42,7 +47,7 @@ namespace Antelope
             inline bool IsSimulating() const { return m_IsSimulating; }
 
         private:
-            Entity SpawnModelNodeRecursive(const ModelNode& node, const ModelData& modelData, Entity parentEntity);
+            Entity SpawnModelNodeRecursive(const ModelNode& node, const ModelData& modelData, UUID modelAssetUUID, Entity parentEntity, std::vector<AssetBinding>* outBindings);
 
         private:
             std::unique_ptr<PhysicsContext> m_PhysicsContext;

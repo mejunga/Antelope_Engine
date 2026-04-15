@@ -2,10 +2,10 @@
 #include <Engine/Renderer/Graphics/SkyRenderer.hpp>
 #include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 #include <Engine/Renderer/Vulkan/SwapChain.hpp>
-#include <Engine/AssetImport/TextureManager.hpp>
-#include <Engine/Renderer/Vulkan/VulkanBuffer.hpp>
+#include <Engine/Asset/TextureManager.hpp>
+#include <Engine/Renderer/Vulkan/Buffer.hpp>
 #include <Engine/Renderer/Vulkan/Pipeline.hpp>
-#include <Engine/Renderer/Vulkan/VulkanDescriptor.hpp>
+#include <Engine/Renderer/Vulkan/Descriptor.hpp>
 #include <Engine/Renderer/Vulkan/GpuMemoryAllocator.hpp>
 #include <Engine/Debug/Log.hpp>
 #ifdef ANTELOPE_EDITOR_MODE
@@ -173,13 +173,16 @@ namespace Antelope
 
         if (totalSize == 0) { return handle; }
 
-        handle.posAllocation = m_GpuAllocator->AllocatePosition(posSize);
-        handle.colorAllocation = m_GpuAllocator->AllocateColor(colorSize);
-        handle.normalAllocation = m_GpuAllocator->AllocateNormal(normalSize);
-        handle.uvAllocation     = m_GpuAllocator->AllocateUV(uvSize);
-        handle.faceAllocation = m_GpuAllocator->AllocateFace(faceSize);
+        handle.MeshID = m_NextMeshID++;
         handle.faceCount = static_cast<uint32_t>(meshData.faces.size());
 
+        MeshAllocationResult allocation { m_GpuAllocator->AllocateMesh(posSize, colorSize, normalSize, uvSize, faceSize, handle.MeshID) };
+        handle.posOffset = allocation.posOffset;
+        handle.colorOffset = allocation.colorOffset;
+        handle.normalOffset = allocation.normalOffset;
+        handle.uvOffset = allocation.uvOffset;
+        handle.faceOffset = allocation.faceOffset;
+        
         VkBuffer stagingBuffer { VK_NULL_HANDLE };
         VmaAllocation stagingAllocation { VK_NULL_HANDLE };
 
@@ -239,17 +242,11 @@ namespace Antelope
                 }
             } };
 
-        VkBuffer targetPosBuffer { m_GpuAllocator->GetPosBuffer()->GetBuffer(handle.posAllocation.PageIndex) };
-        VkBuffer targetColBuffer { m_GpuAllocator->GetColorBuffer()->GetBuffer(handle.colorAllocation.PageIndex) };
-        VkBuffer targetNormBuffer { m_GpuAllocator->GetNormalBuffer()->GetBuffer(handle.normalAllocation.PageIndex) };
-        VkBuffer targetUvBuffer { m_GpuAllocator->GetUvBuffer()->GetBuffer(handle.uvAllocation.PageIndex) };
-        VkBuffer targetFaceBuffer { m_GpuAllocator->GetFaceBuffer()->GetBuffer(handle.faceAllocation.PageIndex) };
-
-        addCopy(targetPosBuffer, handle.posAllocation.Offset, posSize);
-        addCopy(targetColBuffer, handle.colorAllocation.Offset, colorSize);
-        addCopy(targetNormBuffer, handle.normalAllocation.Offset, normalSize);
-        addCopy(targetUvBuffer, handle.uvAllocation.Offset, uvSize);
-        addCopy(targetFaceBuffer, handle.faceAllocation.Offset, faceSize);
+        addCopy(allocation.pos.Buffer, allocation.pos.Offset, posSize);
+        addCopy(allocation.color.Buffer, allocation.color.Offset, colorSize);
+        addCopy(allocation.normal.Buffer, allocation.normal.Offset, normalSize);
+        addCopy(allocation.uv.Buffer, allocation.uv.Offset, uvSize);
+        addCopy(allocation.face.Buffer, allocation.face.Offset, faceSize);
 
         vkEndCommandBuffer(commandBuffer);
 
@@ -274,12 +271,8 @@ namespace Antelope
 
     void Renderer::FreeMesh(const MeshHandle& handle)
     {
-        m_GpuAllocator->FreePosition(handle.posAllocation);
-        m_GpuAllocator->FreeColor(handle.colorAllocation);
-        m_GpuAllocator->FreeNormal(handle.normalAllocation);
-        m_GpuAllocator->FreeUV(handle.uvAllocation);
-        m_GpuAllocator->FreeFace(handle.faceAllocation);
-        AE_ENGINE_TRACE("Mesh freed from GPU Buffers. Space reclaimed.");
+        m_GpuAllocator->FreeMesh(handle.MeshID);
+        AE_ENGINE_TRACE("Mesh freed from GPU Buffers.");
     }
 
     void Renderer::UpdateTextureDescriptors(const std::vector<Texture>& textures)
@@ -628,11 +621,11 @@ namespace Antelope
 
             objectDataMap[objectCount].model = command.transform;
             objectDataMap[objectCount].normalMatrix = glm::mat4(command.normalMatrix);
-            objectDataMap[objectCount].posOffset = static_cast<uint32_t>(command.mesh.posAllocation.Offset / sizeof(VertexPosition));
-            objectDataMap[objectCount].colorOffset = static_cast<uint32_t>(command.mesh.colorAllocation.Offset / sizeof(VertexColor));
-            objectDataMap[objectCount].normalOffset = static_cast<uint32_t>(command.mesh.normalAllocation.Offset / sizeof(VertexNormal));
-            objectDataMap[objectCount].faceOffset = static_cast<uint32_t>(command.mesh.faceAllocation.Offset / sizeof(Face));
-            objectDataMap[objectCount].uvOffset = static_cast<uint32_t>(command.mesh.uvAllocation.Offset / sizeof(VertexUV));
+            objectDataMap[objectCount].posOffset = command.mesh.posOffset;
+            objectDataMap[objectCount].colorOffset = command.mesh.colorOffset;
+            objectDataMap[objectCount].normalOffset = command.mesh.normalOffset;
+            objectDataMap[objectCount].faceOffset = command.mesh.faceOffset;
+            objectDataMap[objectCount].uvOffset = command.mesh.uvOffset;
             objectDataMap[objectCount].materialIndex = command.mesh.materialIndex;
         #ifdef ANTELOPE_EDITOR_MODE
             objectDataMap[objectCount].entityID = command.entityID;
@@ -956,7 +949,7 @@ namespace Antelope
 
         for (size_t i { 0 }; i < m_MaxFramesInFlight; i++) 
         {
-            m_UniformBuffers.push_back(std::make_unique<VulkanBuffer>(
+            m_UniformBuffers.push_back(std::make_unique<Buffer>(
                 m_Context, 
                 bufferSize, 
                 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 
@@ -973,7 +966,7 @@ namespace Antelope
 
         for (size_t i { 0 }; i < m_MaxFramesInFlight; i++) 
         {
-            m_ObjectBuffers.push_back(std::make_unique<VulkanBuffer>(
+            m_ObjectBuffers.push_back(std::make_unique<Buffer>(
                 m_Context, 
                 bufferSize, 
                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, 
@@ -990,7 +983,7 @@ namespace Antelope
 
         for (size_t i { 0 }; i < m_MaxFramesInFlight; ++i) 
         {
-            m_IndirectBuffers.push_back(std::make_unique<VulkanBuffer>(
+            m_IndirectBuffers.push_back(std::make_unique<Buffer>(
                 m_Context, 
                 bufferSize, 
                 VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, 
@@ -1036,11 +1029,11 @@ namespace Antelope
 
             DescriptorWriter writer;
             writer.WriteBuffer(0, m_UniformBuffers[i]->GetBuffer(), sizeof(UniformBufferObject), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-            writer.WriteBuffer(1, m_GpuAllocator->GetPosBuffer()->GetBuffer(0),    VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-            writer.WriteBuffer(2, m_GpuAllocator->GetColorBuffer()->GetBuffer(0),  VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-            writer.WriteBuffer(3, m_GpuAllocator->GetNormalBuffer()->GetBuffer(0), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-            writer.WriteBuffer(4, m_GpuAllocator->GetFaceBuffer()->GetBuffer(0),   VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-            writer.WriteBuffer(5, m_GpuAllocator->GetUvBuffer()->GetBuffer(0),     VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+            writer.WriteBuffer(1, m_GpuAllocator->GetPosBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+            writer.WriteBuffer(2, m_GpuAllocator->GetColorBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+            writer.WriteBuffer(3, m_GpuAllocator->GetNormalBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+            writer.WriteBuffer(4, m_GpuAllocator->GetFaceBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+            writer.WriteBuffer(5, m_GpuAllocator->GetUvBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
             writer.WriteBuffer(6, m_ObjectBuffers[i]->GetBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
             writer.UpdateSet(m_Context, m_DescriptorSets[i]);
         }

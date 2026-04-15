@@ -16,7 +16,7 @@ namespace Antelope
     class VulkanContext;
     class Pipeline;
     class EditorCamera;
-    class VulkanBuffer;
+    class Buffer;
 
     class ScenePicker
     {
@@ -42,8 +42,8 @@ namespace Antelope
         private:
             std::shared_ptr<VulkanContext> m_Context;
             std::unique_ptr<Pipeline> m_Pipeline;
-            std::unique_ptr<VulkanBuffer> m_PickingObjectBuffer;
-            std::unique_ptr<VulkanBuffer> m_PickingIndirectBuffer;
+            std::unique_ptr<Buffer> m_PickingObjectBuffer;
+            std::unique_ptr<Buffer> m_PickingIndirectBuffer;
             
             VkRenderPass m_RenderPass { VK_NULL_HANDLE };
             VkFramebuffer m_Framebuffer { VK_NULL_HANDLE };

@@ -17,8 +17,11 @@ namespace Antelope
 
             glm::mat4 GetViewMatrix() const;
             glm::mat4 GetProjectionMatrix(float width, float height) const;
+            void SetState(const glm::vec3& position, float yaw, float pitch);
 
             inline glm::vec3 GetPosition() const { return m_Position; }
+            inline float GetYaw() const { return m_Yaw; }
+            inline float GetPitch() const { return m_Pitch; }
             inline bool IsActive() const { return m_IsActive; }
             void SetActive(bool active) { m_IsActive = active; }
 
