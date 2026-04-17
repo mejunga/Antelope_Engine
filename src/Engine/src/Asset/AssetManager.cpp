@@ -9,7 +9,7 @@
 
 namespace Antelope
 {
-    std::map<UUID, AssetMetadata> AssetManager::s_AssetRegistry;
+    std::unordered_map<UUID, AssetMetadata> AssetManager::s_AssetRegistry;
 
     void AssetManager::LoadAssetRegistry(const std::filesystem::path& assetDirectory,
                                          const std::vector<AssetRecord>& lastKnownAssets)

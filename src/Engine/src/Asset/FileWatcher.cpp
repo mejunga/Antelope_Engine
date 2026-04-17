@@ -8,7 +8,12 @@
 
 namespace Antelope
 {
-    void FileWatcher::BuildFrom(const std::filesystem::path& watchDir, const std::map<UUID, AssetMetadata>& registry)
+    FileWatcher::~FileWatcher()
+    {
+        if (m_ChangeHandle != INVALID_HANDLE_VALUE) { FindCloseChangeNotification(m_ChangeHandle); }
+    }
+
+    void FileWatcher::BuildFrom(const std::filesystem::path& watchDir, const std::unordered_map<UUID, AssetMetadata>& registry)
     {
         m_WatchDir = watchDir;
         m_Records.clear();
@@ -25,10 +30,21 @@ namespace Antelope
                 uuid
             };
         }
+
+        if (m_ChangeHandle != INVALID_HANDLE_VALUE) { FindCloseChangeNotification(m_ChangeHandle); }
+
+        m_ChangeHandle = FindFirstChangeNotificationA(
+            m_WatchDir.string().c_str(),
+            TRUE,
+            FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_DIR_NAME
+        );
     }
 
     void FileWatcher::Poll()
     {
+        if (m_ChangeHandle == INVALID_HANDLE_VALUE) { return; }
+        if (WaitForSingleObject(m_ChangeHandle, 0) != WAIT_OBJECT_0) { return; }
+
         std::error_code ec;
 
         struct ScanEntry
@@ -169,6 +185,8 @@ namespace Antelope
                 m_Records.erase(uuidInt);
             }
         }
+
+        FindNextChangeNotification(m_ChangeHandle);
     }
 
     std::vector<AssetChange> FileWatcher::FlushChanges()

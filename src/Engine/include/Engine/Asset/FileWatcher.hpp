@@ -3,10 +3,10 @@
 
 #include <Engine/Asset/AssetTypes.hpp>
 
+#include <windows.h>
 #include <filesystem>
 #include <vector>
 #include <unordered_map>
-#include <map>
 
 
 namespace Antelope
@@ -24,7 +24,8 @@ namespace Antelope
     class FileWatcher
     {
         public:
-            void BuildFrom(const std::filesystem::path& watchDir, const std::map<UUID, AssetMetadata>& registry);
+            ~FileWatcher();
+            void BuildFrom(const std::filesystem::path& watchDir, const std::unordered_map<UUID, AssetMetadata>& registry);
             void Poll();
             std::vector<AssetChange> FlushChanges();
 
@@ -39,6 +40,7 @@ namespace Antelope
             std::filesystem::path m_WatchDir;
             std::unordered_map<uint64_t, FileRecord> m_Records;
             std::vector<AssetChange> m_PendingChanges;
+            HANDLE m_ChangeHandle { INVALID_HANDLE_VALUE };
     };
 }
 #endif

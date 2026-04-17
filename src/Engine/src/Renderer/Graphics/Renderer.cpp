@@ -611,7 +611,7 @@ namespace Antelope
         for (const auto& command : renderList)
         {
             if (m_PendingMeshIDs.count(command.mesh.MeshID) > 0) { continue; }
-            if (m_PendingTextureIndices.count(command.mesh.materialIndex) > 0) { continue; }
+            if (m_PendingTextureIndices.count(command.materialIndex) > 0) { continue; }
 
             if (objectCount >= MAX_OBJECTS)
             {
@@ -626,7 +626,7 @@ namespace Antelope
             objectDataMap[objectCount].normalOffset = command.mesh.normalOffset;
             objectDataMap[objectCount].faceOffset = command.mesh.faceOffset;
             objectDataMap[objectCount].uvOffset = command.mesh.uvOffset;
-            objectDataMap[objectCount].materialIndex = command.mesh.materialIndex;
+            objectDataMap[objectCount].materialIndex = command.materialIndex;
         #ifdef ANTELOPE_EDITOR_MODE
             objectDataMap[objectCount].entityID = command.entityID;
         #endif

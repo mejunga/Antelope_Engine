@@ -63,11 +63,7 @@ namespace Antelope
                 m_UIContext->EndFrame();
             }
             
-            if (++m_FileWatchFrameCount >= FILE_WATCH_INTERVAL)
-            {
-                m_FileWatchFrameCount = 0;
-                m_FileWatcher.Poll();
-            }
+            m_FileWatcher.Poll();
         #endif
             
             OnUpdate(timeStep);

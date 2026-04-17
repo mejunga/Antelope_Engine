@@ -1,18 +1,18 @@
 ProjectName: Unnamed Project
 LastScene: assets://Scenes/BearScene.antelope
 Camera:
-  Position: [4.948417, 5.239775, 28.278715]
-  Yaw: -102.49978
-  Pitch: 0.599955
+  Position: [0.7981928, 9.853151, 18.423496]
+  Yaw: -449.3026
+  Pitch: -14.700278
 Assets:
+  - UUID: 12928269464334836696
+    Path: Scenes/BearScene.antelope
+    Type: 1
+    LastModified: 134208718792846117
   - UUID: 1669307296476971368
     Path: Models/Bear_DEMO.fbx
     Type: 3
     LastModified: 134187177423306219
-  - UUID: 2643987133498507292
-    Path: Textures/gorilla.png
-    Type: 2
-    LastModified: 134187342225171046
   - UUID: 4508731122345488918
     Path: Models/Gorilla_hd.fbx
     Type: 3
@@ -21,7 +21,7 @@ Assets:
     Path: Textures/Bear.png
     Type: 2
     LastModified: 134187177365198093
-  - UUID: 12928269464334836696
-    Path: Scenes/BearScene.antelope
-    Type: 1
-    LastModified: 134207690383557853
+  - UUID: 2643987133498507292
+    Path: Textures/gorilla.png
+    Type: 2
+    LastModified: 134187342225171046

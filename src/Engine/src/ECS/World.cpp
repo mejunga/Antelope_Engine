@@ -22,10 +22,19 @@ namespace Antelope
     {
         m_PhysicsContext = std::make_unique<PhysicsContext>();
 
+        m_Registry.on_construct<TransformComponent>().connect<[](entt::registry& reg, entt::entity e)
+        {
+            reg.emplace_or_replace<LocalMatrixComponent>(e);
+            reg.emplace_or_replace<WorldMatrixComponent>(e);
+        }>();
+
         m_Registry.on_construct<MeshComponent>().connect<[](entt::registry& reg, entt::entity e)
         {
             reg.emplace_or_replace<NormalMatrixComponent>(e);
         }>();
+
+        m_Registry.on_construct<CameraComponent>().connect<&World::OnCameraConstructed>(this);
+        m_Registry.on_destroy<CameraComponent>().connect<&World::OnCameraDestroyed>(this);
     }
 
     World::~World() 
@@ -147,6 +156,7 @@ namespace Antelope
         if (m_IsSimulating) { OnSimulationStop(); }
         m_Registry.clear();
         m_HierarchyDirty = true;
+        m_PrimaryCamera = entt::null;
     }
 
     void World::OnSimulationStart()
@@ -212,6 +222,16 @@ namespace Antelope
         RenderSystem::RenderRuntime(*this, renderer);
     }
 
+    void World::OnCameraConstructed(entt::registry& reg, entt::entity e)
+    {
+        if (reg.get<CameraComponent>(e).IsPrimary) { m_PrimaryCamera = e; }
+    }
+
+    void World::OnCameraDestroyed(entt::registry& reg, entt::entity e)
+    {
+        if (m_PrimaryCamera == e) { m_PrimaryCamera = entt::null; }
+    }
+
     Entity World::SpawnModelNodeRecursive(const ModelNode& node, const ModelData& modelData, UUID modelAssetUUID, Entity parentEntity, std::vector<AssetBinding>* outBindings)
     {
         Entity entity { CreateEntity(node.Name) };
@@ -228,7 +248,7 @@ namespace Antelope
         transform.Translation = translation;
         transform.Rotation = glm::eulerAngles(rotation);
         transform.Scale = scale;
-        transform.LocalMatrix = node.LocalTransform;
+        entity.GetComponent<LocalMatrixComponent>().Matrix = node.LocalTransform;
         MarkTransformDirty(entity);
 
         if (!node.MeshIndices.empty())

@@ -31,7 +31,8 @@ namespace Antelope
         for (auto [entity, transform, rb] : view.each())
         {
             JPH::ShapeRefC shape;
-            std::vector<std::pair<glm::vec3, JPH::ShapeRefC>> childShapes;
+            std::vector<glm::vec3> childOffsets;
+            std::vector<JPH::ShapeRefC> childShapeRefs;
 
             if (registry.all_of<RelationshipComponent>(entity))
             {
@@ -61,7 +62,9 @@ namespace Antelope
 
                         if (childShape)
                         {
-                            childShapes.push_back({ childTrans.Translation + childCol.Offset, childShape });
+                            childOffsets.push_back(childTrans.Translation + childCol.Offset);
+                            childShapeRefs.push_back(childShape);
+
                         }
                     }
                     
@@ -69,11 +72,15 @@ namespace Antelope
                 }
             }
 
-            if (!childShapes.empty())
+            if (!childOffsets.empty())
             {
                 JPH::StaticCompoundShapeSettings compoundSettings;
-                for (const auto& cs : childShapes)
-                    compoundSettings.AddShape(ToJoltVec3(cs.first), JPH::Quat::sIdentity(), cs.second);
+
+                for (size_t i { 0 }; i < childOffsets.size(); ++i)
+                {
+                    compoundSettings.AddShape(ToJoltVec3(childOffsets[i]), JPH::Quat::sIdentity(), childShapeRefs[i]);
+                }
+
                 shape = compoundSettings.Create().Get();
             }
             else if (registry.all_of<ColliderComponent>(entity))
@@ -123,8 +130,9 @@ namespace Antelope
                 motionType = JPH::EMotionType::Kinematic;
             }
 
-            glm::vec3 worldPosition { transform.WorldMatrix[3] };
-            glm::quat worldRotation { glm::normalize(glm::quat_cast(transform.WorldMatrix)) };
+            const auto& worldMat { registry.get<WorldMatrixComponent>(entity) };
+            glm::vec3 worldPosition { worldMat.Matrix[3] };
+            glm::quat worldRotation { glm::normalize(glm::quat_cast(worldMat.Matrix)) };
 
             JPH::BodyCreationSettings bodySettings(
                 shape,
@@ -244,18 +252,19 @@ namespace Antelope
         auto& rb { registry.get<RigidBodyComponent>(rbEntity) };
         if (rb.RuntimeBodyID == 0xFFFFFFFF) { return; }
 
-        auto& transform { registry.get<TransformComponent>(rbEntity) };
-        transform.RebuildLocal();
+        auto& transform  { registry.get<TransformComponent>(rbEntity) };
+        auto& localMat   { registry.get<LocalMatrixComponent>(rbEntity) };
+        localMat.Rebuild(transform);
 
-        glm::mat4 worldMat { transform.LocalMatrix };
+        glm::mat4 worldMat { localMat.Matrix };
 
         if (registry.all_of<RelationshipComponent>(rbEntity))
         {
             entt::entity parent { registry.get<RelationshipComponent>(rbEntity).Parent };
             if (parent != entt::null)
             {
-                auto& parentTransform { registry.get<TransformComponent>(parent) };
-                worldMat = parentTransform.WorldMatrix * transform.LocalMatrix;
+                const auto& parentWorld { registry.get<WorldMatrixComponent>(parent) };
+                worldMat = parentWorld.Matrix * localMat.Matrix;
             }
         }
 

@@ -37,21 +37,34 @@ namespace Antelope
     struct TransformComponent
     {
         glm::vec3 Translation { 0.0f, 0.0f, 0.0f };
-        glm::vec3 Rotation { 0.0f, 0.0f, 0.0f };
-        glm::vec3 Scale { 1.0f, 1.0f, 1.0f };
-
-        glm::mat4 LocalMatrix { 1.0f };
-        glm::mat4 WorldMatrix { 1.0f };
+        glm::vec3 Rotation    { 0.0f, 0.0f, 0.0f };
+        glm::vec3 Scale       { 1.0f, 1.0f, 1.0f };
 
         TransformComponent() = default;
         TransformComponent(const TransformComponent&) = default;
+    };
 
-        void RebuildLocal()
+    struct LocalMatrixComponent
+    {
+        glm::mat4 Matrix { 1.0f };
+
+        LocalMatrixComponent() = default;
+        LocalMatrixComponent(const LocalMatrixComponent&) = default;
+
+        void Rebuild(const TransformComponent& t)
         {
-            LocalMatrix = glm::translate(glm::mat4(1.0f), Translation)
-                        * glm::toMat4(glm::quat(Rotation))
-                        * glm::scale(glm::mat4(1.0f), Scale);
+            Matrix = glm::translate(glm::mat4(1.0f), t.Translation)
+                * glm::toMat4(glm::quat(t.Rotation))
+                * glm::scale(glm::mat4(1.0f), t.Scale);
         }
+    };
+
+    struct WorldMatrixComponent
+    {
+        glm::mat4 Matrix { 1.0f };
+
+        WorldMatrixComponent() = default;
+        WorldMatrixComponent(const WorldMatrixComponent&) = default;
     };
 
     struct NormalMatrixComponent
@@ -98,6 +111,14 @@ namespace Antelope
         MeshComponent() = default;
         MeshComponent(const MeshComponent&) = default;
         MeshComponent(MeshHandle handle) : Handle(handle) {}
+    };
+
+    struct MaterialComponent
+    {
+        uint32_t MaterialIndex { 0 };
+
+        MaterialComponent() = default;
+        MaterialComponent(const MaterialComponent&) = default;
     };
 
     enum class RigidBodyType

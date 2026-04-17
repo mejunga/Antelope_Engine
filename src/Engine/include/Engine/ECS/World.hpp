@@ -41,10 +41,14 @@ namespace Antelope
             void OnUpdateEditor(float timeStep, const EditorCamera& camera);
         #endif
             void OnUpdateRuntime(float timeStep);
+            void OnCameraConstructed(entt::registry& reg, entt::entity e);
+            void OnCameraDestroyed(entt::registry& reg, entt::entity e);
             
             inline entt::registry& GetRegistry() { return m_Registry; }
             inline PhysicsContext* GetPhysicsContext() { return m_PhysicsContext.get(); }
             inline bool IsSimulating() const { return m_IsSimulating; }
+            inline entt::entity GetPrimaryCamera() const { return m_PrimaryCamera; }
+            inline void SetPrimaryCamera(entt::entity e) { m_PrimaryCamera = e; }
 
         private:
             Entity SpawnModelNodeRecursive(const ModelNode& node, const ModelData& modelData, UUID modelAssetUUID, Entity parentEntity, std::vector<AssetBinding>* outBindings);
@@ -53,6 +57,7 @@ namespace Antelope
             std::unique_ptr<PhysicsContext> m_PhysicsContext;
 
             entt::registry m_Registry;
+            entt::entity m_PrimaryCamera { entt::null };
             bool m_HierarchyDirty { true };
             bool m_IsSimulating { false }; 
 

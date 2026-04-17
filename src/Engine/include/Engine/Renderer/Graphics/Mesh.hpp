@@ -32,6 +32,5 @@ namespace Antelope
         uint32_t uvOffset { 0 };
         uint32_t faceOffset { 0 };
         uint32_t faceCount { 0 };
-        uint32_t materialIndex { 0 };
     };
 }

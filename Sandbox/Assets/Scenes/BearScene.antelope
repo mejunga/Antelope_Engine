@@ -21,9 +21,9 @@ Entities:
     TagComponent:
       Tag: Bear_Sculpture_Root
     TransformComponent:
-      Translation: [0.71879435, 9.9119835, -0.012390532]
-      Rotation: [-0.0047106924, -0.018003158, 0.25592434]
-      Scale: [0.9999988, 0.99999905, 1]
+      Translation: [0.94978404, 4.6451974, -0.00967754]
+      Rotation: [0.012142129, 0.07252913, 0.35541397]
+      Scale: [0.9999995, 0.9999995, 0.99999964]
     RigidBodyComponent:
       Type: 2
       Mass: 500
@@ -2187,7 +2187,7 @@ Entities:
     TagComponent:
       Tag: Ground
     TransformComponent:
-      Translation: [0, -2, 0]
+      Translation: [0, -1.1949863, 0]
       Rotation: [0, -0, 0]
       Scale: [1, 1, 1]
     RigidBodyComponent:

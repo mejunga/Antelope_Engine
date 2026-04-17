@@ -14,6 +14,8 @@
 
 namespace Antelope
 {
+    static std::vector<RenderCommand> s_RenderList;
+
 #ifdef ANTELOPE_EDITOR_MODE
     void RenderSystem::RenderEditor(World& world, std::shared_ptr<Renderer> renderer, const EditorCamera& camera)
     {
@@ -28,23 +30,29 @@ namespace Antelope
             static_cast<float>(renderExtent.height)
         );
 
-        std::vector<RenderCommand> renderList;
+        s_RenderList.clear();
         auto& registry { world.GetRegistry() };
-        auto view { registry.view<TransformComponent, MeshComponent, NormalMatrixComponent>(entt::exclude<DisabledComponent>) };
-        renderList.reserve(view.size_hint());
+        auto view { registry.view<WorldMatrixComponent, MeshComponent, NormalMatrixComponent>(entt::exclude<DisabledComponent>) };
+        s_RenderList.reserve(view.size_hint());
 
-        for (auto [entityID, transform, meshComponent, normalMat] : view.each())
+        for (auto [entityID, worldMat, meshComponent, normalMat] : view.each())
         {
             RenderCommand cmd {};
-            cmd.transform = transform.WorldMatrix;
+            cmd.transform = worldMat.Matrix;
             cmd.normalMatrix = normalMat.Matrix;
             cmd.mesh = meshComponent.Handle;
+
+            if (auto* mat { registry.try_get<MaterialComponent>(entityID) })
+            {
+                cmd.materialIndex = mat->MaterialIndex;
+            }
+
             cmd.entityID = static_cast<uint32_t>(entityID);
 
-            renderList.push_back(cmd);
+            s_RenderList.push_back(cmd);
         }
 
-        renderer->DrawFrame(cameraUBO, renderList);
+        renderer->DrawFrame(cameraUBO, s_RenderList);
     }
 #endif
 
@@ -54,49 +62,44 @@ namespace Antelope
 
         glm::mat4 viewMatrix { 1.0f };
         glm::mat4 projMatrix { 1.0f };
-        bool cameraFound { false };
 
         auto& registry { world.GetRegistry() };
-        auto cameraView { registry.view<TransformComponent, CameraComponent>() };
-        
-        for (auto [entity, transform, camera] : cameraView.each())
-        {
-            if (camera.IsPrimary)
-            {
-                viewMatrix = glm::inverse(transform.WorldMatrix);
-                auto extent { Application::Get().GetSwapChain()->GetExtent() };
-                camera.CalculateProjection(static_cast<float>(extent.width) / static_cast<float>(extent.height));
-                projMatrix = camera.Projection;
-
-                cameraFound = true;
-                break;
-            }
-        }
-
-        if (!cameraFound) 
+        entt::entity camEntity { world.GetPrimaryCamera() };
+        if (camEntity == entt::null)
         {
             AE_ENGINE_WARN("No primary camera found in the scene!");
             return;
         }
 
+        const auto& [camWorld, camera] { registry.get<WorldMatrixComponent, CameraComponent>(camEntity) };
+        viewMatrix = glm::inverse(camWorld.Matrix);
+        auto extent { Application::Get().GetSwapChain()->GetExtent() };
+        camera.CalculateProjection(static_cast<float>(extent.width) / static_cast<float>(extent.height));
+        projMatrix = camera.Projection;
+
         UniformBufferObject cameraUBO {};
         cameraUBO.view = viewMatrix;
         cameraUBO.proj = projMatrix;
 
-        std::vector<RenderCommand> renderList;
-        auto meshView { registry.view<TransformComponent, MeshComponent, NormalMatrixComponent>(entt::exclude<DisabledComponent>) };
-        renderList.reserve(meshView.size_hint());
+        s_RenderList.clear();
+        auto meshView { registry.view<WorldMatrixComponent, MeshComponent, NormalMatrixComponent>(entt::exclude<DisabledComponent>) };
+        s_RenderList.reserve(meshView.size_hint());
 
-        for (auto [entityID, transform, meshComponent, normalMat] : meshView.each()) 
+        for (auto [entityID, worldMat, meshComponent, normalMat] : meshView.each())
         {
             RenderCommand cmd {};
-            cmd.transform = transform.WorldMatrix;
+            cmd.transform = worldMat.Matrix;
             cmd.normalMatrix = normalMat.Matrix;
             cmd.mesh = meshComponent.Handle;
 
-            renderList.push_back(cmd);
+            if (auto* mat { registry.try_get<MaterialComponent>(entityID) })
+            {
+                cmd.materialIndex = mat->MaterialIndex;
+            }
+
+            s_RenderList.push_back(cmd);
         }
 
-        renderer->DrawFrame(cameraUBO, renderList);
+        renderer->DrawFrame(cameraUBO, s_RenderList);
     }
 }

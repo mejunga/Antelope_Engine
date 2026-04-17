@@ -100,12 +100,12 @@ namespace Antelope::Editor
                 renderList.clear();
                 
                 auto& registry { Application::Get().GetWorld()->GetRegistry() };
-                auto view { registry.view<TransformComponent, MeshComponent, NormalMatrixComponent>() };
+                auto view { registry.view<WorldMatrixComponent, MeshComponent, NormalMatrixComponent>() };
 
-                for (auto [entityID, transform, mesh, normalMat] : view.each())
+                for (auto [entityID, worldMat, mesh, normalMat] : view.each())
                 {
                     RenderCommand cmd {};
-                    cmd.transform = transform.WorldMatrix;
+                    cmd.transform = worldMat.Matrix;
                     cmd.normalMatrix = normalMat.Matrix;
                     cmd.mesh = mesh.Handle;
                     cmd.entityID = static_cast<uint32_t>(entityID);
@@ -192,7 +192,8 @@ namespace Antelope::Editor
             cameraProjection[1][1] *= -1.0f;
 
             auto& tc { m_SelectedEntity.GetComponent<TransformComponent>() };
-            glm::mat4 transform { tc.WorldMatrix };
+            auto& worldMat { m_SelectedEntity.GetComponent<WorldMatrixComponent>() };
+            glm::mat4 transform { worldMat.Matrix };
             ImGuizmo::Manipulate(glm::value_ptr(cameraView), glm::value_ptr(cameraProjection), (ImGuizmo::OPERATION)m_GizmoType, ImGuizmo::LOCAL, glm::value_ptr(transform));
 
             if (ImGuizmo::IsUsing())
@@ -203,8 +204,8 @@ namespace Antelope::Editor
 
                 if (rel.Parent != entt::null)
                 {
-                    auto& parentTc { Application::Get().GetWorld()->GetRegistry().get<TransformComponent>(rel.Parent) };
-                    localTransform = glm::inverse(parentTc.WorldMatrix) * transform;
+                    const auto& parentWorld { Application::Get().GetWorld()->GetRegistry().get<WorldMatrixComponent>(rel.Parent) };
+                    localTransform = glm::inverse(parentWorld.Matrix) * transform;
                 }
 
                 glm::vec3 translation, rotation, scale;

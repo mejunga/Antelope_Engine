@@ -313,7 +313,7 @@ namespace Antelope::Editor
                 {
                     if (registry.all_of<MeshComponent>(e))
                     {
-                        registry.get<MeshComponent>(e).Handle.materialIndex = texIndex;
+                        registry.emplace_or_replace<MaterialComponent>(e).MaterialIndex = texIndex;
                     }
                     break;
                 }

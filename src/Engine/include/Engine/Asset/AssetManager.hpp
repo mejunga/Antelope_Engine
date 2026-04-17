@@ -2,7 +2,7 @@
 
 #include <Engine/Asset/AssetTypes.hpp>
 
-#include <map>
+#include <unordered_map>
 #include <vector>
 #include <filesystem>
 
@@ -22,7 +22,7 @@ namespace Antelope
             static void UpdateFilePath(UUID uuid, const std::filesystem::path& newPath);
             static void Remove(UUID uuid);
 
-            static const std::map<UUID, AssetMetadata>& GetRegistry() { return s_AssetRegistry; }
+            static const std::unordered_map<UUID, AssetMetadata>& GetRegistry() { return s_AssetRegistry; }
 
         private:
             static void ProcessDirectory(const std::filesystem::path& directory);
@@ -31,6 +31,6 @@ namespace Antelope
                                                 const std::vector<AssetRecord>& lastKnownAssets);
 
         private:
-            static std::map<UUID, AssetMetadata> s_AssetRegistry;
+            static std::unordered_map<UUID, AssetMetadata> s_AssetRegistry;
     };
 }

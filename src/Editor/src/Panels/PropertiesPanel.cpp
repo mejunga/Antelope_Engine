@@ -82,8 +82,12 @@ namespace Antelope::Editor
         DrawComponent<MeshComponent>("Mesh Renderer", entity, [](auto& component)
         {
             ImGui::Text("Mesh ID: %d", component.Handle.MeshID);
-            ImGui::Text("Material Index: %d", component.Handle.materialIndex);
             ImGui::Text("Polygons: %d", component.Handle.faceCount);
+        });
+
+        DrawComponent<MaterialComponent>("Material", entity, [](auto& component)
+        {
+            ImGui::Text("Texture Index: %d", component.MaterialIndex);
         });
 
         DrawComponent<RigidBodyComponent>("Rigid Body", entity, [](auto& component)

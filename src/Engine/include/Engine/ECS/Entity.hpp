@@ -68,7 +68,7 @@ namespace Antelope
             const glm::vec3& GetLocalPosition() const { return GetComponent<TransformComponent>().Translation; }
             const glm::vec3& GetLocalRotation() const { return GetComponent<TransformComponent>().Rotation; }
             const glm::vec3& GetLocalScale() const { return GetComponent<TransformComponent>().Scale; }
-            glm::vec3 GetWorldPosition() const { return glm::vec3(GetComponent<TransformComponent>().WorldMatrix[3]); }
+            glm::vec3 GetWorldPosition() const { return glm::vec3(GetComponent<WorldMatrixComponent>().Matrix[3]); }
 
             template<typename T, typename... Args>
             T& AddComponent(Args&&... args)

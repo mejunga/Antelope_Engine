@@ -70,8 +70,6 @@ namespace Antelope
 
         #ifdef ANTELOPE_EDITOR_MODE
             FileWatcher m_FileWatcher;
-            uint32_t m_FileWatchFrameCount { 0 };
-            static constexpr uint32_t FILE_WATCH_INTERVAL { 120 };
         #endif
     };
 
