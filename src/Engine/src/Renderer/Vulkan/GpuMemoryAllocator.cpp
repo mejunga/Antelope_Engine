@@ -129,20 +129,24 @@ namespace Antelope
         m_ColorBuffer = std::make_shared<PagedVirtualBuffer>(context, PAGE_SIZE, geomUsage, false, "ColorBuffer");
         m_NormalBuffer = std::make_shared<PagedVirtualBuffer>(context, PAGE_SIZE, geomUsage, false, "NormalBuffer");
         m_UvBuffer = std::make_shared<PagedVirtualBuffer>(context, PAGE_SIZE, geomUsage, false, "UvBuffer");
+        m_TangentBuffer = std::make_shared<PagedVirtualBuffer>(context, PAGE_SIZE, geomUsage, false, "TangentBuffer");
         m_FaceBuffer = std::make_shared<PagedVirtualBuffer>(context, PAGE_SIZE, geomUsage, false, "FaceBuffer");
 
         AE_ENGINE_INFO("GpuMemoryAllocator initialized with 128 MB page size.");
     }
 
-    MeshAllocationResult GpuMemoryAllocator::AllocateMesh(VkDeviceSize posSize, VkDeviceSize colorSize, VkDeviceSize normalSize, VkDeviceSize uvSize, VkDeviceSize faceSize, uint32_t meshID)
+    MeshAllocationResult GpuMemoryAllocator::AllocateMesh(VkDeviceSize posSize, VkDeviceSize colorSize, VkDeviceSize normalSize, 
+                                                          VkDeviceSize uvSize, VkDeviceSize tangentSize, VkDeviceSize faceSize, uint32_t meshID)
     {
         VirtualAllocation posAlloc { m_PosBuffer->Allocate(posSize) };
         VirtualAllocation colorAlloc { m_ColorBuffer->Allocate(colorSize) };
         VirtualAllocation normalAlloc { m_NormalBuffer->Allocate(normalSize) };
         VirtualAllocation uvAlloc { m_UvBuffer->Allocate(uvSize) };
+        VirtualAllocation tangentAlloc { m_TangentBuffer->Allocate(tangentSize) };
         VirtualAllocation faceAlloc { m_FaceBuffer->Allocate(faceSize) };
 
-        m_FreeDataMap[meshID] = { posAlloc, colorAlloc, normalAlloc, uvAlloc, faceAlloc };
+        m_FreeDataMap[meshID] = { posAlloc, colorAlloc, normalAlloc, uvAlloc, tangentAlloc, faceAlloc };
+
 
         MeshAllocationResult result {};
         result.MeshID = meshID;
@@ -150,12 +154,14 @@ namespace Antelope
         result.colorOffset = static_cast<uint32_t>(colorAlloc.Offset / sizeof(VertexColor));
         result.normalOffset = static_cast<uint32_t>(normalAlloc.Offset / sizeof(VertexNormal));
         result.uvOffset = static_cast<uint32_t>(uvAlloc.Offset / sizeof(VertexUV));
+        result.tangentOffset = static_cast<uint32_t>(tangentAlloc.Offset / sizeof(VertexTangent));
         result.faceOffset = static_cast<uint32_t>(faceAlloc.Offset / sizeof(Face));
 
         result.pos = { m_PosBuffer->GetBuffer(posAlloc.PageIndex), posAlloc.Offset };
         result.color = { m_ColorBuffer->GetBuffer(colorAlloc.PageIndex), colorAlloc.Offset };
         result.normal = { m_NormalBuffer->GetBuffer(normalAlloc.PageIndex), normalAlloc.Offset };
         result.uv = { m_UvBuffer->GetBuffer(uvAlloc.PageIndex), uvAlloc.Offset };
+        result.tangent = { m_TangentBuffer->GetBuffer(tangentAlloc.PageIndex), tangentAlloc.Offset };
         result.face = { m_FaceBuffer->GetBuffer(faceAlloc.PageIndex), faceAlloc.Offset };
 
         return result;
@@ -171,6 +177,7 @@ namespace Antelope
         m_ColorBuffer->Free(data.color);
         m_NormalBuffer->Free(data.normal);
         m_UvBuffer->Free(data.uv);
+        m_TangentBuffer->Free(data.tangent);
         m_FaceBuffer->Free(data.face);
 
         m_FreeDataMap.erase(it);

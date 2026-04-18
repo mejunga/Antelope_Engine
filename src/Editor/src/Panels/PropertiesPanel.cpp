@@ -121,6 +121,12 @@ namespace Antelope::Editor
                 this->DrawVec3Control("Size", component.Size, 1.0f);
             }
         });
+
+        DrawComponent<DirectionalLightComponent>("Directional Light", entity, [](auto& component)
+        {
+            ImGui::ColorEdit3("Color", glm::value_ptr(component.Color));
+            ImGui::DragFloat("Intensity", &component.Intensity, 0.1f, 0.0f, 100.0f, "%.2f");
+        });
     }
 
     bool PropertiesPanel::DrawVec3Control(const std::string& label, glm::vec3& values, float resetValue, float columnWidth)

@@ -13,8 +13,8 @@ struct ObjectData
     mat4 normalMatrix;
     uint posOffset; uint colorOffset; uint normalOffset; uint uvOffset;
     uint faceOffset; uint materialIndex;
+    uint tangentOffset;
     uint entityID;
-    uint padding;
 };
 
 layout(push_constant) uniform UniformBufferObject

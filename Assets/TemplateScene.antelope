@@ -1,3 +1,13 @@
-Scene: Template
+Scene: TemplateScene
 AssetBindings: []
-Entities: []
+Entities:
+  - Entity: 1
+    TagComponent:
+      Tag: Sun
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [-0.7854, 0.5236, 0]
+      Scale: [1, 1, 1]
+    DirectionalLightComponent:
+      Color: [1, 0.98, 0.92]
+      Intensity: 5.0

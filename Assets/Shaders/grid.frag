@@ -38,10 +38,13 @@ void main()
     float thinFade = 1.0 - smoothstep(10.0, 75.0, dist);
     float thickFade = 1.0 - smoothstep(25.0, 350.0, dist);
 
-    vec4 thinGrid = grid(fragPos3D, 1.0, 0.5);
-    vec4 thickGrid = grid(fragPos3D, 0.1, 1.5); 
-    
-    float thinAlpha = thinGrid.a * 0.1 * thinFade;   
+    float thinThick  = mix(0.5,  0.05, smoothstep(3.0,  40.0,  dist));
+float thickThick = mix(1.5,  0.3,  smoothstep(5.0,  100.0, dist));
+
+    vec4 thinGrid = grid(fragPos3D, 1.0, thinThick);
+    vec4 thickGrid = grid(fragPos3D, 0.1, thickThick);
+
+    float thinAlpha = thinGrid.a  * 0.1 * thinFade;
     float thickAlpha = thickGrid.a * 0.2 * thickFade;
     
     vec3 finalColor = mix(thinGrid.rgb, thickGrid.rgb, thickGrid.a);

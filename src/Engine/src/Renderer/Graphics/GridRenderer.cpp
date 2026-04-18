@@ -39,9 +39,9 @@ namespace Antelope
         config.colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
         config.colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
         config.colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
-        config.colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-                                                     VK_COLOR_COMPONENT_G_BIT |
-                                                     VK_COLOR_COMPONENT_B_BIT;
+        config.colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT 
+                                                   | VK_COLOR_COMPONENT_G_BIT 
+                                                   | VK_COLOR_COMPONENT_B_BIT;
                                                      
         config.depthStencilInfo.depthWriteEnable = VK_FALSE;
 

@@ -10,6 +10,7 @@ struct VertexPosition { vec4 pos; };
 struct VertexColor { vec4 color; };
 struct VertexNormal { vec4 normal; };
 struct VertexUV { vec2 uv; };
+struct VertexTangent { vec4 tangent; };
 struct Face { uvec4 data; }; 
 
 struct ObjectData
@@ -22,8 +23,8 @@ struct ObjectData
     uint uvOffset;
     uint faceOffset;
     uint materialIndex;
+    uint tangentOffset;
     uint padding1;
-    uint padding2;
 };
 
 layout(std430, binding = 1) readonly buffer PosBuffer { VertexPosition vertices[]; } posBuf;
@@ -32,11 +33,14 @@ layout(std430, binding = 3) readonly buffer NormBuffer { VertexNormal normals[];
 layout(std430, binding = 4) readonly buffer FaceBuffer { Face faces[]; } faceBuf;
 layout(std430, binding = 5) readonly buffer UvBuffer { VertexUV uvs[]; } uvBuf;
 layout(std430, binding = 6) readonly buffer ObjectBuffer { ObjectData objects[]; } objBuf;
+layout(std430, binding = 9) readonly buffer TangentBuffer { VertexTangent tangents[]; } tangentBuf;
 
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec3 fragNormal;
 layout(location = 2) out vec2 fragUV;
 layout(location = 3) out flat uint fragMatID;
+layout(location = 4) out vec3 fragWorldPos;
+layout(location = 5) out vec3 fragTangent;
 
 void main() 
 {
@@ -56,11 +60,14 @@ void main()
     vec3 color = colBuf.colors[obj.colorOffset + vIndex].color.xyz;
     vec3 normal = normBuf.normals[obj.normalOffset + vIndex].normal.xyz;
     vec2 uv = uvBuf.uvs[obj.uvOffset + vIndex].uv;
+    vec3 tangent = tangentBuf.tangents[obj.tangentOffset + vIndex].tangent.xyz;
 
     gl_Position = ubo.proj * ubo.view * obj.model * vec4(position, 1.0);
     
     fragColor = color;
     fragNormal = mat3(obj.normalMatrix) * normal;
     fragUV = uv;
+    fragTangent = mat3(obj.normalMatrix) * tangent;
     fragMatID = obj.materialIndex;
+    fragWorldPos = vec3(obj.model * vec4(position, 1.0));
 }

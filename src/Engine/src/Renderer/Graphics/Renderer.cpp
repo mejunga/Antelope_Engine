@@ -80,6 +80,8 @@ namespace Antelope
         AE_ENGINE_TRACE("Uniform buffers created and mapped for {0} frames.", m_MaxFramesInFlight);
         CreateObjectBuffers();
         AE_ENGINE_TRACE("Object buffers created and mapped for {0} frames.", m_MaxFramesInFlight);
+        CreateMaterialBuffers();
+        AE_ENGINE_TRACE("Material buffers created and mapped for {0} frames.", m_MaxFramesInFlight);
         CreateIndirectBuffers();
         AE_ENGINE_TRACE("Indirect command buffers created and mapped for {0} frames.", m_MaxFramesInFlight);
         CreateDescriptorPool();
@@ -166,8 +168,9 @@ namespace Antelope
         VkDeviceSize colorSize { sizeof(VertexColor) * meshData.colors.size() };
         VkDeviceSize normalSize { sizeof(VertexNormal) * meshData.normals.size() };
         VkDeviceSize uvSize { sizeof(VertexUV) * meshData.uvs.size() };
+        VkDeviceSize tangentSize { sizeof(VertexTangent) * meshData.tangents.size() };
         VkDeviceSize faceSize { sizeof(Face) * meshData.faces.size() };
-        VkDeviceSize totalSize { posSize + colorSize + normalSize + faceSize + uvSize };
+        VkDeviceSize totalSize { posSize + colorSize + normalSize + uvSize + tangentSize + faceSize };
 
         MeshHandle handle {};
 
@@ -176,11 +179,12 @@ namespace Antelope
         handle.MeshID = m_NextMeshID++;
         handle.faceCount = static_cast<uint32_t>(meshData.faces.size());
 
-        MeshAllocationResult allocation { m_GpuAllocator->AllocateMesh(posSize, colorSize, normalSize, uvSize, faceSize, handle.MeshID) };
+        MeshAllocationResult allocation { m_GpuAllocator->AllocateMesh(posSize, colorSize, normalSize, uvSize, tangentSize, faceSize, handle.MeshID) };
         handle.posOffset = allocation.posOffset;
         handle.colorOffset = allocation.colorOffset;
         handle.normalOffset = allocation.normalOffset;
         handle.uvOffset = allocation.uvOffset;
+        handle.tangentOffset = allocation.tangentOffset;
         handle.faceOffset = allocation.faceOffset;
         
         VkBuffer stagingBuffer { VK_NULL_HANDLE };
@@ -211,6 +215,7 @@ namespace Antelope
         if (colorSize > 0) { memcpy(dst + writeOffset, meshData.colors.data(), colorSize);  writeOffset += colorSize; }
         if (normalSize > 0) { memcpy(dst + writeOffset, meshData.normals.data(), normalSize); writeOffset += normalSize; }
         if (uvSize > 0) { memcpy(dst + writeOffset, meshData.uvs.data(), uvSize); writeOffset += uvSize; }
+        if (tangentSize > 0) { memcpy(dst + writeOffset, meshData.tangents.data(), tangentSize); writeOffset += tangentSize; }
         if (faceSize > 0) { memcpy(dst + writeOffset, meshData.faces.data(), faceSize); }
 
         VkCommandBufferAllocateInfo allocationInfo {};
@@ -240,12 +245,13 @@ namespace Antelope
                     vkCmdCopyBuffer(commandBuffer, stagingBuffer, dstBuf, 1, &copyRegion);
                     srcOffset += size;
                 }
-            } };
+            }};
 
         addCopy(allocation.pos.Buffer, allocation.pos.Offset, posSize);
         addCopy(allocation.color.Buffer, allocation.color.Offset, colorSize);
         addCopy(allocation.normal.Buffer, allocation.normal.Offset, normalSize);
         addCopy(allocation.uv.Buffer, allocation.uv.Offset, uvSize);
+        addCopy(allocation.tangent.Buffer, allocation.tangent.Offset, tangentSize);
         addCopy(allocation.face.Buffer, allocation.face.Offset, faceSize);
 
         vkEndCommandBuffer(commandBuffer);
@@ -262,7 +268,6 @@ namespace Antelope
 
         vkQueueSubmit(m_Context->GetTransferQueue(), 1, &submitInfo, transferFence);
 
-        handle.MeshID = m_NextMeshID++;
         m_PendingTransfers.push_back({transferFence, commandBuffer, stagingBuffer, stagingAllocation, handle.MeshID, UINT32_MAX});
         m_PendingMeshIDs.insert(handle.MeshID);
 
@@ -354,6 +359,23 @@ namespace Antelope
         vmaCopyMemoryToAllocation(m_Context->GetAllocator(), data, outAllocation, 0, bufferSize);
     }
 
+    uint32_t Renderer::AddMaterial(const PBRMaterialData& material)
+    {
+        uint32_t index { static_cast<uint32_t>(m_GlobalMaterials.size()) };
+        if (index >= MAX_MATERIALS)
+        {
+            AE_ENGINE_WARN("Max material limit reached! Overwriting last material.");
+            return MAX_MATERIALS - 1;
+        }
+        m_GlobalMaterials.push_back(material);
+        return index;
+    }
+    
+    void Renderer::ClearMaterials()
+    {
+        m_GlobalMaterials.clear();
+    }
+
 #ifdef ANTELOPE_EDITOR_MODE
     void Renderer::ResizeRenderTexture(uint32_t width, uint32_t height)
     {
@@ -410,7 +432,7 @@ namespace Antelope
     {
         DescriptorLayoutBuilder builder;
         
-        builder.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
+        builder.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
         
         for (int i { 1 }; i <= 6; ++i)
         {
@@ -418,10 +440,12 @@ namespace Antelope
         }
 
         builder.AddBinding(7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1024);
+        builder.AddBinding(8, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);
+        builder.AddBinding(9, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
 
-        std::array<VkDescriptorBindingFlags, 8> bindingFlags {};
+        std::array<VkDescriptorBindingFlags, 10> bindingFlags {};
 
-        for (int i { 0 }; i < 7; ++i) 
+        for (int i { 0 }; i < 10; ++i) 
         {
             bindingFlags[i] = 0;
         }
@@ -533,6 +557,12 @@ namespace Antelope
 
     void Renderer::DrawObjects(VkCommandBuffer cmd, const UniformBufferObject& cameraData, const std::vector<RenderCommand>& renderList)
     {
+        if (!m_GlobalMaterials.empty())
+        {
+            void* mappedData { m_MaterialBuffers[m_CurrentFrame]->GetMappedMemory() };
+            memcpy(mappedData, m_GlobalMaterials.data(), m_GlobalMaterials.size() * sizeof(PBRMaterialData));
+        }
+
         uint32_t currentGlobalTextureCount { static_cast<uint32_t>(m_GlobalImageInfos.size()) };
 
         if (currentGlobalTextureCount > 0 && m_LastUpdatedTextureCount[m_CurrentFrame] < currentGlobalTextureCount)
@@ -557,7 +587,7 @@ namespace Antelope
         VkRenderPassBeginInfo renderPassInfo {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     #ifdef ANTELOPE_EDITOR_MODE
-        renderPassInfo.renderPass  = m_RenderTexture->GetRenderPass();
+        renderPassInfo.renderPass = m_RenderTexture->GetRenderPass();
         renderPassInfo.framebuffer = m_RenderTexture->GetFramebuffer();
         renderPassInfo.renderArea.extent = m_RenderTexture->GetExtent();
     #else
@@ -579,7 +609,7 @@ namespace Antelope
         VkViewport viewport {};
         viewport.x = 0.0f; viewport.y = 0.0f;
         #ifdef ANTELOPE_EDITOR_MODE
-        viewport.width  = static_cast<float>(m_RenderTexture->GetExtent().width);
+        viewport.width = static_cast<float>(m_RenderTexture->GetExtent().width);
         viewport.height = static_cast<float>(m_RenderTexture->GetExtent().height);
         #else
         viewport.width = static_cast<float>(m_SwapChain->GetExtent().width);
@@ -626,6 +656,7 @@ namespace Antelope
             objectDataMap[objectCount].normalOffset = command.mesh.normalOffset;
             objectDataMap[objectCount].faceOffset = command.mesh.faceOffset;
             objectDataMap[objectCount].uvOffset = command.mesh.uvOffset;
+            objectDataMap[objectCount].tangentOffset = command.mesh.tangentOffset;
             objectDataMap[objectCount].materialIndex = command.materialIndex;
         #ifdef ANTELOPE_EDITOR_MODE
             objectDataMap[objectCount].entityID = command.entityID;
@@ -843,9 +874,9 @@ namespace Antelope
 
     void Renderer::CreateCommandPool()
     {
-        QueueFamilyIndices queueFamilyIndices = m_Context->FindQueueFamilies(m_Context->GetPhysicalDevice());
+        QueueFamilyIndices queueFamilyIndices { m_Context->FindQueueFamilies(m_Context->GetPhysicalDevice()) };
 
-        VkCommandPoolCreateInfo commandPoolInfo{};
+        VkCommandPoolCreateInfo commandPoolInfo {};
         commandPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         commandPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
         commandPoolInfo.queueFamilyIndex = queueFamilyIndices.GraphicsFamily.value();
@@ -961,12 +992,29 @@ namespace Antelope
 
     void Renderer::CreateObjectBuffers()
     {
-        VkDeviceSize bufferSize = sizeof(ObjectData) * MAX_OBJECTS;
+        VkDeviceSize bufferSize { sizeof(ObjectData) * MAX_OBJECTS };
         m_ObjectBuffers.reserve(m_MaxFramesInFlight);
 
         for (size_t i { 0 }; i < m_MaxFramesInFlight; i++) 
         {
             m_ObjectBuffers.push_back(std::make_unique<Buffer>(
+                m_Context, 
+                bufferSize, 
+                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, 
+                VMA_MEMORY_USAGE_AUTO, 
+                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT
+            ));
+        }
+    }
+
+    void Renderer::CreateMaterialBuffers()
+    {
+        VkDeviceSize bufferSize { sizeof(PBRMaterialData) * MAX_MATERIALS };
+        m_MaterialBuffers.reserve(m_MaxFramesInFlight);
+
+        for (size_t i { 0 }; i < m_MaxFramesInFlight; i++) 
+        {
+            m_MaterialBuffers.push_back(std::make_unique<Buffer>(
                 m_Context, 
                 bufferSize, 
                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, 
@@ -1000,7 +1048,7 @@ namespace Antelope
         poolSizes[0].descriptorCount = static_cast<uint32_t>(m_MaxFramesInFlight);
         
         poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        poolSizes[1].descriptorCount = static_cast<uint32_t>(m_MaxFramesInFlight * 6);
+        poolSizes[1].descriptorCount = static_cast<uint32_t>(m_MaxFramesInFlight * 7);
 
         poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         poolSizes[2].descriptorCount = 1024 * m_MaxFramesInFlight;
@@ -1035,6 +1083,8 @@ namespace Antelope
             writer.WriteBuffer(4, m_GpuAllocator->GetFaceBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
             writer.WriteBuffer(5, m_GpuAllocator->GetUvBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
             writer.WriteBuffer(6, m_ObjectBuffers[i]->GetBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+            writer.WriteBuffer(8, m_MaterialBuffers[i]->GetBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+            writer.WriteBuffer(9, m_GpuAllocator->GetTangentBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
             writer.UpdateSet(m_Context, m_DescriptorSets[i]);
         }
     }

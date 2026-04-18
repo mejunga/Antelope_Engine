@@ -31,11 +31,7 @@ namespace Antelope
 
     struct MeshFreeData
     {
-        VirtualAllocation pos;
-        VirtualAllocation color;
-        VirtualAllocation normal;
-        VirtualAllocation uv;
-        VirtualAllocation face;
+        VirtualAllocation pos, color, normal, uv, tangent, face;
     };
 
     struct MeshAllocationResult
@@ -51,12 +47,14 @@ namespace Antelope
         uint32_t colorOffset { 0 };
         uint32_t normalOffset { 0 };
         uint32_t uvOffset { 0 };
+        uint32_t tangentOffset { 0 };
         uint32_t faceOffset { 0 };
 
         AttribCopyInfo pos;
         AttribCopyInfo color;
         AttribCopyInfo normal;
         AttribCopyInfo uv;
+        AttribCopyInfo tangent;
         AttribCopyInfo face;
     };
 
@@ -92,13 +90,15 @@ namespace Antelope
             GpuMemoryAllocator(std::shared_ptr<VulkanContext> context);
             ~GpuMemoryAllocator() = default;
 
-            MeshAllocationResult AllocateMesh(VkDeviceSize posSize, VkDeviceSize colorSize, VkDeviceSize normalSize, VkDeviceSize uvSize, VkDeviceSize faceSize, uint32_t meshID);
+            MeshAllocationResult AllocateMesh(VkDeviceSize posSize, VkDeviceSize colorSize, VkDeviceSize normalSize, 
+                                              VkDeviceSize uvSize, VkDeviceSize tangentSize, VkDeviceSize faceSize, uint32_t meshID);
             void FreeMesh(uint32_t meshID);
 
             inline VkBuffer GetPosBuffer(uint32_t pageIndex = 0) const { return m_PosBuffer->GetBuffer(pageIndex); }
             inline VkBuffer GetColorBuffer(uint32_t pageIndex = 0) const { return m_ColorBuffer->GetBuffer(pageIndex); }
             inline VkBuffer GetNormalBuffer(uint32_t pageIndex = 0) const { return m_NormalBuffer->GetBuffer(pageIndex); }
             inline VkBuffer GetUvBuffer(uint32_t pageIndex = 0) const { return m_UvBuffer->GetBuffer(pageIndex); }
+            inline VkBuffer GetTangentBuffer(uint32_t pageIndex = 0) const { return m_TangentBuffer->GetBuffer(pageIndex); }
             inline VkBuffer GetFaceBuffer(uint32_t pageIndex = 0) const { return m_FaceBuffer->GetBuffer(pageIndex); }
 
         private:
@@ -110,6 +110,7 @@ namespace Antelope
             std::shared_ptr<PagedVirtualBuffer> m_ColorBuffer;
             std::shared_ptr<PagedVirtualBuffer> m_NormalBuffer;
             std::shared_ptr<PagedVirtualBuffer> m_UvBuffer;
+            std::shared_ptr<PagedVirtualBuffer> m_TangentBuffer;
             std::shared_ptr<PagedVirtualBuffer> m_FaceBuffer;
 
             std::unordered_map<uint32_t, MeshFreeData> m_FreeDataMap;

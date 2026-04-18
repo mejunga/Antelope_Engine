@@ -41,8 +41,6 @@ namespace Antelope
             void OnUpdateEditor(float timeStep, const EditorCamera& camera);
         #endif
             void OnUpdateRuntime(float timeStep);
-            void OnCameraConstructed(entt::registry& reg, entt::entity e);
-            void OnCameraDestroyed(entt::registry& reg, entt::entity e);
             
             inline entt::registry& GetRegistry() { return m_Registry; }
             inline PhysicsContext* GetPhysicsContext() { return m_PhysicsContext.get(); }
@@ -51,8 +49,9 @@ namespace Antelope
             inline void SetPrimaryCamera(entt::entity e) { m_PrimaryCamera = e; }
 
         private:
-            Entity SpawnModelNodeRecursive(const ModelNode& node, const ModelData& modelData, UUID modelAssetUUID, Entity parentEntity, std::vector<AssetBinding>* outBindings);
-
+            Entity SpawnModelNodeRecursive(const ModelNode& node, const ModelData& modelData, UUID modelAssetUUID, Entity parentEntity, std::vector<AssetBinding>* outBindings, const std::vector<uint32_t>& materialIndices);
+            void OnCameraConstructed(entt::registry& reg, entt::entity e);
+            void OnCameraDestroyed(entt::registry& reg, entt::entity e);
         private:
             std::unique_ptr<PhysicsContext> m_PhysicsContext;
 

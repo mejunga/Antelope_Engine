@@ -411,6 +411,7 @@ namespace Antelope
         config.renderPass = m_RenderPass;
         config.pipelineLayout = m_PickingPipelineLayout;
         config.multisampleInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        config.colorBlendAttachment.blendEnable = VK_FALSE;
 
         m_Pipeline = std::make_unique<Pipeline>(m_Context, "Assets/Shaders/editor_picking.vert.spv", "Assets/Shaders/editor_picking.frag.spv", config);
     }

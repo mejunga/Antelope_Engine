@@ -42,7 +42,7 @@ namespace Antelope
                 {
                     if (registry.all_of<ColliderComponent>(child) && registry.all_of<TransformComponent>(child))
                     {
-                        auto& childCol   { registry.get<ColliderComponent>(child) };
+                        auto& childCol { registry.get<ColliderComponent>(child) };
                         auto& childTrans { registry.get<TransformComponent>(child) };
                         
                         JPH::ShapeRefC childShape;
@@ -64,7 +64,6 @@ namespace Antelope
                         {
                             childOffsets.push_back(childTrans.Translation + childCol.Offset);
                             childShapeRefs.push_back(childShape);
-
                         }
                     }
                     
@@ -143,7 +142,7 @@ namespace Antelope
             );
 
             bodySettings.mRestitution = rb.Restitution;
-            bodySettings.mFriction    = rb.Friction;
+            bodySettings.mFriction = rb.Friction;
 
             if (rb.Type == RigidBodyType::Dynamic && rb.Mass > 0.0f)
             {
@@ -156,6 +155,7 @@ namespace Antelope
             if (body)
             {
                 rb.RuntimeBodyID = body->GetID().GetIndexAndSequenceNumber();
+
                 if (!registry.all_of<DisabledComponent>(entity))
                 {
                     bodyInterface.AddBody(body->GetID(), JPH::EActivation::Activate);
@@ -233,8 +233,8 @@ namespace Antelope
     void PhysicsSystem::SetBodyTransform(World& world, PhysicsContext& physicsContext, entt::entity entity)
     {
         auto& registry { world.GetRegistry() };
-
         entt::entity rbEntity { entity };
+
         while (rbEntity != entt::null && !registry.all_of<RigidBodyComponent>(rbEntity))
         {
             if (registry.all_of<RelationshipComponent>(rbEntity))
@@ -250,10 +250,11 @@ namespace Antelope
         if (rbEntity == entt::null) { return; }
 
         auto& rb { registry.get<RigidBodyComponent>(rbEntity) };
+
         if (rb.RuntimeBodyID == 0xFFFFFFFF) { return; }
 
-        auto& transform  { registry.get<TransformComponent>(rbEntity) };
-        auto& localMat   { registry.get<LocalMatrixComponent>(rbEntity) };
+        auto& transform { registry.get<TransformComponent>(rbEntity) };
+        auto& localMat { registry.get<LocalMatrixComponent>(rbEntity) };
         localMat.Rebuild(transform);
 
         glm::mat4 worldMat { localMat.Matrix };
@@ -261,6 +262,7 @@ namespace Antelope
         if (registry.all_of<RelationshipComponent>(rbEntity))
         {
             entt::entity parent { registry.get<RelationshipComponent>(rbEntity).Parent };
+            
             if (parent != entt::null)
             {
                 const auto& parentWorld { registry.get<WorldMatrixComponent>(parent) };

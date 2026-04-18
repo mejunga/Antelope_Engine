@@ -24,10 +24,21 @@ namespace Antelope
         std::vector<ModelNode> Children;
     };
 
+    struct ModelMaterial 
+    {
+        glm::vec4 AlbedoFactor { 1.0f };
+        glm::vec4 MetallicRoughnessFactors { 0.0f, 0.5f, 1.0f, 0.0f };
+        
+        std::string AlbedoTexPath;
+        std::string NormalTexPath;
+        std::string MetRoughAOTexPath;
+        std::string EmissiveTexPath;
+    };
+
     struct ModelData
     {
         std::vector<SubMeshData> SubMeshes;
-        std::vector<std::string> MaterialTextures;
+        std::vector<ModelMaterial> Materials;
         ModelNode RootNode;
     };
 }

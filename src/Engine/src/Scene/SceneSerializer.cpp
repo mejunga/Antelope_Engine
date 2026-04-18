@@ -45,11 +45,11 @@ namespace Antelope
 
         if (entity.HasComponent<TransformComponent>())
         {
-            const auto& t { entity.GetComponent<TransformComponent>() };
+            const auto& tc { entity.GetComponent<TransformComponent>() };
             out << YAML::Key << "TransformComponent" << YAML::Value << YAML::BeginMap;
-            out << YAML::Key << "Translation" << YAML::Value; EmitVec3(out, t.Translation);
-            out << YAML::Key << "Rotation" << YAML::Value; EmitVec3(out, t.Rotation);
-            out << YAML::Key << "Scale" << YAML::Value; EmitVec3(out, t.Scale);
+            out << YAML::Key << "Translation" << YAML::Value; EmitVec3(out, tc.Translation);
+            out << YAML::Key << "Rotation" << YAML::Value; EmitVec3(out, tc.Rotation);
+            out << YAML::Key << "Scale" << YAML::Value; EmitVec3(out, tc.Scale);
             out << YAML::EndMap;
         }
 
@@ -87,6 +87,37 @@ namespace Antelope
             out << YAML::Key << "Type" << YAML::Value << (int)col.Type;
             out << YAML::Key << "Size" << YAML::Value; EmitVec3(out, col.Size);
             out << YAML::Key << "Offset" << YAML::Value; EmitVec3(out, col.Offset);
+            out << YAML::EndMap;
+        }
+
+        if (entity.HasComponent<DirectionalLightComponent>())
+        {
+            const auto& light { entity.GetComponent<DirectionalLightComponent>() };
+            out << YAML::Key << "DirectionalLightComponent" << YAML::Value << YAML::BeginMap;
+            out << YAML::Key << "Color" << YAML::Value; EmitVec3(out, light.Color);
+            out << YAML::Key << "Intensity" << YAML::Value << light.Intensity;
+            out << YAML::EndMap;
+        }
+
+        if (entity.HasComponent<PointLightComponent>())
+        {
+            const auto& light { entity.GetComponent<PointLightComponent>() };
+            out << YAML::Key << "PointLightComponent" << YAML::Value << YAML::BeginMap;
+            out << YAML::Key << "Color" << YAML::Value; EmitVec3(out, light.Color);
+            out << YAML::Key << "Intensity" << YAML::Value << light.Intensity;
+            out << YAML::Key << "Radius" << YAML::Value << light.Radius;
+            out << YAML::EndMap;
+        }
+
+        if (entity.HasComponent<SpotLightComponent>())
+        {
+            const auto& light { entity.GetComponent<SpotLightComponent>() };
+            out << YAML::Key << "SpotLightComponent" << YAML::Value << YAML::BeginMap;
+            out << YAML::Key << "Color" << YAML::Value; EmitVec3(out, light.Color);
+            out << YAML::Key << "Intensity" << YAML::Value << light.Intensity;
+            out << YAML::Key << "Radius" << YAML::Value << light.Radius;
+            out << YAML::Key << "InnerCutOff" << YAML::Value << light.InnerCutOff;
+            out << YAML::Key << "OuterCutOff" << YAML::Value << light.OuterCutOff;
             out << YAML::EndMap;
         }
 
@@ -195,10 +226,10 @@ namespace Antelope
 
             if (auto node { entityNode["TransformComponent"] })
             {
-                auto& t { entity.GetComponent<TransformComponent>() };
-                t.Translation = DecodeVec3(node["Translation"]);
-                t.Rotation = DecodeVec3(node["Rotation"]);
-                t.Scale = DecodeVec3(node["Scale"]);
+                auto& tc { entity.GetComponent<TransformComponent>() };
+                tc.Translation = DecodeVec3(node["Translation"]);
+                tc.Rotation = DecodeVec3(node["Rotation"]);
+                tc.Scale = DecodeVec3(node["Scale"]);
                 world.MarkTransformDirty(entity);
             }
 
@@ -228,6 +259,31 @@ namespace Antelope
                 col.Type = (ColliderType)node["Type"].as<int>();
                 col.Size = DecodeVec3(node["Size"]);
                 col.Offset = DecodeVec3(node["Offset"]);
+            }
+
+            if (auto node { entityNode["DirectionalLightComponent"] })
+            {
+                auto& light { entity.AddComponent<DirectionalLightComponent>() };
+                light.Color = DecodeVec3(node["Color"]);
+                light.Intensity = node["Intensity"].as<float>();
+            }
+
+            if (auto node { entityNode["PointLightComponent"] })
+            {
+                auto& light { entity.AddComponent<PointLightComponent>() };
+                light.Color = DecodeVec3(node["Color"]);
+                light.Intensity = node["Intensity"].as<float>();
+                light.Radius = node["Radius"].as<float>();
+            }
+
+            if (auto node { entityNode["SpotLightComponent"] })
+            {
+                auto& light { entity.AddComponent<SpotLightComponent>() };
+                light.Color = DecodeVec3(node["Color"]);
+                light.Intensity = node["Intensity"].as<float>();
+                light.Radius = node["Radius"].as<float>();
+                light.InnerCutOff = node["InnerCutOff"].as<float>();
+                light.OuterCutOff = node["OuterCutOff"].as<float>();
             }
         }
 

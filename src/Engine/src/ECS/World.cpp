@@ -8,6 +8,7 @@
 #include <Engine/Core/Application.hpp>
 #include <Engine/Debug/Log.hpp>
 #include <Engine/Asset/AssetManager.hpp>
+#include <Engine/Asset/TextureManager.hpp>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
@@ -82,17 +83,45 @@ namespace Antelope
         rootTransform.Scale = scale;
         MarkTransformDirty(rootEntity);
 
+        auto renderer { Application::Get().GetRenderer() };
+        auto textureManager { Application::Get().GetTextureManager() };
+        
+        std::vector<uint32_t> ssboMaterialIndices;
+        ssboMaterialIndices.reserve(modelData.Materials.size());
+
+        for (const auto& modelMat : modelData.Materials)
+        {
+            PBRMaterialData pbrMat;
+            pbrMat.AlbedoFactor = modelMat.AlbedoFactor;
+            pbrMat.MetallicRoughnessFactors = modelMat.MetallicRoughnessFactors;
+
+            auto loadTex { [&](const std::string& filename) -> uint32_t {
+                if (filename.empty()) return 0xFFFFFFFF;
+                for (const auto& [uuid, meta] : AssetManager::GetRegistry()) {
+                    if (meta.Type == AssetType::Texture2D && meta.FilePath.filename().string() == filename) {
+                        return textureManager->LoadTexture(meta.FilePath.string());
+                    }
+                }
+                return 0xFFFFFFFF;
+            }};
+
+            pbrMat.AlbedoTexIndex = loadTex(modelMat.AlbedoTexPath);
+            pbrMat.NormalTexIndex = loadTex(modelMat.NormalTexPath);
+            pbrMat.MetRoughAOTexIndex = loadTex(modelMat.MetRoughAOTexPath);
+            pbrMat.EmissiveTexIndex = loadTex(modelMat.EmissiveTexPath);
+
+            ssboMaterialIndices.push_back(renderer->AddMaterial(pbrMat));
+        }
+
         if (!modelData.RootNode.Children.empty())
         {
             for (const auto& childNode : modelData.RootNode.Children)
             {
-                SpawnModelNodeRecursive(childNode, modelData, modelAssetUUID, rootEntity, outBindings);
+                SpawnModelNodeRecursive(childNode, modelData, modelAssetUUID, rootEntity, outBindings, ssboMaterialIndices);
             }
 
             return rootEntity;
         }
-
-        auto renderer { Application::Get().GetRenderer() };
 
         for (uint32_t i { 0 }; i < modelData.SubMeshes.size(); ++i)
         {
@@ -102,24 +131,17 @@ namespace Antelope
             auto& meshComp { part.AddComponent<MeshComponent>() };
             meshComp.Handle = renderer->UploadMesh(subMesh.Data);
 
+            uint32_t matIdx { subMesh.MaterialIndex };
+            
+            if (matIdx < ssboMaterialIndices.size())
+            {
+                part.AddComponent<MaterialComponent>().MaterialIndex = ssboMaterialIndices[matIdx];
+            }
+
             if (outBindings)
             {
                 UUID entityUUID { m_Registry.get<IDComponent>(part.GetHandle()).ID };
                 outBindings->push_back({ entityUUID, modelAssetUUID, "MeshComponent", i });
-
-                uint32_t matIdx { subMesh.MaterialIndex };
-                if (matIdx < modelData.MaterialTextures.size() && !modelData.MaterialTextures[matIdx].empty())
-                {
-                    for (auto& [texUUID, texMeta] : AssetManager::GetRegistry())
-                    {
-                        if (texMeta.Type == AssetType::Texture2D
-                            && texMeta.FilePath.filename().string() == modelData.MaterialTextures[matIdx])
-                        {
-                            outBindings->push_back({ entityUUID, texUUID, "MaterialSlot", 0 });
-                            break;
-                        }
-                    }
-                }
             }
         }
 
@@ -157,6 +179,7 @@ namespace Antelope
         m_Registry.clear();
         m_HierarchyDirty = true;
         m_PrimaryCamera = entt::null;
+        Application::Get().GetRenderer()->ClearMaterials();
     }
 
     void World::OnSimulationStart()
@@ -222,17 +245,7 @@ namespace Antelope
         RenderSystem::RenderRuntime(*this, renderer);
     }
 
-    void World::OnCameraConstructed(entt::registry& reg, entt::entity e)
-    {
-        if (reg.get<CameraComponent>(e).IsPrimary) { m_PrimaryCamera = e; }
-    }
-
-    void World::OnCameraDestroyed(entt::registry& reg, entt::entity e)
-    {
-        if (m_PrimaryCamera == e) { m_PrimaryCamera = entt::null; }
-    }
-
-    Entity World::SpawnModelNodeRecursive(const ModelNode& node, const ModelData& modelData, UUID modelAssetUUID, Entity parentEntity, std::vector<AssetBinding>* outBindings)
+    Entity World::SpawnModelNodeRecursive(const ModelNode& node, const ModelData& modelData, UUID modelAssetUUID, Entity parentEntity, std::vector<AssetBinding>* outBindings, const std::vector<uint32_t>& materialIndices)
     {
         Entity entity { CreateEntity(node.Name) };
 
@@ -259,32 +272,34 @@ namespace Antelope
             auto renderer { Application::Get().GetRenderer() };
             meshComp.Handle = renderer->UploadMesh(subMesh.Data);
 
+            uint32_t matIdx { subMesh.MaterialIndex };
+            if (matIdx < materialIndices.size())
+            {
+                entity.AddComponent<MaterialComponent>().MaterialIndex = materialIndices[matIdx];
+            }
+
             if (outBindings)
             {
                 UUID entityUUID { m_Registry.get<IDComponent>(entity.GetHandle()).ID };
                 outBindings->push_back({ entityUUID, modelAssetUUID, "MeshComponent", firstMeshIndex });
-
-                uint32_t matIdx { subMesh.MaterialIndex };
-                if (matIdx < modelData.MaterialTextures.size() && !modelData.MaterialTextures[matIdx].empty())
-                {
-                    for (auto& [texUUID, texMeta] : AssetManager::GetRegistry())
-                    {
-                        if (texMeta.Type == AssetType::Texture2D
-                            && texMeta.FilePath.filename().string() == modelData.MaterialTextures[matIdx])
-                        {
-                            outBindings->push_back({ entityUUID, texUUID, "MaterialSlot", 0 });
-                            break;
-                        }
-                    }
-                }
             }
         }
 
         for (const auto& childNode : node.Children)
         {
-            SpawnModelNodeRecursive(childNode, modelData, modelAssetUUID, entity, outBindings);
+            SpawnModelNodeRecursive(childNode, modelData, modelAssetUUID, entity, outBindings, materialIndices);
         }
 
         return entity;
+    }
+
+    void World::OnCameraConstructed(entt::registry& reg, entt::entity e)
+    {
+        if (reg.get<CameraComponent>(e).IsPrimary) { m_PrimaryCamera = e; }
+    }
+
+    void World::OnCameraDestroyed(entt::registry& reg, entt::entity e)
+    {
+        if (m_PrimaryCamera == e) { m_PrimaryCamera = entt::null; }
     }
 }

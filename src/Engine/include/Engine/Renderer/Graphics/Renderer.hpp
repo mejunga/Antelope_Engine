@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Engine/Renderer/Graphics/RenderCommand.hpp>
+#include <Engine/Renderer/Graphics/Material.hpp>
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
@@ -75,6 +76,8 @@ namespace Antelope
             VkCommandBuffer BeginAsyncGraphicsCommand();
             void EndAndSubmitAsyncGraphicsCommand(VkCommandBuffer cmd, VkBuffer stagingBuffer, VmaAllocation stagingAllocation, uint32_t textureIndex = UINT32_MAX);
             void CreateStagingBuffer(const void* data, VkDeviceSize size, VkBuffer& outBuffer, VmaAllocation& outAllocation);
+            uint32_t AddMaterial(const PBRMaterialData& material);
+            void ClearMaterials();            
         #ifdef ANTELOPE_EDITOR_MODE
             void ResizeRenderTexture(uint32_t width, uint32_t height);
         #endif
@@ -111,6 +114,7 @@ namespace Antelope
             void CreateSyncObjects();
             void CreateUniformBuffers();
             void CreateObjectBuffers();
+            void CreateMaterialBuffers();
             void CreateIndirectBuffers();
             void CreateDescriptorPool();
             void CreateDescriptorSets();
@@ -148,10 +152,12 @@ namespace Antelope
             std::vector<VkCommandBuffer> m_CommandBuffers;
             std::vector<std::unique_ptr<Buffer>> m_UniformBuffers;
             std::vector<std::unique_ptr<Buffer>> m_ObjectBuffers;
+            std::vector<std::unique_ptr<Buffer>> m_MaterialBuffers;
             std::vector<std::unique_ptr<Buffer>> m_IndirectBuffers;
             std::vector<VkDescriptorSet> m_DescriptorSets;
             std::vector<PendingTransfer> m_PendingTransfers;
             std::vector<VkDescriptorImageInfo> m_GlobalImageInfos;
+            std::vector<PBRMaterialData> m_GlobalMaterials;
             std::vector<uint32_t> m_LastUpdatedTextureCount;
             std::unordered_set<uint32_t> m_PendingMeshIDs;
             std::unordered_set<uint32_t> m_PendingTextureIndices;

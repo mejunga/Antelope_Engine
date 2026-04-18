@@ -9,6 +9,7 @@
 #include <Engine/Platform/Input.hpp>
 #include <Engine/Debug/Log.hpp>
 #include <Engine/Core/FileSystem.hpp>
+#include <Engine/Renderer/Graphics/Material.hpp>
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -241,7 +242,7 @@ namespace Antelope::Editor
         GetWorld()->Clear();
         m_AssetBindings.clear();
         m_CurrentScenePath = "";
-        m_SceneIsUntitled  = true;
+        m_SceneIsUntitled = true;
         std::strncpy(m_SaveAsNameBuf, "Untitled", sizeof(m_SaveAsNameBuf) - 1);
 
         std::filesystem::path templatePath { FileSystem::Resolve("engine://TemplateScene.antelope") };
@@ -284,44 +285,51 @@ namespace Antelope::Editor
             const auto& subMesh { modelData.SubMeshes[binding.MeshIndex] };
             MeshHandle handle { GetRenderer()->UploadMesh(subMesh.Data) };
 
-            auto view { registry.view<IDComponent>() };
+            PBRMaterialData pbrMat {};
+            uint32_t matIdx { subMesh.MaterialIndex };
 
+            if (matIdx < modelData.Materials.size())
+            {
+                const auto& modelMat { modelData.Materials[matIdx] };
+                pbrMat.AlbedoFactor = modelMat.AlbedoFactor;
+                pbrMat.MetallicRoughnessFactors = modelMat.MetallicRoughnessFactors;
+
+                auto loadTex { [&](const std::string& filename) -> uint32_t {
+                    if (filename.empty()) { return 0xFFFFFFFF; }
+                    for (const auto& [assetUUID, meta] : AssetManager::GetRegistry())
+                    {
+                        if (meta.Type == AssetType::Texture2D &&
+                            meta.FilePath.filename().string() == filename)
+                        {
+                            return GetTextureManager()->LoadTexture(meta.FilePath.string());
+                        }
+                    }
+                    return 0xFFFFFFFF;
+                }};
+
+                pbrMat.AlbedoTexIndex = loadTex(modelMat.AlbedoTexPath);
+                pbrMat.NormalTexIndex = loadTex(modelMat.NormalTexPath);
+                pbrMat.MetRoughAOTexIndex = loadTex(modelMat.MetRoughAOTexPath);
+                pbrMat.EmissiveTexIndex = loadTex(modelMat.EmissiveTexPath);
+            }
+
+            uint32_t matBufferIndex { GetRenderer()->AddMaterial(pbrMat) };
+
+            auto view { registry.view<IDComponent>() };
             for (auto e : view)
             {
                 if (registry.get<IDComponent>(e).ID == binding.EntityID)
                 {
                     if (registry.all_of<MeshComponent>(e)) { registry.get<MeshComponent>(e).Handle = handle; }
-                    break;
-                }
-            }
-        }
-
-        for (auto& binding : m_AssetBindings)
-        {
-            if (binding.ComponentType != "MaterialSlot") { continue; }
-
-            const auto& meta { AssetManager::GetMetadata(binding.AssetUUID) };
-            if (!meta.IsValid()) { continue; }
-
-            uint32_t texIndex { GetTextureManager()->LoadTexture(meta.FilePath.string()) };
-
-            auto view { registry.view<IDComponent>() };
-
-            for (auto e : view)
-            {
-                if (registry.get<IDComponent>(e).ID == binding.EntityID)
-                {
-                    if (registry.all_of<MeshComponent>(e))
-                    {
-                        registry.emplace_or_replace<MaterialComponent>(e).MaterialIndex = texIndex;
-                    }
+                    
+                    registry.emplace_or_replace<MaterialComponent>(e).MaterialIndex = matBufferIndex;
                     break;
                 }
             }
         }
 
         m_CurrentScenePath = virtualPath;
-        m_SceneIsUntitled  = false;
+        m_SceneIsUntitled = false;
         AE_CLIENT_INFO("Scene loaded: '{0}'", virtualPath);
     }
 

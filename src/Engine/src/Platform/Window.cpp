@@ -85,7 +85,6 @@ namespace Antelope
         glfwSetFramebufferSizeCallback(m_Window, [](GLFWwindow* window, int width, int height)
         {
             auto data { reinterpret_cast<WindowData*>(glfwGetWindowUserPointer(window)) };
-            
             data->Width = width;
             data->Height = height;
             data->LastResizeTime = glfwGetTime();

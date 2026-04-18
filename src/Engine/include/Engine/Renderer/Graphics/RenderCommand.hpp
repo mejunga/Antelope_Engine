@@ -8,10 +8,38 @@
 
 namespace Antelope
 {
-    struct UniformBufferObject
+    constexpr uint32_t MAX_POINT_LIGHTS = 32;
+    constexpr uint32_t MAX_SPOT_LIGHTS = 32;
+
+    struct PointLightData 
+    {
+        glm::vec4 positionAndRadius;
+        glm::vec4 colorAndIntensity;
+    };
+
+    struct SpotLightData 
+    {
+        glm::vec4 positionAndRadius;
+        glm::vec4 directionAndCutOff;
+        glm::vec4 colorAndIntensity;
+        glm::vec4 outerCutOffAndPad;
+    };
+
+    struct UniformBufferObject 
     {
         glm::mat4 view;
         glm::mat4 proj;
+        glm::vec4 cameraPos;
+        
+        glm::vec4 sunDirection;
+        glm::vec4 sunColor;
+
+        uint32_t pointLightCount;
+        uint32_t spotLightCount;
+        glm::vec2 _padding;
+
+        PointLightData pointLights[MAX_POINT_LIGHTS];
+        SpotLightData spotLights[MAX_SPOT_LIGHTS];
     };
 
     struct RenderCommand 
@@ -35,11 +63,11 @@ namespace Antelope
         uint32_t uvOffset { 0 };
         uint32_t faceOffset { 0 };
         uint32_t materialIndex { 0 };
+        uint32_t tangentOffset { 0 };
     #ifdef ANTELOPE_EDITOR_MODE
         uint32_t entityID { 0 };
-        uint32_t padding { 0 };
     #else
-        uint32_t padding[2] { 0, 0 };
+        uint32_t padding { 0 };
     #endif
     };
 }

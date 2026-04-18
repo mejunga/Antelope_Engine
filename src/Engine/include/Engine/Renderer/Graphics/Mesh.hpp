@@ -12,6 +12,7 @@ namespace Antelope
     struct VertexColor { alignas(16) glm::vec3 color; };
     struct VertexNormal { alignas(16) glm::vec3 normal; };
     struct VertexUV { alignas(8)  glm::vec2 uv; };
+    struct VertexTangent { alignas(16) glm::vec3 tangent; };
     struct Face { uint32_t v0, v1, v2; uint32_t normalIndex; };
 
     struct MeshData
@@ -20,6 +21,7 @@ namespace Antelope
         std::vector<VertexColor> colors;
         std::vector<VertexNormal> normals;
         std::vector<VertexUV> uvs;
+        std::vector<VertexTangent> tangents;
         std::vector<Face> faces;
     };
 
@@ -30,6 +32,7 @@ namespace Antelope
         uint32_t colorOffset { 0 };
         uint32_t normalOffset { 0 };
         uint32_t uvOffset { 0 };
+        uint32_t tangentOffset { 0 };
         uint32_t faceOffset { 0 };
         uint32_t faceCount { 0 };
     };

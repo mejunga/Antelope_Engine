@@ -37,8 +37,8 @@ namespace Antelope
     struct TransformComponent
     {
         glm::vec3 Translation { 0.0f, 0.0f, 0.0f };
-        glm::vec3 Rotation    { 0.0f, 0.0f, 0.0f };
-        glm::vec3 Scale       { 1.0f, 1.0f, 1.0f };
+        glm::vec3 Rotation { 0.0f, 0.0f, 0.0f };
+        glm::vec3 Scale { 1.0f, 1.0f, 1.0f };
 
         TransformComponent() = default;
         TransformComponent(const TransformComponent&) = default;
@@ -53,9 +53,12 @@ namespace Antelope
 
         void Rebuild(const TransformComponent& t)
         {
+            glm::quat rx = glm::angleAxis(t.Rotation.x, glm::vec3(1, 0, 0));
+            glm::quat ry = glm::angleAxis(t.Rotation.y, glm::vec3(0, 1, 0));
+            glm::quat rz = glm::angleAxis(t.Rotation.z, glm::vec3(0, 0, 1));
             Matrix = glm::translate(glm::mat4(1.0f), t.Translation)
-                * glm::toMat4(glm::quat(t.Rotation))
-                * glm::scale(glm::mat4(1.0f), t.Scale);
+                   * glm::toMat4(ry * rx * rz)
+                   * glm::scale(glm::mat4(1.0f), t.Scale);
         }
     };
 
@@ -158,5 +161,36 @@ namespace Antelope
         
         ColliderComponent() = default;
         ColliderComponent(const ColliderComponent&) = default;
+    };
+
+    struct DirectionalLightComponent
+    {
+        glm::vec3 Color { 1.0f, 1.0f, 1.0f };
+        float Intensity { 1.0f };
+
+        DirectionalLightComponent() = default;
+        DirectionalLightComponent(const DirectionalLightComponent&) = default;
+    };
+
+    struct PointLightComponent
+    {
+        glm::vec3 Color { 1.0f, 0.9f, 0.7f };
+        float Intensity { 10.0f };
+        float Radius { 10.0f };
+
+        PointLightComponent() = default;
+        PointLightComponent(const PointLightComponent&) = default;
+    };
+
+    struct SpotLightComponent
+    {
+        glm::vec3 Color { 1.0f, 1.0f, 1.0f };
+        float Intensity { 15.0f };
+        float Radius { 15.0f }; 
+        float InnerCutOff { glm::cos(glm::radians(12.5f)) };
+        float OuterCutOff { glm::cos(glm::radians(17.5f)) };
+
+        SpotLightComponent() = default;
+        SpotLightComponent(const SpotLightComponent&) = default;
     };
 }
