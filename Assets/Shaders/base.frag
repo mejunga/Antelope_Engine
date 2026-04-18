@@ -32,9 +32,15 @@ layout(binding = 0) uniform GlobalUBO
     vec4 cameraPos;
     vec4 sunDirection;
     vec4 sunColor;
+    vec4 skyColorDayAndStar; 
+    vec4 horizonColorDay;    
+    vec4 skyColorNight;      
+    vec4 horizonColorNight;  
+    vec4 groundColor;        
     uint pointLightCount;
     uint spotLightCount;
-    vec2 _padding;
+    float time;
+    float ambientEnabled;
     PointLight pointLights[32];
     SpotLight spotLights[32];
 } ubo;
@@ -210,23 +216,34 @@ void main()
         Lo += CalcRadiance(L, V, N, radiance, albedo, metallic, roughness, F0);
     }
 
+    vec3 nightSky = vec3(0.04, 0.05, 0.10);
+    vec3 nightGround = vec3(0.02, 0.015, 0.012);
+
     vec3 skyBase = vec3(0.30, 0.35, 0.50);
-    vec3 groundBase = vec3(0.07, 0.05, 0.04);
+    vec3 groundBase = vec3(0.14, 0.11, 0.09);
 
-    float sunElevation = (ubo.sunDirection.w > 0.5)
-                        ? smoothstep(-0.4, 0.6, ubo.sunDirection.y)
-                        : 0.0;
+    vec3 ambient = vec3(0.0);
 
-
-    vec3 nightSky = vec3(0.01, 0.01, 0.02);
-    vec3 nightGround = vec3(0.003, 0.002, 0.002);
-
-    vec3 skyColor = mix(nightSky, skyBase, sunElevation);
-    vec3 groundColor = mix(nightGround, groundBase, sunElevation);
-
-    float upFactor = N.y * 0.5 + 0.5;
-    vec3 ambient = mix(groundColor, skyColor, upFactor) * albedo * ao;
-    ambient += albedo * 0.07;
+    if (ubo.ambientEnabled < 0.5)
+    {
+        vec3 skyColor = vec3(0.30, 0.35, 0.50);
+        vec3 groundColor = vec3(0.14, 0.11, 0.09);
+        float upFactor = N.y * 0.5 + 0.5;
+        ambient = mix(groundColor, skyColor, upFactor) * albedo * ao;
+        ambient += albedo * 0.07;
+    }
+    else
+    {
+        float sunElevation = (ubo.sunDirection.w > 0.5) ? smoothstep(-0.2, 0.4, ubo.sunDirection.y) : 0.0;
+        
+        vec3 skyColor = mix(nightSky, skyBase, sunElevation);
+        vec3 groundColor = mix(nightGround, groundBase, sunElevation);
+        
+        float upFactor = N.y * 0.5 + 0.5;
+        ambient = mix(groundColor, skyColor, upFactor) * albedo * ao;
+        ambient += albedo * 0.07;
+    }
+    
     vec3 color = ambient + Lo;
 
     vec3 emissive = vec3(0.0);
@@ -237,6 +254,7 @@ void main()
     }
 
     color += emissive;
+
     color = ACESFilm(color);
     color = pow(color, vec3(1.0 / 2.2));
 

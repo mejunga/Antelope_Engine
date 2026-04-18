@@ -778,9 +778,8 @@ namespace Antelope
             m_SwapChain->SetFramebufferResized(false);
             vkDeviceWaitIdle(m_Context->GetDevice());
             m_SwapChain->RecreateSwapchain();
-    #ifdef ANTELOPE_EDITOR_MODE
-            uint32_t newImageCount { static_cast<uint32_t>(m_SwapChain->GetFramebuffers().size()) };
 
+        #ifdef ANTELOPE_EDITOR_MODE
             if (m_Maintenance1Supported)
             {
                 for (auto& slot : m_SemaphorePool)
@@ -789,7 +788,7 @@ namespace Antelope
                     slot.pendingPresent = false;
                 }
             }
-    #endif
+        #endif
         }
 
         m_CurrentFrame = (m_CurrentFrame + 1) % m_MaxFramesInFlight;

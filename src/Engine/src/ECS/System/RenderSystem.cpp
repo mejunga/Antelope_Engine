@@ -11,6 +11,8 @@
 #include <Engine/Renderer/Graphics/EditorCamera.hpp>
 #endif
 
+#include <chrono>
+
 
 namespace Antelope
 {
@@ -60,6 +62,25 @@ namespace Antelope
             ubo.spotLights[ubo.spotLightCount].outerCutOffAndPad.x = lightComp.OuterCutOff;
             ubo.spotLightCount++;
         }
+
+        auto ambientView { registry.view<AmbientComponent>(entt::exclude<DisabledComponent>) };
+        
+        if (ambientView.begin() != ambientView.end())
+        {
+            auto entity { *ambientView.begin() };
+            const auto& ambient { ambientView.get<AmbientComponent>(entity) };
+
+            ubo.skyColorDayAndStar = glm::vec4(ambient.SkyColorDay, ambient.StarIntensity);
+            ubo.horizonColorDay = glm::vec4(ambient.HorizonColorDay, 1.0f);
+            ubo.skyColorNight = glm::vec4(ambient.SkyColorNight, 1.0f);
+            ubo.horizonColorNight = glm::vec4(ambient.HorizonColorNight, 1.0f);
+            ubo.groundColor = glm::vec4(ambient.GroundColor, 1.0f);
+            ubo.ambientEnabled = 1.0f;
+        }
+        else
+        {
+            ubo.ambientEnabled = 0.0f;
+        }
     }
 
 #ifdef ANTELOPE_EDITOR_MODE
@@ -78,6 +99,8 @@ namespace Antelope
 
         glm::mat4 invView { glm::inverse(cameraUBO.view) };
         cameraUBO.cameraPos = glm::vec4(invView[3][0], invView[3][1], invView[3][2], 1.0f);
+        static auto s_StartTime { std::chrono::high_resolution_clock::now() };
+        cameraUBO.time = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - s_StartTime).count();
 
         GatherLights(world.GetRegistry(), cameraUBO);
 
@@ -133,6 +156,8 @@ namespace Antelope
 
         glm::mat4 invView = glm::inverse(cameraUBO.view);
         cameraUBO.cameraPos = glm::vec4(invView[3][0], invView[3][1], invView[3][2], 1.0f);
+        static auto s_StartTime { std::chrono::high_resolution_clock::now() };
+        cameraUBO.time = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - s_StartTime).count();
 
         GatherLights(registry, cameraUBO);
 

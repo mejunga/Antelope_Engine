@@ -11,12 +11,12 @@ namespace Antelope::Editor
     static void SetEntityActiveRecursive(Entity entity, bool active)
     {
         entity.SetActive(active);
-        
+
         if (entity.HasComponent<RelationshipComponent>())
         {
             auto& rel { entity.GetComponent<RelationshipComponent>() };
             entt::entity childID { rel.FirstChild };
-            
+
             while (childID != entt::null)
             {
                 Entity child { childID, Application::Get().GetWorld().get() };
@@ -94,7 +94,7 @@ namespace Antelope::Editor
         {
             const char* bodyTypes[] = { "Static", "Dynamic", "Kinematic" };
             int currentBodyType = static_cast<int>(component.Type);
-            
+
             if (ImGui::Combo("Body Type", &currentBodyType, bodyTypes, IM_ARRAYSIZE(bodyTypes)))
             {
                 component.Type = static_cast<RigidBodyType>(currentBodyType);
@@ -110,7 +110,7 @@ namespace Antelope::Editor
         {
             const char* colliderTypes[] = { "Box", "Sphere", "Capsule" };
             int currentColliderType = static_cast<int>(component.Type);
-            
+
             if (ImGui::Combo("Collider Type", &currentColliderType, colliderTypes, IM_ARRAYSIZE(colliderTypes)))
             {
                 component.Type = static_cast<ColliderType>(currentColliderType);
@@ -127,6 +127,98 @@ namespace Antelope::Editor
             ImGui::ColorEdit3("Color", glm::value_ptr(component.Color));
             ImGui::DragFloat("Intensity", &component.Intensity, 0.1f, 0.0f, 100.0f, "%.2f");
         });
+
+        DrawComponent<PointLightComponent>("Point Light", entity, [](auto& component)
+        {
+            ImGui::ColorEdit3("Color", glm::value_ptr(component.Color));
+            ImGui::DragFloat("Intensity", &component.Intensity, 0.1f, 0.0f, 500.0f, "%.2f");
+            ImGui::DragFloat("Radius", &component.Radius,    0.5f, 0.0f, 500.0f, "%.2f");
+        });
+
+        DrawComponent<SpotLightComponent>("Spot Light", entity, [](auto& component)
+        {
+            ImGui::ColorEdit3("Color", glm::value_ptr(component.Color));
+            ImGui::DragFloat("Intensity", &component.Intensity, 0.1f, 0.0f, 500.0f, "%.2f");
+            ImGui::DragFloat("Radius", &component.Radius,    0.5f, 0.0f, 500.0f, "%.2f");
+
+            float innerDeg { glm::degrees(glm::acos(component.InnerCutOff)) };
+            float outerDeg { glm::degrees(glm::acos(component.OuterCutOff)) };
+
+            if (ImGui::DragFloat("Inner Angle", &innerDeg, 0.5f, 1.0f, 89.0f, "%.1f deg"))
+            {
+                component.InnerCutOff = glm::cos(glm::radians(innerDeg));
+            }
+
+            if (ImGui::DragFloat("Outer Angle", &outerDeg, 0.5f, 1.0f, 89.0f, "%.1f deg"))
+            {
+                component.OuterCutOff = glm::cos(glm::radians(outerDeg));
+            }
+        });
+
+        DrawComponent<AmbientComponent>("Ambient", entity, [](auto& component)
+        {
+            ImGui::ColorEdit3("Sky Day", glm::value_ptr(component.SkyColorDay));
+            ImGui::ColorEdit3("Horizon Day", glm::value_ptr(component.HorizonColorDay));
+            ImGui::ColorEdit3("Ground", glm::value_ptr(component.GroundColor));
+            ImGui::Separator();
+            ImGui::ColorEdit3("Sky Night", glm::value_ptr(component.SkyColorNight));
+            ImGui::ColorEdit3("Horizon Night", glm::value_ptr(component.HorizonColorNight));
+            ImGui::Separator();
+            ImGui::DragFloat("Star Intensity", &component.StarIntensity, 0.01f, 0.0f, 5.0f, "%.2f");
+        });
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        float buttonWidth { 160.0f };
+        ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - buttonWidth) * 0.5f + ImGui::GetCursorPosX());
+
+        if (ImGui::Button("Add Component", ImVec2(buttonWidth, 0.0f)))
+        {
+            ImGui::OpenPopup("AddComponentPopup");
+        }
+
+        if (ImGui::BeginPopup("AddComponentPopup"))
+        {
+            if (!entity.HasComponent<DirectionalLightComponent>())
+            {
+                if (ImGui::MenuItem("Directional Light"))
+                {
+                    entity.AddComponent<DirectionalLightComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+            
+            if (!entity.HasComponent<PointLightComponent>())
+            {
+                if (ImGui::MenuItem("Point Light"))
+                {
+                    entity.AddComponent<PointLightComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
+            if (!entity.HasComponent<SpotLightComponent>())
+            {
+                if (ImGui::MenuItem("Spot Light"))
+                {
+                    entity.AddComponent<SpotLightComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
+            if (!entity.HasComponent<AmbientComponent>())
+            {
+                if (ImGui::MenuItem("Ambient"))
+                {
+                    entity.AddComponent<AmbientComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
+            ImGui::EndPopup();
+        }
     }
 
     bool PropertiesPanel::DrawVec3Control(const std::string& label, glm::vec3& values, float resetValue, float columnWidth)

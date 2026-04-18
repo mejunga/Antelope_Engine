@@ -193,4 +193,19 @@ namespace Antelope
         SpotLightComponent() = default;
         SpotLightComponent(const SpotLightComponent&) = default;
     };
+
+    struct AmbientComponent
+    {
+        glm::vec3 SkyColorDay { 0.26108402f, 0.42027727f, 0.7784616f  };
+        glm::vec3 HorizonColorDay { 0.6553657f,  0.8003316f,  0.9815385f  };
+        glm::vec3 GroundColor { 0.23529412f, 0.22745098f, 0.23137255f };
+
+        glm::vec3 SkyColorNight { 0.050073378f, 0.06377917f, 0.13230771f };
+        glm::vec3 HorizonColorNight { 0.030769223f, 0.040615413f, 0.07999998f };
+
+        float StarIntensity { 0.8f };
+
+        AmbientComponent() = default;
+        AmbientComponent(const AmbientComponent&) = default;
+    };
 }

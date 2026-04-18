@@ -58,6 +58,7 @@ float thickThick = mix(1.5,  0.3,  smoothstep(5.0,  100.0, dist));
         finalColor = vec4(1.0, 0.2, 0.2, 1.0).rgb;
         finalAlpha = max(finalAlpha, 0.5 * thickFade); 
     }
+    
     if(abs(fragPos3D.x) < worldDeriv.x * axisThickness) 
     {
         finalColor = vec4(0.2, 0.2, 1.0, 1.0).rgb;

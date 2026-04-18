@@ -34,9 +34,16 @@ namespace Antelope
         glm::vec4 sunDirection;
         glm::vec4 sunColor;
 
+        glm::vec4 skyColorDayAndStar;
+        glm::vec4 horizonColorDay;
+        glm::vec4 skyColorNight;
+        glm::vec4 horizonColorNight;
+        glm::vec4 groundColor;
+
         uint32_t pointLightCount;
         uint32_t spotLightCount;
-        glm::vec2 _padding;
+        float time;
+        float ambientEnabled;
 
         PointLightData pointLights[MAX_POINT_LIGHTS];
         SpotLightData spotLights[MAX_SPOT_LIGHTS];

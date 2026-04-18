@@ -17,32 +17,6 @@ AssetBindings:
     AssetUUID: 11766189970472800795
     MeshIndex: 0
 Entities:
-  - Entity: 999000000000000001
-    TagComponent:
-      Tag: Sun
-    TransformComponent:
-      Translation: [0, 0, 0]
-      Rotation: [0.7853982, 0.5236, 0]
-      Scale: [1, 1, 1]
-    DirectionalLightComponent:
-      Color: [1, 0.98, 0.92]
-      Intensity: 1
-  - Entity: 1227023538173895054
-    TagComponent:
-      Tag: Ground
-    TransformComponent:
-      Translation: [0, -1.1949863, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-    RigidBodyComponent:
-      Type: 1
-      Mass: 1
-      Friction: 0.2
-      Restitution: 0
-    ColliderComponent:
-      Type: 0
-      Size: [20, 1, 20]
-      Offset: [0, 0, 0]
   - Entity: 16603395071575905790
     TagComponent:
       Tag: Bear_Sculpture_Root
@@ -2209,3 +2183,47 @@ Entities:
       Rotation: [-1.5707967, 0, 0]
       Scale: [10, 10, 10]
     MeshComponent: ~
+  - Entity: 1227023538173895054
+    TagComponent:
+      Tag: Ground
+    TransformComponent:
+      Translation: [0, -1.1949863, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+    RigidBodyComponent:
+      Type: 1
+      Mass: 1
+      Friction: 0.2
+      Restitution: 0
+    ColliderComponent:
+      Type: 0
+      Size: [20, 1, 20]
+      Offset: [0, 0, 0]
+  - Entity: 999000000000000002
+    TagComponent:
+      Tag: PointLight
+    TransformComponent:
+      Translation: [-2, 11.5, -1]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+    PointLightComponent:
+      Color: [0.110371605, 0.61846155, 0.14476526]
+      Intensity: 10
+      Radius: 15
+  - Entity: 999000000000000001
+    TagComponent:
+      Tag: Sun
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [0.7853982, 0.5236, 0]
+      Scale: [1, 1, 1]
+    DirectionalLightComponent:
+      Color: [1, 0.98, 0.92]
+      Intensity: 1
+    AmbientComponent:
+      SkyColorDay: [0.26108402, 0.42027727, 0.7784616]
+      HorizonColorDay: [0.6553657, 0.8003316, 0.9815385]
+      GroundColor: [0.23529412, 0.22745098, 0.23137255]
+      SkyColorNight: [0.050073378, 0.06377917, 0.13230771]
+      HorizonColorNight: [0.030769223, 0.040615413, 0.07999998]
+      StarIntensity: 0.8

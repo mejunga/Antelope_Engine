@@ -121,6 +121,19 @@ namespace Antelope
             out << YAML::EndMap;
         }
 
+        if (entity.HasComponent<AmbientComponent>())
+        {
+            const auto& amb { entity.GetComponent<AmbientComponent>() };
+            out << YAML::Key << "AmbientComponent" << YAML::Value << YAML::BeginMap;
+            out << YAML::Key << "SkyColorDay" << YAML::Value; EmitVec3(out, amb.SkyColorDay);
+            out << YAML::Key << "HorizonColorDay" << YAML::Value; EmitVec3(out, amb.HorizonColorDay);
+            out << YAML::Key << "GroundColor" << YAML::Value; EmitVec3(out, amb.GroundColor);
+            out << YAML::Key << "SkyColorNight" << YAML::Value; EmitVec3(out, amb.SkyColorNight);
+            out << YAML::Key << "HorizonColorNight" << YAML::Value; EmitVec3(out, amb.HorizonColorNight);
+            out << YAML::Key << "StarIntensity" << YAML::Value << amb.StarIntensity;
+            out << YAML::EndMap;
+        }
+
         out << YAML::EndMap;
 
         entt::entity child { rel.FirstChild };
@@ -284,6 +297,17 @@ namespace Antelope
                 light.Radius = node["Radius"].as<float>();
                 light.InnerCutOff = node["InnerCutOff"].as<float>();
                 light.OuterCutOff = node["OuterCutOff"].as<float>();
+            }
+
+            if (auto node { entityNode["AmbientComponent"] })
+            {
+                auto& amb { entity.AddComponent<AmbientComponent>() };
+                amb.SkyColorDay = DecodeVec3(node["SkyColorDay"]);
+                amb.HorizonColorDay = DecodeVec3(node["HorizonColorDay"]);
+                amb.GroundColor = DecodeVec3(node["GroundColor"]);
+                amb.SkyColorNight = DecodeVec3(node["SkyColorNight"]);
+                amb.HorizonColorNight = DecodeVec3(node["HorizonColorNight"]);
+                amb.StarIntensity = node["StarIntensity"].as<float>();
             }
         }
 
