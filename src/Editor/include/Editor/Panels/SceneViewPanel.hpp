@@ -25,7 +25,8 @@ namespace Antelope::Editor
 
         private:
             void CollectMeshDescendants(Entity entity, std::unordered_set<uint32_t>& ids);
-
+            void DrawColliderGizmos(const glm::mat4& viewProj, ImVec2 windowPos, ImVec2 windowSize);
+            
         private:
             int m_PendingResizeFrames { 0 };
             ImVec2 m_LastPanelSize { 0.0f, 0.0f };
@@ -33,6 +34,7 @@ namespace Antelope::Editor
             bool m_ViewportFocused { false };
             bool m_ViewportHovered { false };
             bool m_IsCameraMoving { false };
+            bool m_ShowColliders { true };
 
             int m_GizmoType { ImGuizmo::OPERATION::TRANSLATE };
             Entity m_SelectedEntity;

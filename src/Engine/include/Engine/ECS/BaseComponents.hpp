@@ -109,7 +109,9 @@ namespace Antelope
 
     struct MeshComponent
     {
-        MeshHandle Handle; 
+        MeshHandle Handle;
+        glm::vec3 Offset { 0.0f, 0.0f, 0.0f };
+        glm::vec3 Scale { 1.0f, 1.0f, 1.0f };
         
         MeshComponent() = default;
         MeshComponent(const MeshComponent&) = default;
@@ -203,7 +205,7 @@ namespace Antelope
         glm::vec3 SkyColorNight { 0.050073378f, 0.06377917f, 0.13230771f };
         glm::vec3 HorizonColorNight { 0.030769223f, 0.040615413f, 0.07999998f };
 
-        float StarIntensity { 0.8f };
+        float StarIntensity { 1.5f };
 
         AmbientComponent() = default;
         AmbientComponent(const AmbientComponent&) = default;

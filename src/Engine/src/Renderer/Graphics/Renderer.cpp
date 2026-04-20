@@ -1,5 +1,6 @@
 #include <Engine/Renderer/Graphics/Renderer.hpp>
 #include <Engine/Renderer/Graphics/SkyRenderer.hpp>
+#include <Engine/Renderer/Graphics/ShadowRenderer.hpp>
 #include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 #include <Engine/Renderer/Vulkan/SwapChain.hpp>
 #include <Engine/Asset/TextureManager.hpp>
@@ -62,6 +63,8 @@ namespace Antelope
     #endif
         m_SkyRenderer = std::make_unique<SkyRenderer>(m_Context, m_PipelineLayout, sceneRenderPass);
         AE_ENGINE_TRACE("Sky Renderer created.");
+        m_ShadowMap = std::make_shared<ShadowRenderer>(m_Context, m_PipelineLayout, 4096, 4096);
+        AE_ENGINE_TRACE("Shadow Map created.");
     #ifdef ANTELOPE_EDITOR_MODE
         m_GridRenderer = std::make_unique<GridRenderer>(m_Context, m_PipelineLayout, sceneRenderPass);
         AE_ENGINE_TRACE("Grid Renderer created.");
@@ -442,10 +445,11 @@ namespace Antelope
         builder.AddBinding(7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1024);
         builder.AddBinding(8, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);
         builder.AddBinding(9, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
+        builder.AddBinding(10, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
 
-        std::array<VkDescriptorBindingFlags, 10> bindingFlags {};
+        std::array<VkDescriptorBindingFlags, 11> bindingFlags {};
 
-        for (int i { 0 }; i < 10; ++i) 
+        for (int i { 0 }; i < 11; ++i) 
         {
             bindingFlags[i] = 0;
         }
@@ -582,7 +586,67 @@ namespace Antelope
             AE_ENGINE_TRACE("Descriptor Set for Frame {0} updated with {1} textures.", m_CurrentFrame, currentGlobalTextureCount);
         }
 
+        ObjectData* objectDataMap { static_cast<ObjectData*>(m_ObjectBuffers[m_CurrentFrame]->GetMappedMemory()) };
+        VkDrawIndirectCommand* indirectCommandsMap { static_cast<VkDrawIndirectCommand*>(m_IndirectBuffers[m_CurrentFrame]->GetMappedMemory()) };
+
+        uint32_t objectCount { 0 };
+        std::vector<uint32_t> selectedIndirectIndices;
+
+        for (const auto& command : renderList)
+        {
+            if (m_PendingMeshIDs.count(command.mesh.MeshID) > 0) { continue; }
+            if (m_PendingTextureIndices.count(command.materialIndex) > 0) { continue; }
+
+            if (objectCount >= MAX_OBJECTS)
+            {
+                AE_ENGINE_WARN("Maximum object limit ({0}) reached! Remaining objects will not be drawn.", MAX_OBJECTS);
+                break;
+            }
+
+            objectDataMap[objectCount].model = command.transform;
+            objectDataMap[objectCount].normalMatrix = glm::mat4(command.normalMatrix);
+            objectDataMap[objectCount].posOffset = command.mesh.posOffset;
+            objectDataMap[objectCount].colorOffset = command.mesh.colorOffset;
+            objectDataMap[objectCount].normalOffset = command.mesh.normalOffset;
+            objectDataMap[objectCount].faceOffset = command.mesh.faceOffset;
+            objectDataMap[objectCount].uvOffset = command.mesh.uvOffset;
+            objectDataMap[objectCount].tangentOffset = command.mesh.tangentOffset;
+            objectDataMap[objectCount].materialIndex = command.materialIndex;
+        #ifdef ANTELOPE_EDITOR_MODE
+            objectDataMap[objectCount].entityID = command.entityID;
+        #endif
+
+            indirectCommandsMap[objectCount].vertexCount = command.mesh.faceCount * 3;
+            indirectCommandsMap[objectCount].instanceCount = 1;
+            indirectCommandsMap[objectCount].firstVertex = 0;
+            indirectCommandsMap[objectCount].firstInstance = objectCount;
+        
+        #ifdef ANTELOPE_EDITOR_MODE
+            if (m_SelectedEntityIDs.count(command.entityID))
+            {
+                selectedIndirectIndices.push_back(objectCount);
+            }
+        #endif
+
+            objectCount++;
+        }
+
         UpdateUniformBuffer(m_CurrentFrame, cameraData);
+
+        m_ShadowMap->Draw(cmd, m_DescriptorSets[m_CurrentFrame], objectCount, m_IndirectBuffers[m_CurrentFrame]->GetBuffer());
+
+        VkImageMemoryBarrier shadowBarrier {};
+        shadowBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        shadowBarrier.oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+        shadowBarrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+        shadowBarrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        shadowBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        shadowBarrier.image = m_ShadowMap->GetDepthImage();
+        shadowBarrier.subresourceRange = { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1 };
+        vkCmdPipelineBarrier(cmd,
+            VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            0, 0, nullptr, 0, nullptr, 1, &shadowBarrier);
 
         VkRenderPassBeginInfo renderPassInfo {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -631,51 +695,6 @@ namespace Antelope
         m_MainPipeline->Bind(cmd);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
         m_PipelineLayout, 0, 1, &m_DescriptorSets[m_CurrentFrame], 0, nullptr);
-
-        ObjectData* objectDataMap { static_cast<ObjectData*>(m_ObjectBuffers[m_CurrentFrame]->GetMappedMemory()) };
-        VkDrawIndirectCommand* indirectCommandsMap { static_cast<VkDrawIndirectCommand*>(m_IndirectBuffers[m_CurrentFrame]->GetMappedMemory()) };
-
-        uint32_t objectCount { 0 };
-        std::vector<uint32_t> selectedIndirectIndices;
-
-        for (const auto& command : renderList)
-        {
-            if (m_PendingMeshIDs.count(command.mesh.MeshID) > 0) { continue; }
-            if (m_PendingTextureIndices.count(command.materialIndex) > 0) { continue; }
-
-            if (objectCount >= MAX_OBJECTS)
-            {
-                AE_ENGINE_WARN("Maximum object limit ({0}) reached! Remaining objects will not be drawn.", MAX_OBJECTS);
-                break;
-            }
-
-            objectDataMap[objectCount].model = command.transform;
-            objectDataMap[objectCount].normalMatrix = glm::mat4(command.normalMatrix);
-            objectDataMap[objectCount].posOffset = command.mesh.posOffset;
-            objectDataMap[objectCount].colorOffset = command.mesh.colorOffset;
-            objectDataMap[objectCount].normalOffset = command.mesh.normalOffset;
-            objectDataMap[objectCount].faceOffset = command.mesh.faceOffset;
-            objectDataMap[objectCount].uvOffset = command.mesh.uvOffset;
-            objectDataMap[objectCount].tangentOffset = command.mesh.tangentOffset;
-            objectDataMap[objectCount].materialIndex = command.materialIndex;
-        #ifdef ANTELOPE_EDITOR_MODE
-            objectDataMap[objectCount].entityID = command.entityID;
-        #endif
-
-            indirectCommandsMap[objectCount].vertexCount = command.mesh.faceCount * 3;
-            indirectCommandsMap[objectCount].instanceCount = 1;
-            indirectCommandsMap[objectCount].firstVertex = 0;
-            indirectCommandsMap[objectCount].firstInstance = objectCount;
-        
-        #ifdef ANTELOPE_EDITOR_MODE
-            if (m_SelectedEntityIDs.count(command.entityID))
-            {
-                selectedIndirectIndices.push_back(objectCount);
-            }
-        #endif
-
-            objectCount++;
-        }
 
         if (objectCount > 0)
         {
@@ -1084,6 +1103,8 @@ namespace Antelope
             writer.WriteBuffer(6, m_ObjectBuffers[i]->GetBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
             writer.WriteBuffer(8, m_MaterialBuffers[i]->GetBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
             writer.WriteBuffer(9, m_GpuAllocator->GetTangentBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+            writer.WriteImage(10, m_ShadowMap->GetDepthImageView(), m_ShadowMap->GetSampler(), VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
             writer.UpdateSet(m_Context, m_DescriptorSets[i]);
         }
     }

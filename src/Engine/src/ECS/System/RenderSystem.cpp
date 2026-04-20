@@ -1,3 +1,5 @@
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <Engine/ECS/System/RenderSystem.hpp>
 #include <Engine/ECS/BaseComponents.hpp>
 #include <Engine/Debug/Log.hpp>
@@ -29,6 +31,30 @@ namespace Antelope
             glm::vec3 forward { -glm::normalize(glm::vec3(worldMat.Matrix[2])) };
             ubo.sunDirection = glm::vec4(forward, 1.0f);
             ubo.sunColor = glm::vec4(lightComp.Color, lightComp.Intensity);
+
+            glm::mat4 invCamView { glm::inverse(ubo.view) };
+            glm::vec3 cameraPos { glm::vec3(invCamView[3]) };
+            glm::vec3 cameraForward { -glm::normalize(glm::vec3(invCamView[2])) };
+
+            float shadowDistance { 80.0f }; 
+            glm::vec3 shadowCenter { cameraPos + cameraForward * (shadowDistance * 0.5f) };
+            glm::vec3 lightDir { -forward };
+            glm::vec3 worldUp { glm::abs(glm::dot(lightDir, glm::vec3(0,1,0))) > 0.99f ? glm::vec3(1,0,0) : glm::vec3(0,1,0) };
+            glm::vec3 eye { shadowCenter - lightDir * 200.0f }; 
+            glm::mat4 lightView { glm::lookAt(eye, shadowCenter, worldUp) };
+            
+            float orthoBounds { shadowDistance * 0.5f };
+            float shadowMapResolution { 4096.0f };
+            float texelWorldSize { (orthoBounds * 2.0f) / shadowMapResolution };
+            
+            lightView[3][0] = std::floor(lightView[3][0] / texelWorldSize) * texelWorldSize;
+            lightView[3][1] = std::floor(lightView[3][1] / texelWorldSize) * texelWorldSize;
+
+            glm::mat4 lightProj { glm::ortho(-orthoBounds, orthoBounds, -orthoBounds, orthoBounds, 1.0f, 400.0f) };
+            lightProj[1][1] *= -1.0f;
+
+            ubo.lightSpaceMatrix = lightProj * lightView;
+
             sunFound = true;
             break;
         }
@@ -111,9 +137,13 @@ namespace Antelope
 
         for (auto [entityID, worldMat, meshComponent, normalMat] : view.each())
         {
+            glm::mat4 meshLocal { glm::scale(glm::mat4(1.0f), meshComponent.Scale) };
+            glm::mat4 combined { worldMat.Matrix * meshLocal };
+            combined[3] += glm::vec4(meshComponent.Offset, 0.0f);
+
             RenderCommand cmd {};
-            cmd.transform = worldMat.Matrix;
-            cmd.normalMatrix = normalMat.Matrix;
+            cmd.transform = combined;
+            cmd.normalMatrix = glm::mat3(glm::transpose(glm::inverse(combined)));
             cmd.mesh = meshComponent.Handle;
 
             if (auto* mat { registry.try_get<MaterialComponent>(entityID) })
@@ -167,9 +197,12 @@ namespace Antelope
 
         for (auto [entityID, worldMat, meshComponent, normalMat] : meshView.each())
         {
+            glm::mat4 meshLocal { glm::translate(glm::mat4(1.0f), meshComponent.Offset) * glm::scale(glm::mat4(1.0f), meshComponent.Scale) };
+            glm::mat4 combined { worldMat.Matrix * meshLocal };
+
             RenderCommand cmd {};
-            cmd.transform = worldMat.Matrix;
-            cmd.normalMatrix = normalMat.Matrix;
+            cmd.transform = combined;
+            cmd.normalMatrix = glm::mat3(glm::transpose(glm::inverse(combined)));
             cmd.mesh = meshComponent.Handle;
 
             if (auto* mat { registry.try_get<MaterialComponent>(entityID) })

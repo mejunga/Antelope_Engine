@@ -34,6 +34,8 @@ namespace Antelope
         glm::vec4 sunDirection;
         glm::vec4 sunColor;
 
+        glm::mat4 lightSpaceMatrix; 
+
         glm::vec4 skyColorDayAndStar;
         glm::vec4 horizonColorDay;
         glm::vec4 skyColorNight;

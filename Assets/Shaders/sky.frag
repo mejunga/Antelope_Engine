@@ -10,6 +10,7 @@ layout(binding = 0) uniform GlobalUBO
     vec4 cameraPos;
     vec4 sunDirection;
     vec4 sunColor;
+    mat4 lightSpaceMatrix;
     vec4 skyColorDayAndStar;
     vec4 horizonColorDay;
     vec4 skyColorNight;

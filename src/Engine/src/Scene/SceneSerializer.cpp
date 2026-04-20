@@ -36,6 +36,11 @@ namespace Antelope
             out << YAML::Key << "ParentID" << YAML::Value << (uint64_t)parent.GetComponent<IDComponent>().ID;
         }
 
+        if (entity.HasComponent<DisabledComponent>())
+        {
+            out << YAML::Key << "Disabled" << YAML::Value << true;
+        }
+
         if (entity.HasComponent<TagComponent>())
         {
             out << YAML::Key << "TagComponent" << YAML::Value << YAML::BeginMap;
@@ -55,7 +60,11 @@ namespace Antelope
 
         if (entity.HasComponent<MeshComponent>())
         {
-            out << YAML::Key << "MeshComponent" << YAML::Value << YAML::Null;
+            const auto& mesh { entity.GetComponent<MeshComponent>() };
+            out << YAML::Key << "MeshComponent" << YAML::Value << YAML::BeginMap;
+            out << YAML::Key << "Offset" << YAML::Value; EmitVec3(out, mesh.Offset);
+            out << YAML::Key << "Scale" << YAML::Value; EmitVec3(out, mesh.Scale);
+            out << YAML::EndMap;
         }
 
         if (entity.HasComponent<CameraComponent>())
@@ -237,6 +246,11 @@ namespace Antelope
                 if (it != entityMap.end()) { entity.SetParent(it->second); }
             }
 
+            if (entityNode["Disabled"] && entityNode["Disabled"].as<bool>())
+            {
+                entity.SetActive(false);
+            }
+
             if (auto node { entityNode["TransformComponent"] })
             {
                 auto& tc { entity.GetComponent<TransformComponent>() };
@@ -246,7 +260,12 @@ namespace Antelope
                 world.MarkTransformDirty(entity);
             }
 
-            if (entityNode["MeshComponent"]) { entity.AddComponent<MeshComponent>(); }
+            if (auto node { entityNode["MeshComponent"] })
+            {
+                auto& mesh { entity.AddComponent<MeshComponent>() };
+                if (node["Offset"]) { mesh.Offset = DecodeVec3(node["Offset"]); }
+                if (node["Scale"])  { mesh.Scale  = DecodeVec3(node["Scale"]); }
+            }
 
             if (auto node { entityNode["CameraComponent"] })
             {

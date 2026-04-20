@@ -2,6 +2,8 @@
 
 #include <Engine/Core/Application.hpp>
 #include <Engine/ECS/World.hpp>
+#include <Engine/ECS/System/PhysicsSystem.hpp>
+#include <Engine/Physics/PhysicsContext.hpp>
 
 #include <glm/gtc/type_ptr.hpp>
 
@@ -76,13 +78,25 @@ namespace Antelope::Editor
             changed |= this->DrawVec3Control("Scale", component.Scale, 1.0f);
 
             if (changed)
+            {
                 Application::Get().GetWorld()->MarkTransformDirty(entity);
+                if (Application::Get().GetWorld()->IsSimulating())
+                {
+                    PhysicsSystem::SetBodyTransform(
+                        *Application::Get().GetWorld(),
+                        *Application::Get().GetWorld()->GetPhysicsContext(),
+                        entity
+                    );
+                }
+            }
         });
 
-        DrawComponent<MeshComponent>("Mesh Renderer", entity, [](auto& component)
+        DrawComponent<MeshComponent>("Mesh Renderer", entity, [this](auto& component)
         {
             ImGui::Text("Mesh ID: %d", component.Handle.MeshID);
             ImGui::Text("Polygons: %d", component.Handle.faceCount);
+            this->DrawVec3Control("Offset", component.Offset);
+            this->DrawVec3Control("Scale",  component.Scale, 1.0f);
         });
 
         DrawComponent<MaterialComponent>("Material", entity, [](auto& component)
@@ -116,9 +130,20 @@ namespace Antelope::Editor
                 component.Type = static_cast<ColliderType>(currentColliderType);
             }
 
+            this->DrawVec3Control("Offset", component.Offset);
+
             if (component.Type == ColliderType::Box)
             {
                 this->DrawVec3Control("Size", component.Size, 1.0f);
+            }
+            else if (component.Type == ColliderType::Sphere)
+            {
+                ImGui::DragFloat("Radius", &component.Size.x, 0.05f, 0.0f, 1000.0f, "%.2f");
+            }
+            else if (component.Type == ColliderType::Capsule)
+            {
+                ImGui::DragFloat("Radius", &component.Size.x, 0.05f, 0.0f, 1000.0f, "%.2f");
+                ImGui::DragFloat("Height", &component.Size.y, 0.05f, 0.0f, 1000.0f, "%.2f");
             }
         });
 

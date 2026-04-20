@@ -204,7 +204,7 @@ namespace Antelope
 
         if (ext == ".antelope") { return AssetType::Scene; }
         if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga") { return AssetType::Texture2D; }
-        if (ext == ".fbx" || ext == ".obj" || ext == ".gltf") { return AssetType::Mesh; }
+        if (ext == ".fbx" || ext == ".obj" || ext == ".gltf" || ext == ".glb") { return AssetType::Mesh; }
         return AssetType::None;
     }
 

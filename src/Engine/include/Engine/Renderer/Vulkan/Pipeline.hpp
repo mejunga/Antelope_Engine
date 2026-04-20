@@ -51,8 +51,8 @@ namespace Antelope
         private:
             std::shared_ptr<VulkanContext> m_Context;
 
-            VkPipeline m_GraphicsPipeline;
-            VkShaderModule m_VertShaderModule;
-            VkShaderModule m_FragShaderModule;
+            VkPipeline m_GraphicsPipeline { VK_NULL_HANDLE };
+            VkShaderModule m_VertShaderModule { VK_NULL_HANDLE };
+            VkShaderModule m_FragShaderModule { VK_NULL_HANDLE };
     };
 }

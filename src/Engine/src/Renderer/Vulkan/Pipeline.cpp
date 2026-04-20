@@ -17,7 +17,12 @@ namespace Antelope
     Pipeline::~Pipeline()
     {
         vkDestroyShaderModule(m_Context->GetDevice(), m_VertShaderModule, nullptr);
-        vkDestroyShaderModule(m_Context->GetDevice(), m_FragShaderModule, nullptr);
+        
+        if (m_FragShaderModule != VK_NULL_HANDLE)
+        {
+            vkDestroyShaderModule(m_Context->GetDevice(), m_FragShaderModule, nullptr);
+        }
+        
         vkDestroyPipeline(m_Context->GetDevice(), m_GraphicsPipeline, nullptr);
     }
 
@@ -29,31 +34,37 @@ namespace Antelope
     void Pipeline::CreateGraphicsPipeline(const std::string& vertFilepath, const std::string& fragFilepath, const PipelineConfigInfo& configInfo)
     {
         auto vertCode { ReadFile(vertFilepath) };
-        auto fragCode { ReadFile(fragFilepath) };
-
         m_VertShaderModule = CreateShaderModule(vertCode);
-        m_FragShaderModule = CreateShaderModule(fragCode);
 
-        VkPipelineShaderStageCreateInfo shaderStages[2] {};
-        shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-        shaderStages[0].module = m_VertShaderModule;
-        shaderStages[0].pName = "main";
-        shaderStages[0].flags = 0; shaderStages[0].pNext = nullptr; shaderStages[0].pSpecializationInfo = nullptr;
+        std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
 
-        shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        shaderStages[1].module = m_FragShaderModule;
-        shaderStages[1].pName = "main";
-        shaderStages[1].flags = 0; shaderStages[1].pNext = nullptr; shaderStages[1].pSpecializationInfo = nullptr;
+        VkPipelineShaderStageCreateInfo vertStage {};
+        vertStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        vertStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
+        vertStage.module = m_VertShaderModule;
+        vertStage.pName = "main";
+        shaderStages.push_back(vertStage);
+
+        if (!fragFilepath.empty())
+        {
+            auto fragCode { ReadFile(fragFilepath) };
+            m_FragShaderModule = CreateShaderModule(fragCode);
+
+            VkPipelineShaderStageCreateInfo fragStage {};
+            fragStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            fragStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+            fragStage.module = m_FragShaderModule;
+            fragStage.pName = "main";
+            shaderStages.push_back(fragStage);
+        }
 
         VkPipelineVertexInputStateCreateInfo vertexInputInfo {};
         vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
         VkGraphicsPipelineCreateInfo pipelineInfo {};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipelineInfo.stageCount = 2;
-        pipelineInfo.pStages = shaderStages;
+        pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
+        pipelineInfo.pStages = shaderStages.data();
         pipelineInfo.pVertexInputState = &vertexInputInfo;
         pipelineInfo.pInputAssemblyState = &configInfo.inputAssemblyInfo;
         pipelineInfo.pViewportState = &configInfo.viewportInfo;

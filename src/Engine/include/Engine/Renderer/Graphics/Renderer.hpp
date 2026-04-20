@@ -26,6 +26,7 @@ namespace Antelope
     class SwapChain;
     class GpuMemoryAllocator;
     class SkyRenderer;
+    class ShadowRenderer;
 #ifdef ANTELOPE_EDITOR_MODE
     class RenderTexture;
     class UIContext;
@@ -125,6 +126,7 @@ namespace Antelope
             std::unique_ptr<GpuMemoryAllocator> m_GpuAllocator;
             std::unique_ptr<Pipeline> m_MainPipeline;
             std::unique_ptr<SkyRenderer> m_SkyRenderer;
+            std::shared_ptr<ShadowRenderer> m_ShadowMap;
             std::unique_ptr<DescriptorAllocator> m_GlobalDescriptorAllocator;
         #ifdef ANTELOPE_EDITOR_MODE
             std::shared_ptr<RenderTexture> m_RenderTexture;

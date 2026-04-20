@@ -21,6 +21,132 @@ namespace Antelope
     inline glm::vec3 ToGlmVec3(const JPH::Vec3& v) { return glm::vec3(v.GetX(), v.GetY(), v.GetZ()); }
     inline glm::quat ToGlmQuat(const JPH::Quat& q) { return glm::quat(q.GetW(), q.GetX(), q.GetY(), q.GetZ()); }
 
+    static JPH::ShapeRefC CreateEntityShape(World& world, entt::entity entity)
+    {
+        auto& registry { world.GetRegistry() };
+        JPH::ShapeRefC shape;
+
+        std::vector<glm::vec3> childOffsets;
+        std::vector<JPH::Quat> childRotations;
+        std::vector<JPH::ShapeRefC> childShapeRefs;
+
+        const auto& parentWorldMat { registry.get<WorldMatrixComponent>(entity).Matrix };
+        glm::vec3 parentWorldPos { parentWorldMat[3] };
+        glm::mat3 parentRotMat { parentWorldMat };
+
+        if (glm::length(parentRotMat[0]) > 0.0001f)
+        {
+            parentRotMat[0] = glm::normalize(parentRotMat[0]);
+        }
+
+        if (glm::length(parentRotMat[1]) > 0.0001f)
+        {
+            parentRotMat[1] = glm::normalize(parentRotMat[1]);
+        }
+        
+        if (glm::length(parentRotMat[2]) > 0.0001f)
+        {
+            parentRotMat[2] = glm::normalize(parentRotMat[2]);
+        }
+
+        glm::quat parentRot { glm::quat_cast(parentRotMat) };
+        glm::quat invParentRot { glm::inverse(parentRot) };
+
+        if (registry.all_of<RelationshipComponent>(entity))
+        {
+            entt::entity child { registry.get<RelationshipComponent>(entity).FirstChild };
+            
+            while (child != entt::null)
+            {
+                if (registry.all_of<ColliderComponent>(child) && registry.all_of<WorldMatrixComponent>(child))
+                {
+                    auto& childCol { registry.get<ColliderComponent>(child) };
+                    const auto& childWorldMat { registry.get<WorldMatrixComponent>(child).Matrix };
+                    glm::vec3 childWorldPos { childWorldMat[3] };
+                    glm::mat3 childRotMat { childWorldMat };
+
+                    if (glm::length(childRotMat[0]) > 0.0001f)
+                    {
+                        childRotMat[0] = glm::normalize(childRotMat[0]);
+                    }
+
+                    if (glm::length(childRotMat[1]) > 0.0001f)
+                    {
+                        childRotMat[1] = glm::normalize(childRotMat[1]);
+                    }
+                    
+                    if (glm::length(childRotMat[2]) > 0.0001f)
+                    {
+                        childRotMat[2] = glm::normalize(childRotMat[2]);
+                    }
+
+                    glm::quat childRot { glm::quat_cast(childRotMat) };
+                    JPH::ShapeRefC childShape;
+
+                    if (childCol.Type == ColliderType::Box)
+                    {
+                        childShape = JPH::BoxShapeSettings(ToJoltVec3(childCol.Size * 0.5f)).Create().Get();
+                    }
+                    else if (childCol.Type == ColliderType::Sphere)
+                    {
+                        childShape = JPH::SphereShapeSettings(childCol.Size.x).Create().Get();
+                    }
+                    else if (childCol.Type == ColliderType::Capsule)
+                    {
+                        childShape = JPH::CapsuleShapeSettings(childCol.Size.y, childCol.Size.x).Create().Get();
+                    }
+
+                    if (childShape)
+                    {
+                        glm::vec3 childColliderWorldPos { childWorldPos + childRot * childCol.Offset };
+                        glm::vec3 localOffset { invParentRot * (childColliderWorldPos - parentWorldPos) };
+                        glm::quat localRot { invParentRot * childRot };
+                        childOffsets.push_back(localOffset);
+                        childRotations.push_back(ToJoltQuat(localRot));
+                        childShapeRefs.push_back(childShape);
+                    }
+                }
+                child = registry.get<RelationshipComponent>(child).NextSibling;
+            }
+        }
+
+        if (!childOffsets.empty())
+        {
+            JPH::StaticCompoundShapeSettings compoundSettings {};
+
+            for (size_t i { 0 }; i < childOffsets.size(); ++i)
+            {
+                compoundSettings.AddShape(ToJoltVec3(childOffsets[i]), childRotations[i], childShapeRefs[i]);
+            }
+            
+            shape = compoundSettings.Create().Get();
+        }
+        else if (registry.all_of<ColliderComponent>(entity))
+        {
+            auto& collider { registry.get<ColliderComponent>(entity) }
+            ;
+            if (collider.Type == ColliderType::Box)
+            {
+                shape = JPH::BoxShapeSettings(ToJoltVec3(collider.Size * 0.5f)).Create().Get();
+            }
+            else if (collider.Type == ColliderType::Sphere)
+            {
+                shape = JPH::SphereShapeSettings(collider.Size.x).Create().Get();
+            }
+            else if (collider.Type == ColliderType::Capsule)
+            {
+                shape = JPH::CapsuleShapeSettings(collider.Size.y, collider.Size.x).Create().Get();
+            }
+        }
+        else
+        {
+            auto& transform { registry.get<TransformComponent>(entity) };
+            shape = JPH::BoxShapeSettings(ToJoltVec3(transform.Scale * 0.5f)).Create().Get();
+        }
+
+        return shape;
+    }
+
     void PhysicsSystem::OnRuntimeStart(World& world, PhysicsContext& physicsContext)
     {
         auto& registry { world.GetRegistry() };
@@ -30,86 +156,7 @@ namespace Antelope
 
         for (auto [entity, transform, rb] : view.each())
         {
-            JPH::ShapeRefC shape;
-            std::vector<glm::vec3> childOffsets;
-            std::vector<JPH::ShapeRefC> childShapeRefs;
-
-            if (registry.all_of<RelationshipComponent>(entity))
-            {
-                entt::entity child { registry.get<RelationshipComponent>(entity).FirstChild };
-                
-                while (child != entt::null)
-                {
-                    if (registry.all_of<ColliderComponent>(child) && registry.all_of<TransformComponent>(child))
-                    {
-                        auto& childCol { registry.get<ColliderComponent>(child) };
-                        auto& childTrans { registry.get<TransformComponent>(child) };
-                        
-                        JPH::ShapeRefC childShape;
-
-                        if (childCol.Type == ColliderType::Box)
-                        {
-                            childShape = JPH::BoxShapeSettings(ToJoltVec3(childCol.Size)).Create().Get();
-                        }
-                        else if (childCol.Type == ColliderType::Sphere)
-                        {
-                            childShape = JPH::SphereShapeSettings(childCol.Size.x).Create().Get();
-                        }
-                        else if (childCol.Type == ColliderType::Capsule)
-                        {
-                            childShape = JPH::CapsuleShapeSettings(childCol.Size.y, childCol.Size.x).Create().Get();
-                        }
-
-                        if (childShape)
-                        {
-                            childOffsets.push_back(childTrans.Translation + childCol.Offset);
-                            childShapeRefs.push_back(childShape);
-                        }
-                    }
-                    
-                    child = registry.get<RelationshipComponent>(child).NextSibling;
-                }
-            }
-
-            if (!childOffsets.empty())
-            {
-                JPH::StaticCompoundShapeSettings compoundSettings;
-
-                for (size_t i { 0 }; i < childOffsets.size(); ++i)
-                {
-                    compoundSettings.AddShape(ToJoltVec3(childOffsets[i]), JPH::Quat::sIdentity(), childShapeRefs[i]);
-                }
-
-                shape = compoundSettings.Create().Get();
-            }
-            else if (registry.all_of<ColliderComponent>(entity))
-            {
-                auto& collider { registry.get<ColliderComponent>(entity) };
-
-                if (collider.Type == ColliderType::Box)
-                {
-                    shape = JPH::BoxShapeSettings(ToJoltVec3(collider.Size)).Create().Get();
-                }
-                else if (collider.Type == ColliderType::Sphere)
-                {
-                    shape = JPH::SphereShapeSettings(collider.Size.x).Create().Get();
-                }
-                else if (collider.Type == ColliderType::Capsule)
-                {
-                    shape = JPH::CapsuleShapeSettings(collider.Size.y, collider.Size.x).Create().Get();
-                }
-
-                if (shape && glm::length(collider.Offset) > 0.001f)
-                {
-                    JPH::StaticCompoundShapeSettings offsetSettings;
-                    offsetSettings.AddShape(ToJoltVec3(collider.Offset), JPH::Quat::sIdentity(), shape);
-                    shape = offsetSettings.Create().Get();
-                }
-            }
-            else
-            {
-                shape = JPH::BoxShapeSettings(ToJoltVec3(transform.Scale * 0.5f)).Create().Get();
-            }
+            JPH::ShapeRefC shape { CreateEntityShape(world, entity) };
 
             if (!shape)
             {
@@ -130,12 +177,31 @@ namespace Antelope
             }
 
             const auto& worldMat { registry.get<WorldMatrixComponent>(entity) };
+            glm::mat3 rotMat { worldMat.Matrix };
+            
+            glm::vec3 globalScale {
+                glm::length(rotMat[0]),
+                glm::length(rotMat[1]),
+                glm::length(rotMat[2])
+            };
+
+            if (globalScale.x > 0.0001f) { rotMat[0] /= globalScale.x; }
+            if (globalScale.y > 0.0001f) { rotMat[1] /= globalScale.y; }
+            if (globalScale.z > 0.0001f) { rotMat[2] /= globalScale.z; }
+
+            glm::quat worldRotation { glm::quat_cast(rotMat) };
             glm::vec3 worldPosition { worldMat.Matrix[3] };
-            glm::quat worldRotation { glm::normalize(glm::quat_cast(worldMat.Matrix)) };
+
+            glm::vec3 colliderOffset { glm::vec3(0.0f) };
+
+            if (registry.all_of<ColliderComponent>(entity))
+            {
+                colliderOffset = registry.get<ColliderComponent>(entity).Offset;
+            }
 
             JPH::BodyCreationSettings bodySettings(
                 shape,
-                ToJoltVec3(worldPosition),
+                ToJoltVec3(worldPosition + worldRotation * (colliderOffset * globalScale)),
                 ToJoltQuat(worldRotation),
                 motionType,
                 layer
@@ -144,7 +210,7 @@ namespace Antelope
             bodySettings.mRestitution = rb.Restitution;
             bodySettings.mFriction = rb.Friction;
 
-            if (rb.Type == RigidBodyType::Dynamic && rb.Mass > 0.0f)
+            if ((rb.Type == RigidBodyType::Dynamic || rb.Type == RigidBodyType::Kinematic) && rb.Mass > 0.0f)
             {
                 bodySettings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
                 bodySettings.mMassPropertiesOverride.mMass = rb.Mass;
@@ -201,7 +267,15 @@ namespace Antelope
             if (bodyInterface.IsActive(bodyID))
             {
                 auto& transform { registry.get<TransformComponent>(entity) };
-                transform.Translation = ToGlmVec3(bodyInterface.GetPosition(bodyID));
+                glm::quat bodyRot { ToGlmQuat(bodyInterface.GetRotation(bodyID)) };
+                glm::vec3 bodyPos { ToGlmVec3(bodyInterface.GetPosition(bodyID)) };
+
+                if (registry.all_of<ColliderComponent>(entity))
+                {
+                    bodyPos -= bodyRot * registry.get<ColliderComponent>(entity).Offset;
+                }
+
+                transform.Translation = bodyPos;
                 transform.Rotation = glm::eulerAngles(ToGlmQuat(bodyInterface.GetRotation(bodyID)));
                 registry.emplace_or_replace<DirtyTransform>(entity);
             }
@@ -275,6 +349,13 @@ namespace Antelope
 
         glm::vec3 worldPosition { worldMat[3] };
         glm::quat worldRotation { glm::normalize(glm::quat_cast(glm::mat3(worldMat))) };
+
+        JPH::ShapeRefC newShape { CreateEntityShape(world, rbEntity) };
+        
+        if (newShape)
+        {
+            bodyInterface.SetShape(bodyID, newShape, false, JPH::EActivation::Activate);
+        }
 
         bodyInterface.SetPositionAndRotation(
             bodyID,

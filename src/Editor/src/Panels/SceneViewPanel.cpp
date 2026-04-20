@@ -178,18 +178,18 @@ namespace Antelope::Editor
             if (Input::IsKeyPressed(GLFW_KEY_R)) { m_GizmoType = ImGuizmo::OPERATION::SCALE; }
         }
 
+        float windowWidth { (float)ImGui::GetWindowWidth() };
+        float windowHeight { (float)ImGui::GetWindowHeight() };
+        glm::mat4 cameraView { camera.GetViewMatrix() };
+        glm::mat4 cameraProjection { camera.GetProjectionMatrix(windowWidth, windowHeight) };
+        cameraProjection[1][1] *= -1.0f;
+
         if (m_SelectedEntity && m_GizmoType != -1)
         {
             ImGuizmo::SetOrthographic(false);
             ImGuizmo::SetDrawlist();
 
-            float windowWidth { (float)ImGui::GetWindowWidth() };
-            float windowHeight { (float)ImGui::GetWindowHeight() };
             ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, windowWidth, windowHeight);
-
-            glm::mat4 cameraView { camera.GetViewMatrix() };
-            glm::mat4 cameraProjection { camera.GetProjectionMatrix(windowWidth, windowHeight) };
-            cameraProjection[1][1] *= -1.0f;
 
             auto& tc { m_SelectedEntity.GetComponent<TransformComponent>() };
             auto& worldMat { m_SelectedEntity.GetComponent<WorldMatrixComponent>() };
@@ -227,6 +227,9 @@ namespace Antelope::Editor
             }
         }
 
+        glm::mat4 vp { cameraProjection * cameraView };
+        DrawColliderGizmos(vp, ImGui::GetWindowPos(), { (float)newWidth, (float)newHeight });
+
         ImGui::End();
         ImGui::PopStyleVar();
     }
@@ -246,6 +249,90 @@ namespace Antelope::Editor
             Entity childEntity { child, Application::Get().GetWorld().get() };
             CollectMeshDescendants(childEntity, ids);
             child = childEntity.GetComponent<RelationshipComponent>().NextSibling;
+        }
+    }
+
+    void SceneViewPanel::DrawColliderGizmos(const glm::mat4& viewProj, ImVec2 windowPos, ImVec2 windowSize)
+    {
+        if (!m_ShowColliders) { return; }
+
+        ImDrawList* dl { ImGui::GetWindowDrawList() };
+        auto& registry { Application::Get().GetWorld()->GetRegistry() };
+        auto view { registry.view<ColliderComponent, WorldMatrixComponent>() };
+
+        for (auto [entityID, col, worldMat] : view.each())
+        {
+            bool isSelected { m_SelectedEntity && m_SelectedEntity.GetHandle() == entityID };
+            ImU32 color { isSelected ? IM_COL32(0, 255, 80, 255) : IM_COL32(0, 200, 80, 120) };
+            float thickness { isSelected ? 1.5f : 0.75f };
+
+            auto drawLine { [&](glm::vec3 a, glm::vec3 b) {
+                glm::vec4 ca { viewProj * glm::vec4(a, 1.0f) };
+                glm::vec4 cb { viewProj * glm::vec4(b, 1.0f) };
+
+                if (ca.w < 0.001f && cb.w < 0.001f) { return; }
+
+                if (ca.w < 0.001f)
+                {
+                    float t { (0.001f - ca.w) / (cb.w - ca.w) };
+                    ca = ca + t * (cb - ca);
+                }
+                else if (cb.w < 0.001f)
+                {
+                    float t { (0.001f - cb.w) / (ca.w - cb.w) };
+                    cb = cb + t * (ca - cb);
+                }
+
+                ImVec2 sa { windowPos.x + (ca.x/ca.w * 0.5f + 0.5f) * windowSize.x, windowPos.y + (0.5f - ca.y/ca.w * 0.5f) * windowSize.y };
+                ImVec2 sb { windowPos.x + (cb.x/cb.w * 0.5f + 0.5f) * windowSize.x, windowPos.y + (0.5f - cb.y/cb.w * 0.5f) * windowSize.y };
+                dl->AddLine(sa, sb, color, thickness);
+            }};
+
+            glm::vec3 offset { col.Offset };
+            glm::mat3 rot { worldMat.Matrix };
+            rot[0] = glm::normalize(rot[0]);
+            rot[1] = glm::normalize(rot[1]);
+            rot[2] = glm::normalize(rot[2]);
+            glm::mat4 colliderTransform { glm::mat4(rot) };
+            colliderTransform[3] = worldMat.Matrix[3];
+
+            if (col.Type == ColliderType::Box)
+            {
+                glm::vec3 half { col.Size * 0.5f };
+                glm::vec3 c[8];
+                int i { 0 };
+
+                for (int x : { -1, 1 }) for (int y : { -1, 1 }) for (int z : { -1, 1 })
+                {
+                    c[i++] = glm::vec3(colliderTransform * glm::vec4(offset + glm::vec3(x, y, z) * half, 1.0f));
+                }
+
+                drawLine(c[0],c[1]); drawLine(c[0],c[4]); drawLine(c[1],c[5]); drawLine(c[4],c[5]);
+                drawLine(c[2],c[3]); drawLine(c[2],c[6]); drawLine(c[3],c[7]); drawLine(c[6],c[7]);
+                drawLine(c[0],c[2]); drawLine(c[1],c[3]); drawLine(c[4],c[6]); drawLine(c[5],c[7]);
+            }
+            else if (col.Type == ColliderType::Sphere)
+            {
+                glm::vec3 center { glm::vec3(colliderTransform * glm::vec4(offset, 1.0f)) };
+                float radius { col.Size.x };
+                constexpr int segments { 32 };
+
+                for (int plane { 0 }; plane < 3; ++plane)
+                {
+                    for (int s { 0 }; s < segments; ++s)
+                    {
+                        float a0 { (s / (float)segments) * glm::two_pi<float>() };
+                        float a1 { ((s + 1) / (float)segments) * glm::two_pi<float>() };
+                        glm::vec3 p0 { center }, p1 { center };
+
+                        if (plane == 0) { p0 += glm::vec3(cos(a0), sin(a0), 0) * radius; p1 += glm::vec3(cos(a1), sin(a1), 0) * radius; }
+                        else if (plane == 1) { p0 += glm::vec3(cos(a0), 0, sin(a0)) * radius; p1 += glm::vec3(cos(a1), 0, sin(a1)) * radius; }
+                        else { p0 += glm::vec3(0, cos(a0), sin(a0)) * radius; p1 += glm::vec3(0, cos(a1), sin(a1)) * radius; }
+
+                        drawLine(p0, p1); 
+                    }
+                }
+            }
         }
     }
 }

@@ -16,6 +16,10 @@ AssetBindings:
     ComponentType: MaterialSlot
     AssetUUID: 11766189970472800795
     MeshIndex: 0
+  - EntityID: 1227023538173895054
+    ComponentType: MeshComponent
+    AssetUUID: 4479196892811573101
+    MeshIndex: 0
 Entities:
   - Entity: 16603395071575905790
     TagComponent:
@@ -39,8 +43,8 @@ Entities:
       Scale: [0.00125, 0.00125, 0.00125]
     ColliderComponent:
       Type: 0
-      Size: [1, 1, 1.5]
-      Offset: [0, 0, 0]
+      Size: [2, 1.2, 1.5]
+      Offset: [0.25, 0.6, 0]
   - Entity: 12476797892596032151
     ParentID: 8990208328687078625
     TagComponent:
@@ -1105,7 +1109,9 @@ Entities:
       Translation: [0, 0, 0]
       Rotation: [-1.5707967, 0, 0]
       Scale: [10, 10, 10]
-    MeshComponent: ~
+    MeshComponent:
+      Offset: [0, 0, 0]
+      Scale: [1, 1, 1]
   - Entity: 9381375498182791711
     ParentID: 16603395071575905790
     TagComponent:
@@ -1116,8 +1122,8 @@ Entities:
       Scale: [0.00125, 0.00125, 0.00125]
     ColliderComponent:
       Type: 0
-      Size: [1, 1, 1.5]
-      Offset: [0, 0, 0]
+      Size: [2, 1.2, 1.5]
+      Offset: [0.25, 0.6, 0]
   - Entity: 9290983550822796326
     ParentID: 9381375498182791711
     TagComponent:
@@ -2182,14 +2188,19 @@ Entities:
       Translation: [0, 0, 0]
       Rotation: [-1.5707967, 0, 0]
       Scale: [10, 10, 10]
-    MeshComponent: ~
+    MeshComponent:
+      Offset: [0, 0, 0]
+      Scale: [1, 1, 1]
   - Entity: 1227023538173895054
     TagComponent:
       Tag: Ground
     TransformComponent:
-      Translation: [0, -1.1949863, 0]
-      Rotation: [0, -0, 0]
+      Translation: [0, 0, 0]
+      Rotation: [0, 0, 0]
       Scale: [1, 1, 1]
+    MeshComponent:
+      Offset: [0, 0, 0]
+      Scale: [5, 1, 5]
     RigidBodyComponent:
       Type: 1
       Mass: 1
@@ -2197,9 +2208,10 @@ Entities:
       Restitution: 0
     ColliderComponent:
       Type: 0
-      Size: [20, 1, 20]
+      Size: [20, 0, 20]
       Offset: [0, 0, 0]
   - Entity: 999000000000000002
+    Disabled: true
     TagComponent:
       Tag: PointLight
     TransformComponent:
@@ -2219,11 +2231,11 @@ Entities:
       Scale: [1, 1, 1]
     DirectionalLightComponent:
       Color: [1, 0.98, 0.92]
-      Intensity: 1
+      Intensity: 5
     AmbientComponent:
       SkyColorDay: [0.26108402, 0.42027727, 0.7784616]
       HorizonColorDay: [0.6553657, 0.8003316, 0.9815385]
       GroundColor: [0.23529412, 0.22745098, 0.23137255]
       SkyColorNight: [0.050073378, 0.06377917, 0.13230771]
       HorizonColorNight: [0.030769223, 0.040615413, 0.07999998]
-      StarIntensity: 0.8
+      StarIntensity: 1.5
