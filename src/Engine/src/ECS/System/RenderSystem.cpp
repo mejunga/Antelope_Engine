@@ -117,7 +117,7 @@ namespace Antelope
         UniformBufferObject cameraUBO {};
         cameraUBO.view = camera.GetViewMatrix();
         
-        auto renderExtent { renderer->GetRenderTexture()->GetExtent() };
+        auto renderExtent { renderer->GetFinalLDRTexture()->GetExtent() };
         cameraUBO.proj = camera.GetProjectionMatrix(
             static_cast<float>(renderExtent.width), 
             static_cast<float>(renderExtent.height)

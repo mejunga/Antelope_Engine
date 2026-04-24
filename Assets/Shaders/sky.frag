@@ -53,6 +53,7 @@ void main()
             finalColor += ubo.sunColor.xyz * (sunDisk * 1.5 + corona + sunGlow) * sunElevation * horizonMask;
         }
 
+        finalColor = pow(finalColor, vec3(2.2));
         outColor = vec4(finalColor, 1.0);
         return;
     }
@@ -109,6 +110,8 @@ void main()
         float horizonMask = smoothstep(-0.08, 0.12, dir.y);
         finalColor += ubo.sunColor.xyz * (sunDisk * 1.5 + corona + sunGlow) * sunElevation * horizonMask;
     }
+
+    finalColor = pow(finalColor, vec3(2.2));
 
     outColor = vec4(finalColor, 1.0);
 }

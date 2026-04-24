@@ -95,20 +95,24 @@ namespace Antelope
             pbrMat.AlbedoFactor = modelMat.AlbedoFactor;
             pbrMat.MetallicRoughnessFactors = modelMat.MetallicRoughnessFactors;
 
-            auto loadTex { [&](const std::string& filename) -> uint32_t {
-                if (filename.empty()) return 0xFFFFFFFF;
-                for (const auto& [uuid, meta] : AssetManager::GetRegistry()) {
-                    if (meta.Type == AssetType::Texture2D && meta.FilePath.filename().string() == filename) {
-                        return textureManager->LoadTexture(meta.FilePath.string());
+            auto loadTex { [&](const std::string& filename, bool isSRGB) -> uint32_t {
+                if (filename.empty()) { return 0xFFFFFFFF; }
+
+                for (const auto& [uuid, meta] : AssetManager::GetRegistry())
+                {
+                    if (meta.Type == AssetType::Texture2D && meta.FilePath.filename().string() == filename)
+                    {
+                        return textureManager->LoadTexture(meta.FilePath.string(), isSRGB); 
                     }
                 }
+
                 return 0xFFFFFFFF;
             }};
 
-            pbrMat.AlbedoTexIndex = loadTex(modelMat.AlbedoTexPath);
-            pbrMat.NormalTexIndex = loadTex(modelMat.NormalTexPath);
-            pbrMat.MetRoughAOTexIndex = loadTex(modelMat.MetRoughAOTexPath);
-            pbrMat.EmissiveTexIndex = loadTex(modelMat.EmissiveTexPath);
+            pbrMat.AlbedoTexIndex = loadTex(modelMat.AlbedoTexPath, true);
+            pbrMat.EmissiveTexIndex = loadTex(modelMat.EmissiveTexPath, true);
+            pbrMat.NormalTexIndex = loadTex(modelMat.NormalTexPath, false);
+            pbrMat.MetRoughAOTexIndex = loadTex(modelMat.MetRoughAOTexPath, false);
 
             ssboMaterialIndices.push_back(renderer->AddMaterial(pbrMat));
         }

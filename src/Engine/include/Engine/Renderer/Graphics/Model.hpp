@@ -7,6 +7,7 @@
 #include <vector>
 #include <string>
 
+
 namespace Antelope
 {
     struct SubMeshData

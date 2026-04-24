@@ -11,13 +11,13 @@ namespace Antelope
     class VulkanContext;
     class Pipeline;
 
-    class ShadowRenderer
+    class ShadowPass
     {
     public:
-        ShadowRenderer(std::shared_ptr<VulkanContext> context, 
+        ShadowPass(std::shared_ptr<VulkanContext> context, 
                        VkPipelineLayout pipelineLayout,
                        uint32_t width, uint32_t height);
-        ~ShadowRenderer();
+        ~ShadowPass();
 
         void Draw(VkCommandBuffer cmd, VkDescriptorSet descriptorSet, uint32_t objectCount, VkBuffer indirectBuffer);
 

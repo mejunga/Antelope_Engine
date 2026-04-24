@@ -1,4 +1,4 @@
-#include <Engine/Renderer/Graphics/ShadowRenderer.hpp>
+#include <Engine/Renderer/Graphics/ShadowPass.hpp>
 #include <Engine/Renderer/Vulkan/Pipeline.hpp>
 #include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 #include <Engine/Debug/Log.hpp>
@@ -9,7 +9,7 @@
 
 namespace Antelope
 {
-    ShadowRenderer::ShadowRenderer(std::shared_ptr<VulkanContext> context, 
+    ShadowPass::ShadowPass(std::shared_ptr<VulkanContext> context, 
                                    VkPipelineLayout pipelineLayout,
                                    uint32_t width, uint32_t height)
         : m_Context(context), m_PipelineLayout(pipelineLayout), m_Width(width), m_Height(height)
@@ -20,10 +20,10 @@ namespace Antelope
         CreateFramebuffer();
         CreateSampler();
         CreatePipeline();
-        AE_ENGINE_TRACE("ShadowRenderer created: {0}x{1}", width, height);
+        AE_ENGINE_TRACE("ShadowPass created: {0}x{1}", width, height);
     }
 
-    ShadowRenderer::~ShadowRenderer()
+    ShadowPass::~ShadowPass()
     {
         auto allocator { m_Context->GetAllocator() };
         auto device { m_Context->GetDevice() };
@@ -35,7 +35,7 @@ namespace Antelope
         vmaDestroyImage(allocator, m_DepthImage, m_DepthAllocation);
     }
 
-    void ShadowRenderer::Draw(VkCommandBuffer cmd, VkDescriptorSet descriptorSet, uint32_t objectCount, VkBuffer indirectBuffer)
+    void ShadowPass::Draw(VkCommandBuffer cmd, VkDescriptorSet descriptorSet, uint32_t objectCount, VkBuffer indirectBuffer)
     {
         VkRenderPassBeginInfo rpInfo {};
         rpInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -77,13 +77,13 @@ namespace Antelope
         vkCmdEndRenderPass(cmd);
     }
 
-    VkFormat ShadowRenderer::FindDepthFormat()
+    VkFormat ShadowPass::FindDepthFormat()
     {
         std::vector<VkFormat> candidates { VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT };
         return m_Context->FindSupportedFormat(candidates, VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
     }
 
-    void ShadowRenderer::CreateResources()
+    void ShadowPass::CreateResources()
     {
         auto allocator { m_Context->GetAllocator() };
 
@@ -121,7 +121,7 @@ namespace Antelope
         vkCreateImageView(m_Context->GetDevice(), &depthViewInfo, nullptr, &m_DepthImageView);
     }
 
-    void ShadowRenderer::CreateRenderPass()
+    void ShadowPass::CreateRenderPass()
     {
         VkAttachmentDescription depthAttachment {};
         depthAttachment.format = m_DepthFormat;
@@ -175,7 +175,7 @@ namespace Antelope
         }
     }
 
-    void ShadowRenderer::CreateFramebuffer()
+    void ShadowPass::CreateFramebuffer()
     {
         VkFramebufferCreateInfo framebufferInfo {};
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -193,7 +193,7 @@ namespace Antelope
         }
     }
 
-    void ShadowRenderer::CreateSampler()
+    void ShadowPass::CreateSampler()
     {
         VkSamplerCreateInfo samplerInfo {};
         samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -218,7 +218,7 @@ namespace Antelope
         }
     }
 
-    void ShadowRenderer::CreatePipeline()
+    void ShadowPass::CreatePipeline()
     {
         PipelineConfigInfo config {};
         Pipeline::DefaultPipelineConfigInfo(config, m_Context);

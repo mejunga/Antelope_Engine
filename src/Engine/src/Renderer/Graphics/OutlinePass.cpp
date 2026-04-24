@@ -1,4 +1,4 @@
-#include <Engine/Renderer/Graphics/OutlineRenderer.hpp>
+#include <Engine/Renderer/Graphics/OutlinePass.hpp>
 #include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 #include <Engine/Renderer/Vulkan/Pipeline.hpp>
 #include <Engine/Renderer/Vulkan/RenderTexture.hpp>
@@ -10,7 +10,7 @@
 
 namespace Antelope
 {
-    OutlineRenderer::OutlineRenderer(std::shared_ptr<VulkanContext> context, VkPipelineLayout maskPipelineLayout, std::shared_ptr<RenderTexture> renderTexture)
+    OutlinePass::OutlinePass(std::shared_ptr<VulkanContext> context, VkPipelineLayout maskPipelineLayout, std::shared_ptr<RenderTexture> renderTexture)
         : m_Context(context), m_MaskPipelineLayout(maskPipelineLayout)
     {
         CreateMaskRenderPass();
@@ -20,7 +20,7 @@ namespace Antelope
         RebuildFramebuffersAndDescriptors(renderTexture);
     }
 
-    OutlineRenderer::~OutlineRenderer()
+    OutlinePass::~OutlinePass()
     {
         auto device { m_Context->GetDevice() };
 
@@ -33,7 +33,7 @@ namespace Antelope
         if (m_CompositeRenderPass) { vkDestroyRenderPass(device, m_CompositeRenderPass, nullptr); }
     }
 
-    void OutlineRenderer::DrawMask(VkCommandBuffer cmd, const std::vector<uint32_t>& indirectIndices, VkBuffer indirectBuffer, VkDescriptorSet descriptorSet, glm::vec4 color)
+    void OutlinePass::DrawMask(VkCommandBuffer cmd, const std::vector<uint32_t>& indirectIndices, VkBuffer indirectBuffer, VkDescriptorSet descriptorSet, glm::vec4 color)
     {
         m_ActiveOutlineColor = color;
 
@@ -77,7 +77,7 @@ namespace Antelope
         vkCmdEndRenderPass(cmd);
     }
 
-    void OutlineRenderer::DrawComposite(VkCommandBuffer cmd)
+    void OutlinePass::DrawComposite(VkCommandBuffer cmd)
     {
         VkRenderPassBeginInfo beginInfo {};
         beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -112,12 +112,12 @@ namespace Antelope
         vkCmdEndRenderPass(cmd);
     }
 
-    void OutlineRenderer::RebuildResources(std::shared_ptr<RenderTexture> renderTexture)
+    void OutlinePass::RebuildResources(std::shared_ptr<RenderTexture> renderTexture)
     {
         RebuildFramebuffersAndDescriptors(renderTexture);
     }
 
-    void OutlineRenderer::CreateMaskRenderPass()
+    void OutlinePass::CreateMaskRenderPass()
     {
         VkAttachmentDescription attachment {};
         attachment.format = VK_FORMAT_R8G8B8A8_UNORM;
@@ -162,7 +162,7 @@ namespace Antelope
         }
     }
 
-    void OutlineRenderer::CreateMaskPipeline()
+    void OutlinePass::CreateMaskPipeline()
     {
         PipelineConfigInfo config {};
         Pipeline::DefaultPipelineConfigInfo(config, m_Context);
@@ -176,7 +176,7 @@ namespace Antelope
         m_MaskPipeline = std::make_unique<Pipeline>(m_Context, "Assets/Shaders/solid_mask.vert.spv", "Assets/Shaders/solid_mask.frag.spv", config);
     }
 
-    void OutlineRenderer::CreateCompositeRenderPass(VkFormat colorFormat)
+    void OutlinePass::CreateCompositeRenderPass(VkFormat colorFormat)
     {
         VkAttachmentDescription attachment {};
         attachment.format = colorFormat;
@@ -231,7 +231,7 @@ namespace Antelope
         }
     }
 
-    void OutlineRenderer::CreateCompositePipeline()
+    void OutlinePass::CreateCompositePipeline()
     {
         auto device { m_Context->GetDevice() };
 
@@ -290,7 +290,7 @@ namespace Antelope
         m_CompositePipeline = std::make_unique<Pipeline>(m_Context, "Assets/Shaders/outline_composite.vert.spv", "Assets/Shaders/outline_composite.frag.spv", config);
     }
 
-    void OutlineRenderer::RebuildFramebuffersAndDescriptors(std::shared_ptr<RenderTexture> renderTexture)
+    void OutlinePass::RebuildFramebuffersAndDescriptors(std::shared_ptr<RenderTexture> renderTexture)
     {
         auto device { m_Context->GetDevice() };
         m_Extent = renderTexture->GetExtent();

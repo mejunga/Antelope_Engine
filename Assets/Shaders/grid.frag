@@ -11,11 +11,15 @@ layout(location = 0) out vec4 outColor;
 vec4 grid(vec3 fragPos3D, float scale, float lineThickness) 
 {
     vec2 coord = fragPos3D.xz * scale;
-    vec2 derivative = fwidth(coord);
+    vec2 derivative = max(fwidth(coord), vec2(0.00001)); 
     vec2 grid = abs(fract(coord - 0.5) - 0.5) / derivative;
     float line = min(grid.x, grid.y);
     
-    float alpha = 1.0 - min(line / lineThickness, 1.0);
+    float clampedThickness = max(lineThickness, 0.8);
+    float alpha = 1.0 - min(line / clampedThickness, 1.0);
+    
+    alpha *= min(lineThickness / 0.8, 1.0);
+    
     return vec4(1.0, 1.0, 1.0, alpha);
 }
 
@@ -39,13 +43,13 @@ void main()
     float thickFade = 1.0 - smoothstep(25.0, 350.0, dist);
 
     float thinThick  = mix(0.5,  0.05, smoothstep(3.0,  40.0,  dist));
-float thickThick = mix(1.5,  0.3,  smoothstep(5.0,  100.0, dist));
+    float thickThick = mix(1.5,  0.3,  smoothstep(5.0,  100.0, dist));
 
     vec4 thinGrid = grid(fragPos3D, 1.0, thinThick);
     vec4 thickGrid = grid(fragPos3D, 0.1, thickThick);
 
-    float thinAlpha = thinGrid.a  * 0.1 * thinFade;
-    float thickAlpha = thickGrid.a * 0.2 * thickFade;
+    float thinAlpha = thinGrid.a  * 0.05 * thinFade;
+    float thickAlpha = thickGrid.a * 0.1 * thickFade;
     
     vec3 finalColor = mix(thinGrid.rgb, thickGrid.rgb, thickGrid.a);
     float finalAlpha = max(thinAlpha, thickAlpha);

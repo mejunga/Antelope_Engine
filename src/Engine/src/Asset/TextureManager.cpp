@@ -40,7 +40,7 @@ namespace Antelope
         AE_ENGINE_TRACE("TextureManager destroyed and all textures freed.");
     }
 
-    uint32_t TextureManager::LoadTexture(const std::string& filepath)
+    uint32_t TextureManager::LoadTexture(const std::string& filepath, bool isSRGB)
     {
         auto it { m_PathToIndex.find(filepath) };
         if (it != m_PathToIndex.end()) { return it->second; }
@@ -67,19 +67,21 @@ namespace Antelope
 
         newTexture.GlobalIndex = static_cast<uint32_t>(m_Textures.size());
 
-        CreateImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+        VkFormat format { isSRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM };
+
+        CreateImage(texWidth, texHeight, format, VK_IMAGE_TILING_OPTIMAL,
                     VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                     VMA_MEMORY_USAGE_AUTO, newTexture.Image, newTexture.Allocation);
 
         VkCommandBuffer cmd { m_Renderer->BeginAsyncGraphicsCommand() };
 
-        TransitionImageLayout(cmd, newTexture.Image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        TransitionImageLayout(cmd, newTexture.Image, format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
         CopyBufferToImage(cmd, stagingBuffer, newTexture.Image, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
-        TransitionImageLayout(cmd, newTexture.Image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        TransitionImageLayout(cmd, newTexture.Image, format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
         m_Renderer->EndAndSubmitAsyncGraphicsCommand(cmd, stagingBuffer, stagingAllocation, newTexture.GlobalIndex);
 
-        newTexture.ImageView = CreateImageView(newTexture.Image, VK_FORMAT_R8G8B8A8_SRGB);
+        newTexture.ImageView = CreateImageView(newTexture.Image, format);
         newTexture.Sampler = CreateTextureSampler();
 
         m_Textures.push_back(newTexture);

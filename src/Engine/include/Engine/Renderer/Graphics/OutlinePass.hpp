@@ -13,11 +13,11 @@ namespace Antelope
     class Pipeline;
     class RenderTexture;
 
-    class OutlineRenderer
+    class OutlinePass
     {
         public:
-            OutlineRenderer(std::shared_ptr<VulkanContext> context, VkPipelineLayout maskPipelineLayout, std::shared_ptr<RenderTexture> renderTexture);
-            ~OutlineRenderer();
+            OutlinePass(std::shared_ptr<VulkanContext> context, VkPipelineLayout maskPipelineLayout, std::shared_ptr<RenderTexture> renderTexture);
+            ~OutlinePass();
 
             void DrawMask(VkCommandBuffer cmd, const std::vector<uint32_t>& indirectIndices, VkBuffer indirectBuffer, VkDescriptorSet descriptorSet, glm::vec4 color);
             void DrawComposite(VkCommandBuffer cmd);

@@ -29,7 +29,7 @@ namespace Antelope
             TextureManager(std::shared_ptr<VulkanContext> context, std::shared_ptr<Renderer> renderer);
             ~TextureManager();
 
-            uint32_t LoadTexture(const std::string& filepath);
+            uint32_t LoadTexture(const std::string& filepath, bool isSRGB = true);
 
             inline const std::vector<Texture>& GetGlobalTextures() const { return m_Textures; }
 

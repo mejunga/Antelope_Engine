@@ -25,13 +25,15 @@ namespace Antelope
     class DescriptorAllocator;
     class SwapChain;
     class GpuMemoryAllocator;
-    class SkyRenderer;
-    class ShadowRenderer;
-#ifdef ANTELOPE_EDITOR_MODE
+    class SkyboxPass;
+    class ShadowPass;
+    class PostCompositePass;
     class RenderTexture;
+    class BloomPass;
+#ifdef ANTELOPE_EDITOR_MODE
     class UIContext;
-    class GridRenderer;
-    class OutlineRenderer;
+    class EditorGridPass;
+    class OutlinePass;
 #endif
 
     struct Texture;
@@ -84,9 +86,9 @@ namespace Antelope
         #endif
 
         #ifdef ANTELOPE_EDITOR_MODE
-            inline std::shared_ptr<RenderTexture> GetRenderTexture() const { return m_RenderTexture; }
             inline void SetUIContext(std::shared_ptr<UIContext> uiContext) { m_UIContext = uiContext; }
             inline uint32_t GetMaxFramesInFlight() const { return m_MaxFramesInFlight; }
+            inline std::shared_ptr<RenderTexture> GetFinalLDRTexture() const { return m_FinalLDRTexture; }
         #endif
             inline void SetSelectedEntityIDs(std::unordered_set<uint32_t> entityIDs, glm::vec4 outlineColor = { 1.0f, 0.6f, 0.0f, 1.0f })
             {
@@ -125,14 +127,17 @@ namespace Antelope
             std::shared_ptr<SwapChain> m_SwapChain;
             std::unique_ptr<GpuMemoryAllocator> m_GpuAllocator;
             std::unique_ptr<Pipeline> m_MainPipeline;
-            std::unique_ptr<SkyRenderer> m_SkyRenderer;
-            std::shared_ptr<ShadowRenderer> m_ShadowMap;
+            std::unique_ptr<SkyboxPass> m_SkyBoxPass;
+            std::shared_ptr<ShadowPass> m_ShadowPass;
             std::unique_ptr<DescriptorAllocator> m_GlobalDescriptorAllocator;
+            std::shared_ptr<RenderTexture> m_SceneHDRTexture; 
+            std::unique_ptr<PostCompositePass> m_PostCompositePass;
+            std::unique_ptr<BloomPass> m_BloomPass;
         #ifdef ANTELOPE_EDITOR_MODE
-            std::shared_ptr<RenderTexture> m_RenderTexture;
             std::weak_ptr<UIContext> m_UIContext;
-            std::unique_ptr<GridRenderer> m_GridRenderer;
-            std::unique_ptr<OutlineRenderer> m_OutlineRenderer;
+            std::unique_ptr<EditorGridPass> m_EditorGridPass;
+            std::unique_ptr<OutlinePass> m_OutlinePass;
+            std::shared_ptr<RenderTexture> m_FinalLDRTexture;
         #endif
 
             VkDescriptorSetLayout m_DescriptorSetLayout { VK_NULL_HANDLE };
@@ -172,8 +177,8 @@ namespace Antelope
 
         #ifdef ANTELOPE_EDITOR_MODE
             friend class ScenePicker;
-            friend class GridRenderer;
+            friend class EditorGridPass;
         #endif
-            friend class SkyRenderer;
+            friend class SkyboxPass;
     };
 }

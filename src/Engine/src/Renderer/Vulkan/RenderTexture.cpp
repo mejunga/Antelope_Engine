@@ -8,8 +8,8 @@
 
 namespace Antelope
 {
-    RenderTexture::RenderTexture(std::shared_ptr<VulkanContext> context, uint32_t width, uint32_t height, VkFormat colorFormat)
-        : m_Context(context), m_Width(width), m_Height(height), m_ColorFormat(colorFormat)
+    RenderTexture::RenderTexture(std::shared_ptr<VulkanContext> context, uint32_t width, uint32_t height, VkFormat colorFormat, bool useMSAA)
+        : m_Context(context), m_Width(width), m_Height(height), m_ColorFormat(colorFormat), m_UseMSAA(useMSAA)
     {
         m_DepthFormat = FindDepthFormat();
 
@@ -17,8 +17,6 @@ namespace Antelope
         CreateResources();
         CreateFramebuffer();
         CreateSampler();
-
-        AE_ENGINE_TRACE("RenderTexture (Offscreen MSAA) created: {0}x{1}", width, height);
     }
 
     RenderTexture::~RenderTexture()
@@ -75,39 +73,41 @@ namespace Antelope
     void RenderTexture::CreateResources()
     {
         auto allocator { m_Context->GetAllocator() };
-        VkSampleCountFlagBits msaaSamples { m_Context->GetMsaaSamples() };
-
-        VkImageCreateInfo colorInfo {};
-        colorInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-        colorInfo.imageType = VK_IMAGE_TYPE_2D;
-        colorInfo.extent.width = m_Width;
-        colorInfo.extent.height = m_Height;
-        colorInfo.extent.depth = 1;
-        colorInfo.mipLevels = 1;
-        colorInfo.arrayLayers = 1;
-        colorInfo.format = m_ColorFormat;
-        colorInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-        colorInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        colorInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
-        colorInfo.samples = msaaSamples;
-        colorInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        VkSampleCountFlagBits msaaSamples { m_UseMSAA ? m_Context->GetMsaaSamples() : VK_SAMPLE_COUNT_1_BIT };
 
         VmaAllocationCreateInfo allocationInfo {};
         allocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
-        vmaCreateImage(allocator, &colorInfo, &allocationInfo, &m_ColorImage, &m_ColorAllocation, nullptr);
+        if (m_UseMSAA)
+        {
+            VkImageCreateInfo colorInfo {};
+            colorInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+            colorInfo.imageType = VK_IMAGE_TYPE_2D;
+            colorInfo.extent.width = m_Width;
+            colorInfo.extent.height = m_Height;
+            colorInfo.extent.depth = 1;
+            colorInfo.mipLevels = 1;
+            colorInfo.arrayLayers = 1;
+            colorInfo.format = m_ColorFormat;
+            colorInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+            colorInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            colorInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+            colorInfo.samples = msaaSamples;
+            colorInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+            vmaCreateImage(allocator, &colorInfo, &allocationInfo, &m_ColorImage, &m_ColorAllocation, nullptr);
 
-        VkImageViewCreateInfo colorViewInfo {};
-        colorViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        colorViewInfo.image = m_ColorImage;
-        colorViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        colorViewInfo.format = m_ColorFormat;
-        colorViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        colorViewInfo.subresourceRange.baseMipLevel = 0;
-        colorViewInfo.subresourceRange.levelCount = 1;
-        colorViewInfo.subresourceRange.baseArrayLayer = 0;
-        colorViewInfo.subresourceRange.layerCount = 1;
-        vkCreateImageView(m_Context->GetDevice(), &colorViewInfo, nullptr, &m_ColorImageView);
+            VkImageViewCreateInfo colorViewInfo {};
+            colorViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            colorViewInfo.image = m_ColorImage;
+            colorViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            colorViewInfo.format = m_ColorFormat;
+            colorViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            colorViewInfo.subresourceRange.baseMipLevel = 0;
+            colorViewInfo.subresourceRange.levelCount = 1;
+            colorViewInfo.subresourceRange.baseArrayLayer = 0;
+            colorViewInfo.subresourceRange.layerCount = 1;
+            vkCreateImageView(m_Context->GetDevice(), &colorViewInfo, nullptr, &m_ColorImageView);
+        }
 
         VkImageCreateInfo depthInfo {};
         depthInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -137,6 +137,8 @@ namespace Antelope
         depthViewInfo.subresourceRange.layerCount = 1;
         vkCreateImageView(m_Context->GetDevice(), &depthViewInfo, nullptr, &m_DepthImageView);
 
+        VkImageUsageFlags resolveUsage { VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT };
+
         VkImageCreateInfo resolveInfo {};
         resolveInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         resolveInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -148,7 +150,7 @@ namespace Antelope
         resolveInfo.format = m_ColorFormat;
         resolveInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
         resolveInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        resolveInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        resolveInfo.usage = resolveUsage;
         resolveInfo.samples = VK_SAMPLE_COUNT_1_BIT;
         resolveInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         vmaCreateImage(allocator, &resolveInfo, &allocationInfo, &m_ResolveImage, &m_ResolveAllocation, nullptr);
@@ -210,10 +212,7 @@ namespace Antelope
             toClear.srcAccessMask = 0;
             toClear.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 
-            vkCmdPipelineBarrier(cmd,
-                                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                 VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                 0, 0, nullptr, 0, nullptr, 1, &toClear);
+            vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toClear);
 
             VkClearColorValue clearColor {};
             clearColor.float32[0] = 0.1f;
@@ -228,8 +227,7 @@ namespace Antelope
             range.baseArrayLayer = 0;
             range.layerCount = 1;
 
-            vkCmdClearColorImage(cmd, m_ResolveImage,
-                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &range);
+            vkCmdClearColorImage(cmd, m_ResolveImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &range);
 
             VkImageMemoryBarrier toReadable {};
             toReadable.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -242,117 +240,203 @@ namespace Antelope
             toReadable.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
             toReadable.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-            vkCmdPipelineBarrier(cmd,
-                                 VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                                 0, 0, nullptr, 0, nullptr, 1, &toReadable);
+            vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toReadable);
         });
     }
 
     void RenderTexture::CreateRenderPass()
     {
-        VkSampleCountFlagBits msaaSamples { m_Context->GetMsaaSamples() };
-
-        VkAttachmentDescription colorAttachment {};
-        colorAttachment.format = m_ColorFormat;
-        colorAttachment.samples = msaaSamples;
-        colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-        VkAttachmentDescription depthAttachment {};
-        depthAttachment.format = m_DepthFormat;
-        depthAttachment.samples = msaaSamples;
-        depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-        VkAttachmentDescription resolveAttachment {};
-        resolveAttachment.format = m_ColorFormat;
-        resolveAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-        resolveAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        resolveAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        resolveAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        resolveAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        resolveAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        resolveAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-        VkAttachmentReference colorAttachmentRef {};
-        colorAttachmentRef.attachment = 0;
-        colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-        VkAttachmentReference depthAttachmentRef {};
-        depthAttachmentRef.attachment = 1;
-        depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-        VkAttachmentReference resolveAttachmentRef {};
-        resolveAttachmentRef.attachment = 2;
-        resolveAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-        VkSubpassDescription subpass {};
-        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpass.colorAttachmentCount = 1;
-        subpass.pColorAttachments = &colorAttachmentRef;
-        subpass.pDepthStencilAttachment = &depthAttachmentRef;
-        subpass.pResolveAttachments = &resolveAttachmentRef;
-
-        VkSubpassDependency dependencyIn {};
-        dependencyIn.srcSubpass = VK_SUBPASS_EXTERNAL;
-        dependencyIn.dstSubpass = 0;
-        dependencyIn.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-        dependencyIn.srcAccessMask = 0;
-        dependencyIn.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-        dependencyIn.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-        VkSubpassDependency dependencyOut {};
-        dependencyOut.srcSubpass = 0;
-        dependencyOut.dstSubpass = VK_SUBPASS_EXTERNAL;
-        dependencyOut.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependencyOut.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        dependencyOut.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        dependencyOut.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-        std::array<VkAttachmentDescription, 3> attachments { colorAttachment, depthAttachment, resolveAttachment };
-        std::array<VkSubpassDependency, 2> dependencies { dependencyIn, dependencyOut };
-        
-        VkRenderPassCreateInfo renderPassInfo {};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-        renderPassInfo.pAttachments = attachments.data();
-        renderPassInfo.subpassCount = 1;
-        renderPassInfo.pSubpasses = &subpass;
-        renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
-        renderPassInfo.pDependencies = dependencies.data();
-
-        if (vkCreateRenderPass(m_Context->GetDevice(), &renderPassInfo, nullptr, &m_RenderPass) != VK_SUCCESS) 
+        if (m_UseMSAA)
         {
-            AE_CLIENT_CRITICAL("Failed to create offscreen render pass!");
-            throw std::runtime_error("Failed to create offscreen render pass");
+            VkSampleCountFlagBits msaaSamples { m_Context->GetMsaaSamples() };
+
+            VkAttachmentDescription colorAttachment {};
+            colorAttachment.format = m_ColorFormat;
+            colorAttachment.samples = msaaSamples;
+            colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+            VkAttachmentDescription depthAttachment {};
+            depthAttachment.format = m_DepthFormat;
+            depthAttachment.samples = msaaSamples;
+            depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+            VkAttachmentDescription resolveAttachment {};
+            resolveAttachment.format = m_ColorFormat;
+            resolveAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+            resolveAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            resolveAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            resolveAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            resolveAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            resolveAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            resolveAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+            VkAttachmentReference colorRef {};
+            colorRef.attachment = 0;
+            colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+            VkAttachmentReference depthRef {};
+            depthRef.attachment = 1;
+            depthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+            VkAttachmentReference resolveRef {};
+            resolveRef.attachment = 2;
+            resolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+            VkSubpassDescription subpass {};
+            subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+            subpass.colorAttachmentCount = 1;
+            subpass.pColorAttachments = &colorRef;
+            subpass.pDepthStencilAttachment = &depthRef;
+            subpass.pResolveAttachments = &resolveRef;
+
+            VkSubpassDependency dependencyIn {};
+            dependencyIn.srcSubpass = VK_SUBPASS_EXTERNAL;
+            dependencyIn.dstSubpass = 0;
+            dependencyIn.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+            dependencyIn.srcAccessMask = 0;
+            dependencyIn.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+            dependencyIn.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+            VkSubpassDependency dependencyOut {};
+            dependencyOut.srcSubpass = 0;
+            dependencyOut.dstSubpass = VK_SUBPASS_EXTERNAL;
+            dependencyOut.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            dependencyOut.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            dependencyOut.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            dependencyOut.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+            std::array<VkAttachmentDescription, 3> attachments { colorAttachment, depthAttachment, resolveAttachment };
+            std::array<VkSubpassDependency, 2> dependencies { dependencyIn, dependencyOut };
+
+            VkRenderPassCreateInfo renderPassInfo {};
+            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+            renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+            renderPassInfo.pAttachments = attachments.data();
+            renderPassInfo.subpassCount = 1;
+            renderPassInfo.pSubpasses = &subpass;
+            renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
+            renderPassInfo.pDependencies = dependencies.data();
+
+            if (vkCreateRenderPass(m_Context->GetDevice(), &renderPassInfo, nullptr, &m_RenderPass) != VK_SUCCESS)
+            {
+                AE_CLIENT_CRITICAL("Failed to create offscreen render pass!");
+                throw std::runtime_error("Failed to create offscreen render pass");
+            }
+        }
+        else
+        {
+            VkAttachmentDescription colorAttachment {};
+            colorAttachment.format = m_ColorFormat;
+            colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+            colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            colorAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+            VkAttachmentDescription depthAttachment {};
+            depthAttachment.format = m_DepthFormat;
+            depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+            depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+            VkAttachmentReference colorRef {};
+            colorRef.attachment = 0;
+            colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+            VkAttachmentReference depthRef {};
+            depthRef.attachment = 1;
+            depthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+            VkSubpassDescription subpass {};
+            subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+            subpass.colorAttachmentCount = 1;
+            subpass.pColorAttachments = &colorRef;
+            subpass.pDepthStencilAttachment = &depthRef;
+
+            VkSubpassDependency dependencyIn {};
+            dependencyIn.srcSubpass = VK_SUBPASS_EXTERNAL;
+            dependencyIn.dstSubpass = 0;
+            dependencyIn.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+            dependencyIn.srcAccessMask = 0;
+            dependencyIn.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+            dependencyIn.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+            VkSubpassDependency dependencyOut {};
+            dependencyOut.srcSubpass = 0;
+            dependencyOut.dstSubpass = VK_SUBPASS_EXTERNAL;
+            dependencyOut.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            dependencyOut.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            dependencyOut.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            dependencyOut.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+            std::array<VkAttachmentDescription, 2> attachments { colorAttachment, depthAttachment };
+            std::array<VkSubpassDependency, 2> dependencies { dependencyIn, dependencyOut };
+
+            VkRenderPassCreateInfo renderPassInfo {};
+            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+            renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+            renderPassInfo.pAttachments = attachments.data();
+            renderPassInfo.subpassCount = 1;
+            renderPassInfo.pSubpasses = &subpass;
+            renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
+            renderPassInfo.pDependencies = dependencies.data();
+
+            if (vkCreateRenderPass(m_Context->GetDevice(), &renderPassInfo, nullptr, &m_RenderPass) != VK_SUCCESS)
+            {
+                AE_CLIENT_CRITICAL("Failed to create offscreen render pass!");
+                throw std::runtime_error("Failed to create offscreen render pass");
+            }
         }
     }
+
     void RenderTexture::CreateFramebuffer()
     {
-        std::array<VkImageView, 3> attachments { m_ColorImageView, m_DepthImageView, m_ResolveImageView };
-
         VkFramebufferCreateInfo framebufferInfo {};
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         framebufferInfo.renderPass = m_RenderPass;
-        framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-        framebufferInfo.pAttachments = attachments.data();
         framebufferInfo.width = m_Width;
         framebufferInfo.height = m_Height;
         framebufferInfo.layers = 1;
 
-        if (vkCreateFramebuffer(m_Context->GetDevice(), &framebufferInfo, nullptr, &m_Framebuffer) != VK_SUCCESS) 
+        if (m_UseMSAA)
         {
-            AE_CLIENT_CRITICAL("Failed to create offscreen framebuffer!");
-            throw std::runtime_error("Failed to create offscreen framebuffer");
+            std::array<VkImageView, 3> attachments { m_ColorImageView, m_DepthImageView, m_ResolveImageView };
+            framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+            framebufferInfo.pAttachments = attachments.data();
+
+            if (vkCreateFramebuffer(m_Context->GetDevice(), &framebufferInfo, nullptr, &m_Framebuffer) != VK_SUCCESS)
+            {
+                AE_CLIENT_CRITICAL("Failed to create offscreen framebuffer!");
+                throw std::runtime_error("Failed to create offscreen framebuffer");
+            }
+        }
+        else
+        {
+            std::array<VkImageView, 2> attachments { m_ResolveImageView, m_DepthImageView };
+            framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+            framebufferInfo.pAttachments = attachments.data();
+
+            if (vkCreateFramebuffer(m_Context->GetDevice(), &framebufferInfo, nullptr, &m_Framebuffer) != VK_SUCCESS)
+            {
+                AE_CLIENT_CRITICAL("Failed to create offscreen framebuffer!");
+                throw std::runtime_error("Failed to create offscreen framebuffer");
+            }
         }
     }
 

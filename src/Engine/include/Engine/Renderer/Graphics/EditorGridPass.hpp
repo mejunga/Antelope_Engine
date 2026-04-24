@@ -1,5 +1,6 @@
 #pragma once
 
+#ifdef ANTELOPE_EDITOR_MODE
 #include <vulkan/vulkan.h>
 
 #include <memory>
@@ -10,13 +11,13 @@ namespace Antelope
     class VulkanContext;
     class Pipeline;
 
-    class SkyRenderer
+    class EditorGridPass
     {
         public:
-            SkyRenderer(std::shared_ptr<VulkanContext> context,
-                        VkPipelineLayout pipelineLayout,
-                        VkRenderPass renderPass);
-            ~SkyRenderer() = default;
+            EditorGridPass(std::shared_ptr<VulkanContext> context,
+                         VkPipelineLayout pipelineLayout,
+                         VkRenderPass renderPass);
+            ~EditorGridPass() = default;
 
             void Draw(VkCommandBuffer cmd, VkDescriptorSet descriptorSet);
 
@@ -26,7 +27,8 @@ namespace Antelope
         private:
             std::shared_ptr<VulkanContext> m_Context;
             std::unique_ptr<Pipeline> m_Pipeline;
-
+            
             VkPipelineLayout m_PipelineLayout { VK_NULL_HANDLE };
     };
 }
+#endif

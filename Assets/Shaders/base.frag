@@ -141,7 +141,7 @@ float ShadowPCF(vec3 worldPos, vec3 normal)
     vec3 L = normalize(ubo.sunDirection.xyz);
     float cosTheta = clamp(dot(normal, L), 0.0, 1.0);
 
-    float normalBias = mix(0.04, 0.01, cosTheta);
+    float normalBias = mix(0.25, 0.05, cosTheta); 
     vec3 biasedPos = worldPos + normal * normalBias;
 
     vec4 sc = ubo.lightSpaceMatrix * vec4(biasedPos, 1.0);
@@ -153,12 +153,12 @@ float ShadowPCF(vec3 worldPos, vec3 normal)
     vec2 poissonDisk[16] = vec2[](
         vec2( -0.94201624, -0.39906216 ), vec2( 0.94558609, -0.76890725 ),
         vec2( -0.094184101, -0.92938870 ), vec2( 0.34495938, 0.29387760 ),
-        vec2( -0.91588581, 0.45771432 ),  vec2( -0.81544232, -0.87912464 ),
-        vec2( -0.38277543, 0.27676845 ),  vec2( 0.97484398, 0.75648379 ),
-        vec2( 0.44323325, -0.97511554 ),  vec2( 0.53742981, -0.47373420 ),
+        vec2( -0.91588581, 0.45771432 ), vec2( -0.81544232, -0.87912464 ),
+        vec2( -0.38277543, 0.27676845 ), vec2( 0.97484398, 0.75648379 ),
+        vec2( 0.44323325, -0.97511554 ), vec2( 0.53742981, -0.47373420 ),
         vec2( -0.26496911, -0.41893023 ), vec2( 0.79197514, 0.19090188 ),
-        vec2( -0.24188840, 0.99706507 ),  vec2( -0.81409955, 0.91437590 ),
-        vec2( 0.19984126, 0.78641367 ),   vec2( 0.14383161, -0.14100467 )
+        vec2( -0.24188840, 0.99706507 ), vec2( -0.81409955, 0.91437590 ),
+        vec2( 0.19984126, 0.78641367 ), vec2( 0.14383161, -0.14100467 )
     );
 
     float noise = InterleavedGradientNoise(gl_FragCoord.xy);
@@ -184,8 +184,8 @@ float ShadowPCF(vec3 worldPos, vec3 normal)
 void main() 
 {
     MaterialData mat = materials[fragMatID];
-
     vec4 albedoData = mat.AlbedoFactor;
+    albedoData.rgb = pow(albedoData.rgb, vec3(2.2));
 
     if (mat.AlbedoTex != 0xFFFFFFFF)
     {
@@ -272,18 +272,18 @@ void main()
         Lo += CalcRadiance(L, V, N, radiance, albedo, metallic, roughness, F0);
     }
 
-    vec3 nightSky = vec3(0.04, 0.05, 0.10);
-    vec3 nightGround = vec3(0.02, 0.015, 0.012);
+    vec3 nightSky = pow(vec3(0.04, 0.05, 0.10), vec3(2.2));
+    vec3 nightGround = pow(vec3(0.02, 0.015, 0.012), vec3(2.2));
 
-    vec3 skyBase = vec3(0.30, 0.35, 0.50);
-    vec3 groundBase = vec3(0.14, 0.11, 0.09);
+    vec3 skyBase = pow(vec3(0.30, 0.35, 0.50), vec3(2.2));
+    vec3 groundBase = pow(vec3(0.14, 0.11, 0.09), vec3(2.2));
 
     vec3 ambient = vec3(0.0);
 
     if (ubo.ambientEnabled < 0.5)
     {
-        vec3 skyColor = vec3(0.30, 0.35, 0.50);
-        vec3 groundColor = vec3(0.14, 0.11, 0.09);
+        vec3 skyColor = pow(vec3(0.30, 0.35, 0.50), vec3(2.2));
+        vec3 groundColor = pow(vec3(0.14, 0.11, 0.09), vec3(2.2));
         float upFactor = N.y * 0.5 + 0.5;
         ambient = mix(groundColor, skyColor, upFactor) * albedo * ao;
         ambient += albedo * 0.07;
@@ -310,9 +310,6 @@ void main()
     }
 
     color += emissive;
-
-    color = ACESFilm(color);
-    color = pow(color, vec3(1.0 / 2.2));
 
     outColor = vec4(color, albedoData.a);
 }

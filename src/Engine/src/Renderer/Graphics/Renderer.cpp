@@ -1,6 +1,8 @@
 #include <Engine/Renderer/Graphics/Renderer.hpp>
-#include <Engine/Renderer/Graphics/SkyRenderer.hpp>
-#include <Engine/Renderer/Graphics/ShadowRenderer.hpp>
+#include <Engine/Renderer/Graphics/SkyboxPass.hpp>
+#include <Engine/Renderer/Graphics/ShadowPass.hpp>
+#include <Engine/Renderer/Graphics/BloomPass.hpp>
+#include <Engine/Renderer/Graphics/PostCompositePass.hpp>
 #include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 #include <Engine/Renderer/Vulkan/SwapChain.hpp>
 #include <Engine/Asset/TextureManager.hpp>
@@ -13,8 +15,8 @@
 #include <Engine/Renderer/Graphics/EditorCamera.hpp>
 #include <Engine/Renderer/Vulkan/RenderTexture.hpp>
 #include <Engine/Renderer/UI/UIContext.hpp>
-#include <Engine/Renderer/Graphics/GridRenderer.hpp>
-#include <Engine/Renderer/Graphics/OutlineRenderer.hpp>
+#include <Engine/Renderer/Graphics/EditorGridPass.hpp>
+#include <Engine/Renderer/Graphics/OutlinePass.hpp>
 #endif
 
 #define GLM_FORCE_RADIANS
@@ -30,13 +32,24 @@ namespace Antelope
     Renderer::Renderer(std::shared_ptr<VulkanContext> context, std::shared_ptr<SwapChain> swapChain, uint32_t framesInFlight)
         : m_Context(context), m_SwapChain(swapChain), m_MaxFramesInFlight(framesInFlight)
     {
-    #ifdef ANTELOPE_EDITOR_MODE
-        m_Maintenance1Supported = m_Context->IsSwapchainMaintenance1Supported();
-        m_RenderTexture = std::make_shared<RenderTexture>(
+        m_SceneHDRTexture = std::make_shared<RenderTexture>(
             m_Context,
             m_SwapChain->GetExtent().width,
             m_SwapChain->GetExtent().height,
-            m_SwapChain->GetImageFormat()
+            VK_FORMAT_R16G16B16A16_SFLOAT,
+            true
+        );
+
+        VkRenderPass sceneRenderPass { m_SceneHDRTexture->GetRenderPass() };
+
+    #ifdef ANTELOPE_EDITOR_MODE
+        m_Maintenance1Supported = m_Context->IsSwapchainMaintenance1Supported();
+        m_FinalLDRTexture = std::make_shared<RenderTexture>(
+            m_Context,
+            m_SwapChain->GetExtent().width,
+            m_SwapChain->GetExtent().height,
+            VK_FORMAT_B8G8R8A8_UNORM,
+            false
         );
     #endif
 
@@ -56,21 +69,35 @@ namespace Antelope
         AE_ENGINE_TRACE("Pipeline Layout created.");
         CreateGraphicsPipeline();
         AE_ENGINE_INFO("Graphics Pipeline created.");
-    #ifdef ANTELOPE_EDITOR_MODE
-        VkRenderPass sceneRenderPass { m_RenderTexture->GetRenderPass() };
-    #else
-        VkRenderPass sceneRenderPass { m_SwapChain->GetRenderPass() };
-    #endif
-        m_SkyRenderer = std::make_unique<SkyRenderer>(m_Context, m_PipelineLayout, sceneRenderPass);
+
+        m_SkyBoxPass = std::make_unique<SkyboxPass>(m_Context, m_PipelineLayout, sceneRenderPass);
         AE_ENGINE_TRACE("Sky Renderer created.");
-        m_ShadowMap = std::make_shared<ShadowRenderer>(m_Context, m_PipelineLayout, 4096, 4096);
+        
+        m_ShadowPass = std::make_shared<ShadowPass>(m_Context, m_PipelineLayout, 4096, 4096);
         AE_ENGINE_TRACE("Shadow Map created.");
+
     #ifdef ANTELOPE_EDITOR_MODE
-        m_GridRenderer = std::make_unique<GridRenderer>(m_Context, m_PipelineLayout, sceneRenderPass);
+        m_EditorGridPass = std::make_unique<EditorGridPass>(m_Context, m_PipelineLayout, sceneRenderPass);
         AE_ENGINE_TRACE("Grid Renderer created.");
-        m_OutlineRenderer = std::make_unique<OutlineRenderer>(m_Context, m_PipelineLayout, m_RenderTexture);
+        m_OutlinePass = std::make_unique<OutlinePass>(m_Context, m_PipelineLayout, m_FinalLDRTexture);
         AE_ENGINE_TRACE("Outline Renderer created.");
+        VkRenderPass postRenderPass = m_FinalLDRTexture->GetRenderPass();
+    #else
+        VkRenderPass postRenderPass = m_SwapChain->GetRenderPass();
     #endif
+
+        m_BloomPass = std::make_unique<BloomPass>(m_Context, m_SceneHDRTexture, m_SceneHDRTexture->GetWidth(), m_SceneHDRTexture->GetHeight());
+        AE_ENGINE_TRACE("BloomPass created.");
+
+        m_PostCompositePass = std::make_unique<PostCompositePass>(
+            m_Context, 
+            m_SceneHDRTexture, 
+            m_BloomPass->GetBloomTexture(), 
+            m_BloomPass->GetFlareTexture(),
+            postRenderPass
+        );
+        AE_ENGINE_TRACE("PostCompositePass created.");
+
         CreateCommandPool();
         AE_ENGINE_TRACE("Command Pool created.");
         CreateTransferCommandPool();
@@ -152,7 +179,9 @@ namespace Antelope
     void Renderer::DrawFrame(const UniformBufferObject& cameraData, const std::vector<RenderCommand>& renderList)
     {
         VkCommandBuffer cmd { BeginFrame() };
+
         if (cmd == VK_NULL_HANDLE) { return; }
+        
         DrawObjects(cmd, cameraData, renderList);
 
     #ifdef ANTELOPE_EDITOR_MODE
@@ -221,14 +250,14 @@ namespace Antelope
         if (tangentSize > 0) { memcpy(dst + writeOffset, meshData.tangents.data(), tangentSize); writeOffset += tangentSize; }
         if (faceSize > 0) { memcpy(dst + writeOffset, meshData.faces.data(), faceSize); }
 
-        VkCommandBufferAllocateInfo allocationInfo {};
-        allocationInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocationInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocationInfo.commandPool = m_TransferCommandPool;
-        allocationInfo.commandBufferCount = 1;
+        VkCommandBufferAllocateInfo allocateInfo {};
+        allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocateInfo.commandPool = m_TransferCommandPool;
+        allocateInfo.commandBufferCount = 1;
 
         VkCommandBuffer commandBuffer { VK_NULL_HANDLE };
-        vkAllocateCommandBuffers(m_Context->GetDevice(), &allocationInfo, &commandBuffer);
+        vkAllocateCommandBuffers(m_Context->GetDevice(), &allocateInfo, &commandBuffer);
 
         VkCommandBufferBeginInfo beginInfo {};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -237,18 +266,18 @@ namespace Antelope
 
         VkBufferCopy copyRegion {};
         VkDeviceSize srcOffset { 0 };
-        
+
         auto addCopy { [&](VkBuffer dstBuf, VkDeviceSize dstOffset, VkDeviceSize size)
+        {
+            if (size > 0)
             {
-                if (size > 0)
-                {
-                    copyRegion.srcOffset = srcOffset;
-                    copyRegion.dstOffset = dstOffset;
-                    copyRegion.size = size;
-                    vkCmdCopyBuffer(commandBuffer, stagingBuffer, dstBuf, 1, &copyRegion);
-                    srcOffset += size;
-                }
-            }};
+                copyRegion.srcOffset = srcOffset;
+                copyRegion.dstOffset = dstOffset;
+                copyRegion.size = size;
+                vkCmdCopyBuffer(commandBuffer, stagingBuffer, dstBuf, 1, &copyRegion);
+                srcOffset += size;
+            }
+        }};
 
         addCopy(allocation.pos.Buffer, allocation.pos.Offset, posSize);
         addCopy(allocation.color.Buffer, allocation.color.Offset, colorSize);
@@ -289,7 +318,7 @@ namespace Antelope
 
         m_GlobalImageInfos.clear();
         m_GlobalImageInfos.reserve(textures.size());
-        
+
         for (const auto& tex : textures)
         {
             m_GlobalImageInfos.push_back({tex.Sampler, tex.ImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
@@ -300,20 +329,20 @@ namespace Antelope
 
     VkCommandBuffer Renderer::BeginAsyncGraphicsCommand()
     {
-        VkCommandBufferAllocateInfo allocationInfo {};
-        allocationInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocationInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocationInfo.commandPool = m_CommandPool;
-        allocationInfo.commandBufferCount = 1;
+        VkCommandBufferAllocateInfo allocateInfo {};
+        allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocateInfo.commandPool = m_CommandPool;
+        allocateInfo.commandBufferCount = 1;
 
         VkCommandBuffer cmd;
-        vkAllocateCommandBuffers(m_Context->GetDevice(), &allocationInfo, &cmd);
+        vkAllocateCommandBuffers(m_Context->GetDevice(), &allocateInfo, &cmd);
 
         VkCommandBufferBeginInfo beginInfo {};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         vkBeginCommandBuffer(cmd, &beginInfo);
-        
+
         return cmd;
     }
 
@@ -373,7 +402,7 @@ namespace Antelope
         m_GlobalMaterials.push_back(material);
         return index;
     }
-    
+
     void Renderer::ClearMaterials()
     {
         m_GlobalMaterials.clear();
@@ -383,8 +412,11 @@ namespace Antelope
     void Renderer::ResizeRenderTexture(uint32_t width, uint32_t height)
     {
         vkDeviceWaitIdle(m_Context->GetDevice());
-        m_RenderTexture->Resize(width, height);
-        m_OutlineRenderer->RebuildResources(m_RenderTexture);
+        m_SceneHDRTexture->Resize(width, height);
+        m_FinalLDRTexture->Resize(width, height);
+        m_OutlinePass->RebuildResources(m_FinalLDRTexture);
+        m_BloomPass->Resize(width, height, m_SceneHDRTexture);
+        m_PostCompositePass->UpdateDescriptorSet(m_SceneHDRTexture, m_BloomPass->GetBloomTexture(), m_BloomPass->GetFlareTexture());
     }
 
     VkSemaphore Renderer::AcquireRenderFinishedSemaphore()
@@ -402,8 +434,10 @@ namespace Antelope
         }
 
         AE_ENGINE_WARN("Semaphore pool exhausted — growing by 1.");
+
         VkSemaphoreCreateInfo semInfo {};
         semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
         VkFenceCreateInfo fenInfo {};
         fenInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 
@@ -434,9 +468,9 @@ namespace Antelope
     void Renderer::CreateDescriptorSetLayout() 
     {
         DescriptorLayoutBuilder builder;
-        
+
         builder.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-        
+
         for (int i { 1 }; i <= 6; ++i)
         {
             builder.AddBinding(i, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
@@ -453,7 +487,7 @@ namespace Antelope
         {
             bindingFlags[i] = 0;
         }
-        
+
         bindingFlags[7] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
 
         VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo {};
@@ -491,10 +525,14 @@ namespace Antelope
             if (vkGetFenceStatus(m_Context->GetDevice(), transfer.fence) == VK_SUCCESS)
             {
                 vkDestroyFence(m_Context->GetDevice(), transfer.fence, nullptr);
+
                 VkCommandPool poolToUse { (transfer.meshID == 0) ? m_CommandPool : m_TransferCommandPool };
+                VkQueue queueToWait { (transfer.meshID == 0) ? m_Context->GetGraphicsQueue() : m_Context->GetTransferQueue() };
+                vkQueueWaitIdle(queueToWait);
+
                 vkFreeCommandBuffers(m_Context->GetDevice(), poolToUse, 1, &transfer.commandBuffer);
                 vmaDestroyBuffer(m_Context->GetAllocator(), transfer.stagingBuffer, transfer.stagingAllocation);
-
+                
                 if (transfer.meshID != 0)
                 {
                     m_PendingMeshIDs.erase(transfer.meshID);
@@ -526,7 +564,7 @@ namespace Antelope
             UINT64_MAX,
             m_FrameSync[m_CurrentFrame].imageAvailableSemaphore,
             VK_NULL_HANDLE,
-            &m_CurrentImageIndex) };
+            &m_CurrentImageIndex)};
 
         if (result == VK_ERROR_OUT_OF_DATE_KHR)
         {
@@ -540,6 +578,12 @@ namespace Antelope
         }
         else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         {
+            vkDestroySemaphore(m_Context->GetDevice(), m_FrameSync[m_CurrentFrame].imageAvailableSemaphore, nullptr);
+
+            VkSemaphoreCreateInfo semInfo {};
+            semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+            vkCreateSemaphore(m_Context->GetDevice(), &semInfo, nullptr, &m_FrameSync[m_CurrentFrame].imageAvailableSemaphore);
+
             AE_ENGINE_ERROR("Failed to acquire swapchain image!");
             return VK_NULL_HANDLE;
         }
@@ -633,7 +677,7 @@ namespace Antelope
 
         UpdateUniformBuffer(m_CurrentFrame, cameraData);
 
-        m_ShadowMap->Draw(cmd, m_DescriptorSets[m_CurrentFrame], objectCount, m_IndirectBuffers[m_CurrentFrame]->GetBuffer());
+        m_ShadowPass->Draw(cmd, m_DescriptorSets[m_CurrentFrame], objectCount, m_IndirectBuffers[m_CurrentFrame]->GetBuffer());
 
         VkImageMemoryBarrier shadowBarrier {};
         shadowBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -641,7 +685,7 @@ namespace Antelope
         shadowBarrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
         shadowBarrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
         shadowBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        shadowBarrier.image = m_ShadowMap->GetDepthImage();
+        shadowBarrier.image = m_ShadowPass->GetDepthImage();
         shadowBarrier.subresourceRange = { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1 };
         vkCmdPipelineBarrier(cmd,
             VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
@@ -650,16 +694,10 @@ namespace Antelope
 
         VkRenderPassBeginInfo renderPassInfo {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    #ifdef ANTELOPE_EDITOR_MODE
-        renderPassInfo.renderPass = m_RenderTexture->GetRenderPass();
-        renderPassInfo.framebuffer = m_RenderTexture->GetFramebuffer();
-        renderPassInfo.renderArea.extent = m_RenderTexture->GetExtent();
-    #else
-        renderPassInfo.renderPass = m_SwapChain->GetRenderPass();
-        renderPassInfo.framebuffer = m_SwapChain->GetFramebuffers()[m_CurrentImageIndex];
-        renderPassInfo.renderArea.extent = m_SwapChain->GetExtent();
-    #endif
+        renderPassInfo.renderPass = m_SceneHDRTexture->GetRenderPass();
+        renderPassInfo.framebuffer = m_SceneHDRTexture->GetFramebuffer();
         renderPassInfo.renderArea.offset = {0, 0};
+        renderPassInfo.renderArea.extent = m_SceneHDRTexture->GetExtent();
         
         std::array<VkClearValue, 2> clearValues {};
         clearValues[0] = {};
@@ -672,46 +710,85 @@ namespace Antelope
 
         VkViewport viewport {};
         viewport.x = 0.0f; viewport.y = 0.0f;
-        #ifdef ANTELOPE_EDITOR_MODE
-        viewport.width = static_cast<float>(m_RenderTexture->GetExtent().width);
-        viewport.height = static_cast<float>(m_RenderTexture->GetExtent().height);
-        #else
-        viewport.width = static_cast<float>(m_SwapChain->GetExtent().width);
-        viewport.height = static_cast<float>(m_SwapChain->GetExtent().height);
-        #endif
+        viewport.width = static_cast<float>(m_SceneHDRTexture->GetExtent().width);
+        viewport.height = static_cast<float>(m_SceneHDRTexture->GetExtent().height);
         viewport.minDepth = 0.0f; viewport.maxDepth = 1.0f;
         vkCmdSetViewport(cmd, 0, 1, &viewport);
 
         VkRect2D scissor {};
         scissor.offset = {0, 0};
-        #ifdef ANTELOPE_EDITOR_MODE
-        scissor.extent = m_RenderTexture->GetExtent();
-        #else
-        scissor.extent = m_SwapChain->GetExtent();
-        #endif
+        scissor.extent = m_SceneHDRTexture->GetExtent();
         vkCmdSetScissor(cmd, 0, 1, &scissor);
-
-        m_SkyRenderer->Draw(cmd, m_DescriptorSets[m_CurrentFrame]);
+        
         m_MainPipeline->Bind(cmd);
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-        m_PipelineLayout, 0, 1, &m_DescriptorSets[m_CurrentFrame], 0, nullptr);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_PipelineLayout, 0, 1, &m_DescriptorSets[m_CurrentFrame], 0, nullptr);
 
         if (objectCount > 0)
         {
             vkCmdDrawIndirect(cmd, m_IndirectBuffers[m_CurrentFrame]->GetBuffer(), 0, objectCount, sizeof(VkDrawIndirectCommand));
         }
 
+        m_SkyBoxPass->Draw(cmd, m_DescriptorSets[m_CurrentFrame]);
+
     #ifdef ANTELOPE_EDITOR_MODE
-        m_GridRenderer->Draw(cmd, m_DescriptorSets[m_CurrentFrame]);
+        m_EditorGridPass->Draw(cmd, m_DescriptorSets[m_CurrentFrame]);
     #endif
+        
+        vkCmdEndRenderPass(cmd);
+
+        VkImageMemoryBarrier resolveBarrier {};
+        resolveBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        resolveBarrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; 
+        resolveBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        resolveBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        resolveBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        resolveBarrier.image = m_SceneHDRTexture->GetResolveImage(); 
+        resolveBarrier.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+        
+        vkCmdPipelineBarrier(cmd,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            0, 0, nullptr, 0, nullptr, 1, &resolveBarrier);
+
+        std::array<VkClearValue, 2> postClearValues {};
+        postClearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+        postClearValues[1].depthStencil = {1.0f, 0};
+        
+        VkRenderPassBeginInfo postPassInfo {};
+        postPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+
+    #ifdef ANTELOPE_EDITOR_MODE
+        postPassInfo.renderPass = m_FinalLDRTexture->GetRenderPass();
+        postPassInfo.framebuffer = m_FinalLDRTexture->GetFramebuffer();
+        postPassInfo.renderArea.extent = m_FinalLDRTexture->GetExtent();
+    #else
+        postPassInfo.renderPass = m_SwapChain->GetRenderPass();
+        postPassInfo.framebuffer = m_SwapChain->GetFramebuffers()[m_CurrentImageIndex];
+        postPassInfo.renderArea.extent = m_SwapChain->GetExtent();
+    #endif
+        postPassInfo.renderArea.offset = {0, 0};
+        postPassInfo.clearValueCount = static_cast<uint32_t>(postClearValues.size());
+        postPassInfo.pClearValues = postClearValues.data();
+
+        m_BloomPass->Draw(cmd, m_SceneHDRTexture, 1.8f, 0.1f);
+
+        vkCmdBeginRenderPass(cmd, &postPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+        viewport.width = static_cast<float>(postPassInfo.renderArea.extent.width);
+        viewport.height = static_cast<float>(postPassInfo.renderArea.extent.height);
+        scissor.extent = postPassInfo.renderArea.extent;
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
+        vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+        m_PostCompositePass->Draw(cmd, cameraData.time, 1.0f);
 
         vkCmdEndRenderPass(cmd);
 
     #ifdef ANTELOPE_EDITOR_MODE
         if (!selectedIndirectIndices.empty())
         {
-            m_OutlineRenderer->DrawMask(cmd, selectedIndirectIndices, m_IndirectBuffers[m_CurrentFrame]->GetBuffer(), m_DescriptorSets[m_CurrentFrame], m_OutlineColor);
-            m_OutlineRenderer->DrawComposite(cmd);
+            m_OutlinePass->DrawMask(cmd, selectedIndirectIndices, m_IndirectBuffers[m_CurrentFrame]->GetBuffer(), m_DescriptorSets[m_CurrentFrame], m_OutlineColor);
+            m_OutlinePass->DrawComposite(cmd);
         }
     #endif
     }
@@ -877,7 +954,7 @@ namespace Antelope
         Pipeline::DefaultPipelineConfigInfo(pipelineConfig, m_Context);
         pipelineConfig.pipelineLayout = m_PipelineLayout;
     #ifdef ANTELOPE_EDITOR_MODE
-        pipelineConfig.renderPass = m_RenderTexture->GetRenderPass();
+        pipelineConfig.renderPass = m_SceneHDRTexture->GetRenderPass();
     #else
         pipelineConfig.renderPass = m_SwapChain->GetRenderPass();
     #endif
@@ -910,13 +987,13 @@ namespace Antelope
     {
         m_CommandBuffers.resize(m_MaxFramesInFlight);
 
-        VkCommandBufferAllocateInfo allocationInfo {};
-        allocationInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocationInfo.commandPool = m_CommandPool;
-        allocationInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocationInfo.commandBufferCount = static_cast<uint32_t>(m_MaxFramesInFlight);
+        VkCommandBufferAllocateInfo allocateInfo {};
+        allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocateInfo.commandPool = m_CommandPool;
+        allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocateInfo.commandBufferCount = static_cast<uint32_t>(m_MaxFramesInFlight);
 
-        if (vkAllocateCommandBuffers(m_Context->GetDevice(), &allocationInfo, m_CommandBuffers.data()) != VK_SUCCESS)
+        if (vkAllocateCommandBuffers(m_Context->GetDevice(), &allocateInfo, m_CommandBuffers.data()) != VK_SUCCESS)
         {
             AE_ENGINE_CRITICAL("Failed to allocate Command Buffers!");
             throw std::runtime_error("Failed to allocate Command Buffers");
@@ -1103,7 +1180,7 @@ namespace Antelope
             writer.WriteBuffer(6, m_ObjectBuffers[i]->GetBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
             writer.WriteBuffer(8, m_MaterialBuffers[i]->GetBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
             writer.WriteBuffer(9, m_GpuAllocator->GetTangentBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-            writer.WriteImage(10, m_ShadowMap->GetDepthImageView(), m_ShadowMap->GetSampler(), VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+            writer.WriteImage(10, m_ShadowPass->GetDepthImageView(), m_ShadowPass->GetSampler(), VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
             writer.UpdateSet(m_Context, m_DescriptorSets[i]);
         }

@@ -1,11 +1,11 @@
-#include <Engine/Renderer/Graphics/SkyRenderer.hpp>
+#include <Engine/Renderer/Graphics/SkyboxPass.hpp>
 #include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 #include <Engine/Renderer/Vulkan/Pipeline.hpp>
 
 
 namespace Antelope
 {
-    SkyRenderer::SkyRenderer(std::shared_ptr<VulkanContext> context,
+    SkyboxPass::SkyboxPass(std::shared_ptr<VulkanContext> context,
                              VkPipelineLayout pipelineLayout,
                              VkRenderPass renderPass)
         : m_Context(context), m_PipelineLayout(pipelineLayout)
@@ -13,7 +13,7 @@ namespace Antelope
         CreatePipeline(renderPass);
     }
 
-    void SkyRenderer::Draw(VkCommandBuffer cmd, VkDescriptorSet descriptorSet)
+    void SkyboxPass::Draw(VkCommandBuffer cmd, VkDescriptorSet descriptorSet)
     {
         m_Pipeline->Bind(cmd);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -21,7 +21,7 @@ namespace Antelope
         vkCmdDraw(cmd, 6, 1, 0, 0);
     }
 
-    void SkyRenderer::CreatePipeline(VkRenderPass renderPass)
+    void SkyboxPass::CreatePipeline(VkRenderPass renderPass)
     {
         PipelineConfigInfo config {};
         Pipeline::DefaultPipelineConfigInfo(config, m_Context);

@@ -1,5 +1,5 @@
 #ifdef ANTELOPE_EDITOR_MODE
-#include <Engine/Renderer/Graphics/GridRenderer.hpp>
+#include <Engine/Renderer/Graphics/EditorGridPass.hpp>
 #include <Engine/Renderer/Vulkan/VulkanContext.hpp>
 #include <Engine/Renderer/Vulkan/Pipeline.hpp>
 #include <Engine/Renderer/Vulkan/RenderTexture.hpp>
@@ -9,7 +9,7 @@
 
 namespace Antelope
 {
-    GridRenderer::GridRenderer(std::shared_ptr<VulkanContext> context,
+    EditorGridPass::EditorGridPass(std::shared_ptr<VulkanContext> context,
                                VkPipelineLayout pipelineLayout,
                                VkRenderPass renderPass)
         : m_Context(context), m_PipelineLayout(pipelineLayout)
@@ -17,7 +17,7 @@ namespace Antelope
         CreatePipeline(renderPass);
     }
 
-    void GridRenderer::Draw(VkCommandBuffer cmd, VkDescriptorSet descriptorSet)
+    void EditorGridPass::Draw(VkCommandBuffer cmd, VkDescriptorSet descriptorSet)
     {
         m_Pipeline->Bind(cmd);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -25,7 +25,7 @@ namespace Antelope
         vkCmdDraw(cmd, 6, 1, 0, 0);
     }
 
-    void GridRenderer::CreatePipeline(VkRenderPass renderPass)
+    void EditorGridPass::CreatePipeline(VkRenderPass renderPass)
     {
         PipelineConfigInfo config {};
         Pipeline::DefaultPipelineConfigInfo(config, m_Context);

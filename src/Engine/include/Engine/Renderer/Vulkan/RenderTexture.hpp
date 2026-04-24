@@ -13,7 +13,7 @@ namespace Antelope
     class RenderTexture
     {
         public:
-            RenderTexture(std::shared_ptr<VulkanContext> context, uint32_t width, uint32_t height, VkFormat colorFormat);
+            RenderTexture(std::shared_ptr<VulkanContext> context, uint32_t width, uint32_t height, VkFormat colorFormat, bool useMSAA = true);
             ~RenderTexture();
 
             void Resize(uint32_t width, uint32_t height);
@@ -21,11 +21,13 @@ namespace Antelope
             inline VkRenderPass GetRenderPass() const { return m_RenderPass; }
             inline VkFramebuffer GetFramebuffer() const { return m_Framebuffer; }
             inline VkImageView GetResolveImageView() const { return m_ResolveImageView; }
+            inline VkImage GetResolveImage() const { return m_ResolveImage; }
             inline VkSampler GetSampler() const { return m_Sampler; }
             inline VkExtent2D GetExtent() const { return { m_Width, m_Height }; }
             inline VkImageView GetMaskImageView() const { return m_MaskImageView; }
             inline VkFormat GetColorFormat() const { return m_ColorFormat; }
-
+            inline uint32_t GetHeight() {return m_Height; }
+            inline uint32_t GetWidth() {return m_Width; }
 
         private:
             void CreateResources();
@@ -54,7 +56,7 @@ namespace Antelope
             VmaAllocation m_MaskAllocation { VK_NULL_HANDLE };
             VkImageView m_MaskImageView { VK_NULL_HANDLE };
 
-
+            bool m_UseMSAA { true };
             uint32_t m_Width;
             uint32_t m_Height;
             VkFormat m_ColorFormat;

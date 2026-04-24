@@ -91,7 +91,7 @@ namespace Antelope
 
     void UIContext::UpdateSceneTextureID()
     {
-        auto renderTex { m_Renderer->GetRenderTexture() };
+        auto renderTex { m_Renderer->GetFinalLDRTexture() };
 
         VkDescriptorImageInfo imageInfo {};
         imageInfo.sampler = renderTex->GetSampler();
@@ -224,10 +224,10 @@ namespace Antelope
 
         ImGui_ImplVulkan_Init(&init_info);
 
-        auto renderTexture { m_Renderer->GetRenderTexture() };
+        auto renderTex { m_Renderer->GetFinalLDRTexture() };
         m_SceneTextureDescriptorSet = ImGui_ImplVulkan_AddTexture(
-            renderTexture->GetSampler(),
-            renderTexture->GetResolveImageView(),
+            renderTex->GetSampler(),
+            renderTex->GetResolveImageView(),
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
         );
         m_SceneTexture = (void*)m_SceneTextureDescriptorSet;
