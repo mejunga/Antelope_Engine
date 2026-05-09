@@ -140,6 +140,30 @@ namespace Antelope
             out << YAML::Key << "SkyColorNight" << YAML::Value; EmitVec3(out, amb.SkyColorNight);
             out << YAML::Key << "HorizonColorNight" << YAML::Value; EmitVec3(out, amb.HorizonColorNight);
             out << YAML::Key << "StarIntensity" << YAML::Value << amb.StarIntensity;
+            
+            if (amb.SunEntity != entt::null)
+            {
+                out << YAML::Key << "SunEntity" << YAML::Value << (uint64_t)Entity(amb.SunEntity, &world).GetComponent<IDComponent>().ID;
+            }
+
+            if (amb.MoonEntity != entt::null)
+            {
+                out << YAML::Key << "MoonEntity" << YAML::Value << (uint64_t)Entity(amb.MoonEntity, &world).GetComponent<IDComponent>().ID;
+            }
+
+            out << YAML::Key << "SunMaxIntensity" << YAML::Value << amb.SunMaxIntensity;
+            out << YAML::Key << "MoonMaxIntensity" << YAML::Value << amb.MoonMaxIntensity;
+            
+            out << YAML::EndMap;
+        }
+
+        if (entity.HasComponent<TimeCycleComponent>())
+        {
+            const auto& time { entity.GetComponent<TimeCycleComponent>() };
+            out << YAML::Key << "TimeCycleComponent" << YAML::Value << YAML::BeginMap;
+            out << YAML::Key << "TimeOfDay" << YAML::Value << time.TimeOfDay;
+            out << YAML::Key << "TimeScale" << YAML::Value << time.TimeScale;
+            out << YAML::Key << "CurrentDay" << YAML::Value << time.CurrentDay;
             out << YAML::EndMap;
         }
 
@@ -237,8 +261,16 @@ namespace Antelope
 
         for (auto entityNode : entitiesNode)
         {
-            Entity entity { entityMap[entityNode["Entity"].as<uint64_t>()] };
-
+            auto entityIt { entityMap.find(entityNode["Entity"].as<uint64_t>()) };
+            
+            if (entityIt == entityMap.end())
+            {
+                AE_ENGINE_ERROR("SceneSerializer: entity UUID not found during component load, skipping.");
+                continue;
+            }
+            
+            Entity entity { entityIt->second };
+            
             if (auto parentNode { entityNode["ParentID"] })
             {
                 auto it { entityMap.find(parentNode.as<uint64_t>()) };
@@ -327,6 +359,33 @@ namespace Antelope
                 amb.SkyColorNight = DecodeVec3(node["SkyColorNight"]);
                 amb.HorizonColorNight = DecodeVec3(node["HorizonColorNight"]);
                 amb.StarIntensity = node["StarIntensity"].as<float>();
+
+                if (auto sunNode { node["SunEntity"] })
+                {
+                    uint64_t sunID { sunNode.as<uint64_t>() };
+                
+                    if (entityMap.find(sunID) != entityMap.end()) { amb.SunEntity = entityMap[sunID]; }
+                }
+
+                if (auto moonNode { node["MoonEntity"] })
+                {
+                    uint64_t moonID { moonNode.as<uint64_t>() };
+                    
+                    if (entityMap.find(moonID) != entityMap.end()) { amb.MoonEntity = entityMap[moonID]; }
+                }
+                
+                if (node["SunMaxIntensity"]) { amb.SunMaxIntensity = node["SunMaxIntensity"].as<float>(); }
+                if (node["MoonMaxIntensity"]) { amb.MoonMaxIntensity = node["MoonMaxIntensity"].as<float>(); }
+            }
+
+            if (auto node { entityNode["TimeCycleComponent"] })
+            {
+                auto& time { entity.HasComponent<TimeCycleComponent>()
+                           ? entity.GetComponent<TimeCycleComponent>()
+                           : entity.AddComponent<TimeCycleComponent>() };
+                time.TimeOfDay = node["TimeOfDay"].as<float>();
+                time.TimeScale = node["TimeScale"].as<float>();
+                time.CurrentDay = node["CurrentDay"].as<uint32_t>();
             }
         }
 

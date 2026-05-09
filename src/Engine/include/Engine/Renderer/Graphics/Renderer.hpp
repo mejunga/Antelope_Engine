@@ -128,7 +128,7 @@ namespace Antelope
             std::unique_ptr<GpuMemoryAllocator> m_GpuAllocator;
             std::unique_ptr<Pipeline> m_MainPipeline;
             std::unique_ptr<SkyboxPass> m_SkyBoxPass;
-            std::shared_ptr<ShadowPass> m_ShadowPass;
+            std::shared_ptr<ShadowPass> m_ShadowPasses[2];
             std::unique_ptr<DescriptorAllocator> m_GlobalDescriptorAllocator;
             std::shared_ptr<RenderTexture> m_SceneHDRTexture; 
             std::unique_ptr<PostCompositePass> m_PostCompositePass;

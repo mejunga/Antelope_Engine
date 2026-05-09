@@ -4,6 +4,7 @@
 #include <Engine/ECS/System/RenderSystem.hpp>
 #include <Engine/ECS/System/TransformSystem.hpp>
 #include <Engine/ECS/System/PhysicsSystem.hpp>
+#include <Engine/ECS/System/AmbientSystem.hpp>
 #include <Engine/Physics/PhysicsContext.hpp>
 #include <Engine/Core/Application.hpp>
 #include <Engine/Debug/Log.hpp>
@@ -36,6 +37,11 @@ namespace Antelope
 
         m_Registry.on_construct<CameraComponent>().connect<&World::OnCameraConstructed>(this);
         m_Registry.on_destroy<CameraComponent>().connect<&World::OnCameraDestroyed>(this);
+
+        m_Registry.on_construct<AmbientComponent>().connect<[](entt::registry& reg, entt::entity e)
+        {
+            reg.emplace_or_replace<TimeCycleComponent>(e);
+        }>();
     }
 
     World::~World() 
@@ -224,6 +230,7 @@ namespace Antelope
             m_HierarchyDirty = false;
         }
 
+        AmbientSystem::OnUpdate(*this, m_IsSimulating ? timeStep : 0.0f);
         TransformSystem::OnUpdate(*this);
         
         auto renderer { Application::Get().GetRenderer() };
@@ -243,6 +250,7 @@ namespace Antelope
             m_HierarchyDirty = false;
         }
 
+        AmbientSystem::OnUpdate(*this, timeStep);
         TransformSystem::OnUpdate(*this);
 
         auto renderer { Application::Get().GetRenderer() };

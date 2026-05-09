@@ -26,12 +26,14 @@ namespace Antelope
         float filterRadius;
     };
 
-    struct FlarePushConstants 
+    struct FlarePushConstants
     {
-        int ghosts;
-        float ghostDispersal;
-        float haloWidth;
-        float distortion;
+        glm::vec2 sunUV;
+        float sunIntensity;
+        float pad0;
+        glm::vec2 moonUV;
+        float moonIntensity;
+        float pad1;
     };
 
     BloomPass::BloomPass(std::shared_ptr<VulkanContext> context, std::shared_ptr<RenderTexture> sceneTexture, uint32_t width, uint32_t height)
@@ -381,7 +383,7 @@ namespace Antelope
         );
     }
 
-    void BloomPass::Draw(VkCommandBuffer cmd, std::shared_ptr<RenderTexture> sceneTexture, float threshold, float knee)
+    void BloomPass::Draw(VkCommandBuffer cmd, std::shared_ptr<RenderTexture> sceneTexture, float threshold, float knee, glm::vec2 sunUV, float sunIntensity, glm::vec2 moonUV, float moonIntensity)
     {
         m_DownsamplePipeline->Bind(cmd);
         
@@ -509,10 +511,10 @@ namespace Antelope
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_FlarePipelineLayout, 0, 1, &m_FlareDescriptorSet, 0, nullptr);
         
         FlarePushConstants flarePush {};
-        flarePush.ghosts = 4;
-        flarePush.ghostDispersal = 0.3f;
-        flarePush.haloWidth = 0.0008f;
-        flarePush.distortion = 1.5f;
+        flarePush.sunUV = sunUV;
+        flarePush.sunIntensity = sunIntensity;
+        flarePush.moonUV = moonUV;
+        flarePush.moonIntensity = moonIntensity;
         
         vkCmdPushConstants(cmd, m_FlarePipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(FlarePushConstants), &flarePush);
         vkCmdDraw(cmd, 3, 1, 0, 0);

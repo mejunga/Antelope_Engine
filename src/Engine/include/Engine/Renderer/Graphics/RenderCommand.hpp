@@ -26,16 +26,19 @@ namespace Antelope
         glm::vec4 outerCutOffAndPad;
     };
 
-    struct UniformBufferObject 
+    struct UniformBufferObject
     {
         glm::mat4 view;
         glm::mat4 proj;
         glm::vec4 cameraPos;
-        
+
         glm::vec4 sunDirection;
         glm::vec4 sunColor;
+        glm::vec4 moonDirection;
+        glm::vec4 moonColor;
 
-        glm::mat4 lightSpaceMatrix; 
+        glm::mat4 lightSpaceMatrices[2];
+        glm::vec4 cascadeSplits;
 
         glm::vec4 skyColorDayAndStar;
         glm::vec4 horizonColorDay;
@@ -47,6 +50,10 @@ namespace Antelope
         uint32_t spotLightCount;
         float time;
         float ambientEnabled;
+        uint32_t shadowCaster { 0 };
+        float _pad1 { 0.0f };
+        float _pad2 { 0.0f };
+        float _pad3 { 0.0f };
 
         PointLightData pointLights[MAX_POINT_LIGHTS];
         SpotLightData spotLights[MAX_SPOT_LIGHTS];

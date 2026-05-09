@@ -2,10 +2,12 @@
 
 #include <Engine/ECS/World.hpp>
 #include <Engine/ECS/BaseComponents.hpp>
+#include <Engine/Debug/Log.hpp>
 
 #include <entt/entt.hpp>
 
 #include <utility>
+#include <stdexcept>
 
 
 namespace Antelope
@@ -73,6 +75,11 @@ namespace Antelope
             template<typename T, typename... Args>
             T& AddComponent(Args&&... args)
             {
+                if (m_EntityHandle == entt::null || !m_World)
+                {
+                    AE_ENGINE_ERROR("AddComponent called on a null entity!");
+                    throw std::runtime_error("AddComponent called on a null entity!");
+                }
                 return m_World->m_Registry.emplace<T>(m_EntityHandle, std::forward<Args>(args)...);
             }
 

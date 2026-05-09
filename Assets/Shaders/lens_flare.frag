@@ -7,57 +7,113 @@ layout(binding = 0) uniform sampler2D brightTexture;
 
 layout(push_constant) uniform PushConstants
 {
-    int ghosts;
-    float ghostDispersal;
-    float haloWidth;
-    float distortion;
+    vec2  sunUV;
+    float sunIntensity;
+    float pad0;
+    vec2  moonUV;
+    float moonIntensity;
+    float pad1;
 } pc;
 
-vec3 textureDistorted(sampler2D tex, vec2 uv, vec2 direction, vec3 distortion)
+float hash(float t)
 {
-    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return vec3(0.0);
-    
-    return vec3(
-        texture(tex, uv + direction * distortion.r).r,
-        texture(tex, uv + direction * distortion.g).g,
-        texture(tex, uv + direction * distortion.b).b
-    );
+    return fract(sin(t * 127.1) * 43758.5453);
+}
+
+float noise2(vec2 p)
+{
+    float a = hash(p.x + p.y * 57.0);
+    float b = hash(p.x + 1.0 + p.y * 57.0);
+    float c = hash(p.x + (p.y + 1.0) * 57.0);
+    float d = hash(p.x + 1.0 + (p.y + 1.0) * 57.0);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+vec3 lensflare(vec2 uv, vec2 pos)
+{
+    vec2 main = uv - pos;
+    vec2 uvd = uv * length(uv);
+
+    float ang = atan(main.x, main.y);
+    float dist = pow(length(main), 0.1);
+
+    float d = length(main);
+    float f0 = exp(-d * d * 50.0) * 0.6;
+    float coronaMask = smoothstep(0.15, 0.02, d) * smoothstep(0.0, 0.02, d);
+    f0 += coronaMask * (noise2(vec2(ang * 10.0 + pos.x * 5.0, dist * 20.0)) * 0.3 + 0.7) * 0.22;
+
+    float f2 = max(1.0 / (1.0 + 32.0 * pow(length(uvd + 0.800 * pos), 2.0)), 0.0) * 0.25;
+    float f22 = max(1.0 / (1.0 + 32.0 * pow(length(uvd + 0.850 * pos), 2.0)), 0.0) * 0.23;
+    float f23 = max(1.0 / (1.0 + 32.0 * pow(length(uvd + 0.900 * pos), 2.0)), 0.0) * 0.21;
+
+    vec2 uvx = mix(uv, uvd, -0.5);
+    float f4 = max(0.01 - pow(length(uvx + 0.40 * pos), 2.4), 0.0) * 6.0;
+    float f42 = max(0.01 - pow(length(uvx + 0.45 * pos), 2.4), 0.0) * 5.0;
+    float f43 = max(0.01 - pow(length(uvx + 0.50 * pos), 2.4), 0.0) * 3.0;
+
+    uvx = mix(uv, uvd, -0.4);
+    float f5 = max(0.01 - pow(length(uvx + 0.20 * pos), 5.5), 0.0) * 2.0;
+    float f52 = max(0.01 - pow(length(uvx + 0.40 * pos), 5.5), 0.0) * 2.0;
+    float f53 = max(0.01 - pow(length(uvx + 0.60 * pos), 5.5), 0.0) * 2.0;
+
+    uvx = mix(uv, uvd, -0.5);
+    float f6 = max(0.01 - pow(length(uvx - 0.300 * pos), 1.6), 0.0) * 6.0;
+    float f62 = max(0.01 - pow(length(uvx - 0.325 * pos), 1.6), 0.0) * 3.0;
+    float f63 = max(0.01 - pow(length(uvx - 0.350 * pos), 1.6), 0.0) * 5.0;
+
+    vec3 c = vec3(0.0);
+    c.r += f2  + f4  + f5  + f6;
+    c.g += f22 + f42 + f52 + f62;
+    c.b += f23 + f43 + f53 + f63;    
+    c = c * 1.6 - vec3(length(uvd) * 0.05);
+    c += vec3(f0);
+    return c;
+}
+
+float sampleVisibility(vec2 screenUV)
+{
+    if (any(lessThan(screenUV, vec2(0.01))) || any(greaterThan(screenUV, vec2(0.99)))) { return 0.0; }
+
+    float lum = 0.0;
+    vec2 d = vec2(0.01, 0.0);
+    lum += dot(texture(brightTexture, screenUV).rgb, vec3(0.333));
+    lum += dot(texture(brightTexture, screenUV + d).rgb, vec3(0.333));
+    lum += dot(texture(brightTexture, screenUV - d).rgb, vec3(0.333));
+    lum += dot(texture(brightTexture, screenUV + d.yx).rgb, vec3(0.333));
+    lum += dot(texture(brightTexture, screenUV - d.yx).rgb, vec3(0.333));
+    return clamp(lum / 5.0 * 8.0, 0.0, 1.0);
 }
 
 void main()
 {
-    vec2 texcoord = -inUV + vec2(1.0); 
-    vec2 texelSize = 1.0 / vec2(textureSize(brightTexture, 0));
-    
-    vec2 ghostVec = (vec2(0.5) - texcoord) * pc.ghostDispersal;
-    float ghostLen = length(ghostVec);
-    
-    vec2 direction = ghostLen > 0.0001 ? ghostVec / ghostLen : vec2(0.0);
-    
-    vec3 result = vec3(0.0);
-    vec3 distortion = vec3(-texelSize.x * pc.distortion, 0.0, texelSize.x * pc.distortion);
-    
-    for (int i = 0; i < pc.ghosts; ++i)
+    vec2 res = vec2(textureSize(brightTexture, 0));
+    float aspect = res.x / res.y;
+
+    vec2 uv = inUV - 0.5;
+    uv.x *= aspect;
+
+    vec3 color = vec3(0.0);
+
+    if (pc.sunUV.x > -1.5)
     {
-        vec2 offset = texcoord + ghostVec * float(i); 
-        
-        float distToCenter = length(vec2(0.5) - offset);
-        float weight = max(0.0, 1.0 - (distToCenter * 1.5)); 
-        
-        weight *= pow(0.8, float(i)); 
-        
-        result += textureDistorted(brightTexture, offset, direction, distortion) * weight;
+        vec2 sunPos = pc.sunUV - 0.5;
+        sunPos.x *= aspect;
+        float vis = sampleVisibility(pc.sunUV);
+        color += vec3(1.4, 1.2, 1.0) * lensflare(uv, sunPos) * vis * clamp(pc.sunIntensity, 0.0, 1.0);
     }
-    
-    vec2 haloVec = direction * pc.haloWidth;
-    vec2 haloPos = texcoord + haloVec;
-    
-    float haloDist = length(vec2(0.5) - haloPos);
-    float haloWeight = max(0.0, 1.0 - (haloDist * 1.5)); 
-    
-    float haloFade = smoothstep(0.0, 0.1, ghostLen);
-    
-    result += textureDistorted(brightTexture, haloPos, direction, distortion) * haloWeight * haloFade;
-    
-    outColor = vec4(result * 0.5, 1.0);
+
+    if (pc.moonUV.x > -1.5)
+    {
+        vec2 moonPos = pc.moonUV - 0.5;
+        moonPos.x *= aspect;
+        float vis = sampleVisibility(pc.moonUV);
+        color += vec3(0.8, 0.9, 1.1) * lensflare(uv, moonPos) * vis * clamp(pc.moonIntensity * 0.3, 0.0, 0.3);
+    }
+
+    float w = color.r + color.g + color.b;
+    color = mix(color, vec3(w) * 0.5, w * 0.1);
+
+    outColor = vec4(color, 1.0);
 }

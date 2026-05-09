@@ -207,7 +207,23 @@ namespace Antelope
 
         float StarIntensity { 1.5f };
 
+        entt::entity SunEntity { entt::null };
+        entt::entity MoonEntity { entt::null };
+        float SunMaxIntensity { 2.5f };
+        float MoonMaxIntensity { 0.15f };
+
         AmbientComponent() = default;
         AmbientComponent(const AmbientComponent&) = default;
+    };
+
+    struct TimeCycleComponent
+    {
+        float TimeOfDay { 12.0f };
+        float TimeScale { 600.0f };
+        uint32_t CurrentDay { 0 };
+        float MoonPhase { 0.0f };
+
+        TimeCycleComponent() = default;
+        TimeCycleComponent(const TimeCycleComponent&) = default;
     };
 }

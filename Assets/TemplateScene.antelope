@@ -1,13 +1,43 @@
 Scene: TemplateScene
 AssetBindings: []
 Entities:
-  - Entity: 1
+  - Entity: 999000000000000001
+    TagComponent:
+      Tag: Ambient System
+    AmbientComponent:
+      SkyColorDay: [0.26, 0.42, 0.77]
+      HorizonColorDay: [0.65, 0.8, 0.98]
+      GroundColor: [0.23, 0.22, 0.23]
+      SkyColorNight: [0.05, 0.06, 0.13]
+      HorizonColorNight: [0.03, 0.04, 0.08]
+      StarIntensity: 1.5
+      SunEntity: 999000000000000002
+      MoonEntity: 999000000000000003
+      SunMaxIntensity: 2.5
+      MoonMaxIntensity: 0.15
+    TimeCycleComponent:
+      TimeOfDay: 12.0
+      TimeScale: 600.0
+      CurrentDay: 0
+  - Entity: 999000000000000002
+    ParentID: 999000000000000001
     TagComponent:
       Tag: Sun
     TransformComponent:
       Translation: [0, 0, 0]
-      Rotation: [-0.7854, 0.5236, 0]
+      Rotation: [0, 0, 0]
       Scale: [1, 1, 1]
     DirectionalLightComponent:
       Color: [1, 0.98, 0.92]
-      Intensity: 5.0
+      Intensity: 2.5
+  - Entity: 999000000000000003
+    ParentID: 999000000000000001
+    TagComponent:
+      Tag: Moon
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    DirectionalLightComponent:
+      Color: [0.7, 0.8, 1.0]
+      Intensity: 0.15

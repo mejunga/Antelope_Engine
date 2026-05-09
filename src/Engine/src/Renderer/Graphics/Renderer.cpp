@@ -73,8 +73,9 @@ namespace Antelope
         m_SkyBoxPass = std::make_unique<SkyboxPass>(m_Context, m_PipelineLayout, sceneRenderPass);
         AE_ENGINE_TRACE("Sky Renderer created.");
         
-        m_ShadowPass = std::make_shared<ShadowPass>(m_Context, m_PipelineLayout, 4096, 4096);
-        AE_ENGINE_TRACE("Shadow Map created.");
+        m_ShadowPasses[0] = std::make_shared<ShadowPass>(m_Context, m_PipelineLayout, 4096, 4096);
+        m_ShadowPasses[1] = std::make_shared<ShadowPass>(m_Context, m_PipelineLayout, 4096, 4096);
+        AE_ENGINE_TRACE("Shadow Maps created (2 cascades).");
 
     #ifdef ANTELOPE_EDITOR_MODE
         m_EditorGridPass = std::make_unique<EditorGridPass>(m_Context, m_PipelineLayout, sceneRenderPass);
@@ -480,10 +481,11 @@ namespace Antelope
         builder.AddBinding(8, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);
         builder.AddBinding(9, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
         builder.AddBinding(10, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+        builder.AddBinding(11, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
 
-        std::array<VkDescriptorBindingFlags, 11> bindingFlags {};
+        std::array<VkDescriptorBindingFlags, 12> bindingFlags {};
 
-        for (int i { 0 }; i < 11; ++i) 
+        for (int i { 0 }; i < 12; ++i) 
         {
             bindingFlags[i] = 0;
         }
@@ -492,7 +494,7 @@ namespace Antelope
 
         VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo {};
         flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
-        flagsInfo.bindingCount = static_cast<uint32_t>(bindingFlags.size());
+        flagsInfo.bindingCount = 12;
         flagsInfo.pBindingFlags = bindingFlags.data();
 
         m_DescriptorSetLayout = builder.Build(m_Context, &flagsInfo, VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT);
@@ -500,12 +502,17 @@ namespace Antelope
 
     void Renderer::CreatePipelineLayout()
     {
+        VkPushConstantRange pushRange {};
+        pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        pushRange.offset = 0;
+        pushRange.size = sizeof(uint32_t);
+
         VkPipelineLayoutCreateInfo pipelineLayoutInfo {};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = 1;
         pipelineLayoutInfo.pSetLayouts = &m_DescriptorSetLayout;
-        pipelineLayoutInfo.pushConstantRangeCount = 0;
-        pipelineLayoutInfo.pPushConstantRanges = nullptr;
+        pipelineLayoutInfo.pushConstantRangeCount = 1;
+        pipelineLayoutInfo.pPushConstantRanges = &pushRange;
 
         if (vkCreatePipelineLayout(m_Context->GetDevice(), &pipelineLayoutInfo, nullptr, &m_PipelineLayout) != VK_SUCCESS) 
         {
@@ -677,20 +684,21 @@ namespace Antelope
 
         UpdateUniformBuffer(m_CurrentFrame, cameraData);
 
-        m_ShadowPass->Draw(cmd, m_DescriptorSets[m_CurrentFrame], objectCount, m_IndirectBuffers[m_CurrentFrame]->GetBuffer());
+        for (uint32_t cascade { 0 }; cascade < 2; cascade++)
+        {
+            vkCmdPushConstants(cmd, m_PipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(uint32_t), &cascade);
+            m_ShadowPasses[cascade]->Draw(cmd, m_DescriptorSets[m_CurrentFrame], objectCount, m_IndirectBuffers[m_CurrentFrame]->GetBuffer());
 
-        VkImageMemoryBarrier shadowBarrier {};
-        shadowBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        shadowBarrier.oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-        shadowBarrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-        shadowBarrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        shadowBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        shadowBarrier.image = m_ShadowPass->GetDepthImage();
-        shadowBarrier.subresourceRange = { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1 };
-        vkCmdPipelineBarrier(cmd,
-            VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-            0, 0, nullptr, 0, nullptr, 1, &shadowBarrier);
+            VkImageMemoryBarrier shadowBarrier {};
+            shadowBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            shadowBarrier.oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+            shadowBarrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+            shadowBarrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            shadowBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            shadowBarrier.image = m_ShadowPasses[cascade]->GetDepthImage();
+            shadowBarrier.subresourceRange = { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1 };
+            vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &shadowBarrier);
+        }
 
         VkRenderPassBeginInfo renderPassInfo {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -770,7 +778,20 @@ namespace Antelope
         postPassInfo.clearValueCount = static_cast<uint32_t>(postClearValues.size());
         postPassInfo.pClearValues = postClearValues.data();
 
-        m_BloomPass->Draw(cmd, m_SceneHDRTexture, 1.8f, 0.1f);
+        auto projectToScreenUV { [&](glm::vec4 dirW) -> glm::vec2
+        {
+            glm::vec4 clip { cameraData.proj * cameraData.view * glm::vec4(glm::vec3(dirW) * 1000.0f, 1.0f) };
+
+            if (clip.w <= 0.0f) { return glm::vec2(-2.0f); }
+            
+            glm::vec2 ndc { glm::vec2(clip.x, clip.y) / clip.w };
+            return ndc * 0.5f + 0.5f;
+        }};
+
+        glm::vec2 sunUV { (cameraData.sunDirection.w  > 0.5f) ? projectToScreenUV(cameraData.sunDirection)  : glm::vec2(-2.0f) };
+        glm::vec2 moonUV { (cameraData.moonDirection.w > 0.5f) ? projectToScreenUV(cameraData.moonDirection) : glm::vec2(-2.0f) };
+
+        m_BloomPass->Draw(cmd, m_SceneHDRTexture, 1.8f, 0.1f, sunUV, cameraData.sunColor.a, moonUV, cameraData.moonColor.a);
 
         vkCmdBeginRenderPass(cmd, &postPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -1180,7 +1201,8 @@ namespace Antelope
             writer.WriteBuffer(6, m_ObjectBuffers[i]->GetBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
             writer.WriteBuffer(8, m_MaterialBuffers[i]->GetBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
             writer.WriteBuffer(9, m_GpuAllocator->GetTangentBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-            writer.WriteImage(10, m_ShadowPass->GetDepthImageView(), m_ShadowPass->GetSampler(), VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+            writer.WriteImage(10, m_ShadowPasses[0]->GetDepthImageView(), m_ShadowPasses[0]->GetSampler(), VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+            writer.WriteImage(11, m_ShadowPasses[1]->GetDepthImageView(), m_ShadowPasses[1]->GetSampler(), VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
             writer.UpdateSet(m_Context, m_DescriptorSets[i]);
         }

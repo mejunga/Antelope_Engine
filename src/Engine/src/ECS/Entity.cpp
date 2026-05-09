@@ -21,8 +21,12 @@ namespace Antelope
             else
             {
                 entt::entity current = parentRel.FirstChild;
+
                 while (m_World->GetRegistry().get<RelationshipComponent>(current).NextSibling != entt::null)
+                {
                     current = m_World->GetRegistry().get<RelationshipComponent>(current).NextSibling;
+                }
+                
                 m_World->GetRegistry().get<RelationshipComponent>(current).NextSibling = m_EntityHandle;
                 relation.PreviousSibling = current;
             }

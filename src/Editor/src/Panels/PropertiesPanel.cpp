@@ -189,7 +189,30 @@ namespace Antelope::Editor
             ImGui::ColorEdit3("Sky Night", glm::value_ptr(component.SkyColorNight));
             ImGui::ColorEdit3("Horizon Night", glm::value_ptr(component.HorizonColorNight));
             ImGui::Separator();
-            ImGui::DragFloat("Star Intensity", &component.StarIntensity, 0.01f, 0.0f, 5.0f, "%.2f");
+            ImGui::DragFloat("Star Intensity", &component.StarIntensity, 0.01f, 0.0f,  5.0f, "%.2f");
+            ImGui::DragFloat("Sun Intensity", &component.SunMaxIntensity, 0.1f, 0.0f, 20.0f, "%.2f");
+            ImGui::DragFloat("Moon Intensity", &component.MoonMaxIntensity, 0.01f, 0.0f, 2.0f, "%.3f");
+        });
+
+        DrawComponent<TimeCycleComponent>("Time Cycle", entity, [](auto& component)
+        {
+            ImGui::DragFloat("Time of Day", &component.TimeOfDay, 0.05f, 0.0f, 24.0f, "%.2f h");
+            ImGui::DragFloat("Time Scale", &component.TimeScale, 10.0f, 0.0f, 10000.0f, "%.0f");
+
+            int day { static_cast<int>(component.CurrentDay) };
+
+            if (ImGui::DragInt("Day", &day, 1, 0, 100000))
+            {
+                component.CurrentDay = static_cast<uint32_t>(day < 0 ? 0 : day);
+            }
+
+            ImGui::SameLine();
+
+            if (ImGui::SmallButton("Reset"))
+            {
+                component.CurrentDay = 0;
+                component.TimeOfDay  = 12.0f;
+            }
         });
 
         ImGui::Spacing();

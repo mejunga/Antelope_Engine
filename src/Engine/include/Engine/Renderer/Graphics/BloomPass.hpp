@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
+#include <glm/glm.hpp>
 
 #include <memory>
 #include <vector>
@@ -19,7 +20,7 @@ namespace Antelope
         ~BloomPass();
 
         void Resize(uint32_t width, uint32_t height, std::shared_ptr<RenderTexture> sceneTexture);
-        void Draw(VkCommandBuffer cmd, std::shared_ptr<RenderTexture> sceneTexture, float threshold = 1.0f, float knee = 0.1f);
+        void Draw(VkCommandBuffer cmd, std::shared_ptr<RenderTexture> sceneTexture, float threshold, float knee, glm::vec2 sunUV, float sunIntensity, glm::vec2 moonUV, float moonIntensity);
 
         std::shared_ptr<RenderTexture> GetBloomTexture() const { return m_UpChain[0]; }
         std::shared_ptr<RenderTexture> GetFlareTexture() const { return m_FlareTexture; }

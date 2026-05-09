@@ -1,5 +1,10 @@
 #version 450
 
+layout(push_constant) uniform PushConstants
+{
+    uint cascadeIndex;
+} pc;
+
 layout(binding = 0) uniform UniformBufferObject
 {
     mat4 view;
@@ -7,7 +12,9 @@ layout(binding = 0) uniform UniformBufferObject
     vec4 cameraPos;
     vec4 sunDirection;
     vec4 sunColor;
-    mat4 lightSpaceMatrix;
+    vec4 moonDirection;
+    vec4 moonColor;
+    mat4 lightSpaceMatrices[2];
 } ubo;
 
 struct Face { uvec4 data; };
@@ -44,5 +51,5 @@ void main()
     else { vIndex = f.data.z; }
 
     vec3 position = posBuf.vertices[obj.posOffset + vIndex].pos.xyz;
-    gl_Position = ubo.lightSpaceMatrix * obj.model * vec4(position, 1.0);
+    gl_Position = ubo.lightSpaceMatrices[pc.cascadeIndex] * obj.model * vec4(position, 1.0);
 }
