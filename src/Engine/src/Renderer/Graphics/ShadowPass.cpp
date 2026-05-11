@@ -20,7 +20,6 @@ namespace Antelope
         CreateFramebuffer();
         CreateSampler();
         CreatePipeline();
-        AE_ENGINE_TRACE("ShadowPass created: {0}x{1}", width, height);
     }
 
     ShadowPass::~ShadowPass()
@@ -63,7 +62,7 @@ namespace Antelope
         scissor.extent = { m_Width, m_Height };
         vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-        vkCmdSetDepthBias(cmd, 1.25f, 0.0f, 1.75f);
+        vkCmdSetDepthBias(cmd, 1.0f, 0.0f, 1.5f);
 
         m_Pipeline->Bind(cmd);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,

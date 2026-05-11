@@ -14,9 +14,7 @@ namespace Antelope
     class ShadowPass
     {
     public:
-        ShadowPass(std::shared_ptr<VulkanContext> context, 
-                       VkPipelineLayout pipelineLayout,
-                       uint32_t width, uint32_t height);
+        ShadowPass(std::shared_ptr<VulkanContext> context, VkPipelineLayout pipelineLayout, uint32_t width, uint32_t height);
         ~ShadowPass();
 
         void Draw(VkCommandBuffer cmd, VkDescriptorSet descriptorSet, uint32_t objectCount, VkBuffer indirectBuffer);

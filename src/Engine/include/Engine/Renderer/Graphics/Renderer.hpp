@@ -15,6 +15,8 @@
 #include <array>
 #include <memory>
 #include <string>
+#include <span>
+#include <atomic>
 
 
 namespace Antelope
@@ -37,6 +39,48 @@ namespace Antelope
 #endif
 
     struct Texture;
+
+    struct StagingArena
+    {
+        VkBuffer buffer { VK_NULL_HANDLE };
+        VmaAllocation allocation { VK_NULL_HANDLE };
+        char* mappedData { nullptr };
+        size_t capacity { 64 * 1024 * 1024 };
+        std::atomic<size_t> offset { 0 };
+
+        StagingArena() = default;
+
+        StagingArena(StagingArena&& other) noexcept
+            : buffer(other.buffer), allocation(other.allocation), mappedData(other.mappedData),
+              capacity(other.capacity), offset(other.offset.load(std::memory_order_relaxed))
+        {
+            other.buffer = VK_NULL_HANDLE;
+            other.allocation = VK_NULL_HANDLE;
+            other.mappedData = nullptr;
+            other.offset.store(0, std::memory_order_relaxed);
+        }
+
+        StagingArena& operator=(StagingArena&& other) noexcept
+        {
+            if (this != &other)
+            {
+                buffer = other.buffer;
+                allocation = other.allocation;
+                mappedData = other.mappedData;
+                capacity = other.capacity;
+                offset.store(other.offset.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                
+                other.buffer = VK_NULL_HANDLE;
+                other.allocation = VK_NULL_HANDLE;
+                other.mappedData = nullptr;
+                other.offset.store(0, std::memory_order_relaxed);
+            }
+            return *this;
+        }
+
+        StagingArena(const StagingArena&) = delete;
+        StagingArena& operator=(const StagingArena&) = delete;
+    };
 
     struct PendingTransfer
     {
@@ -72,13 +116,13 @@ namespace Antelope
             Renderer(std::shared_ptr<VulkanContext> context, std::shared_ptr<SwapChain> swapChain, uint32_t framesInFlight = 2);
             ~Renderer();
 
-            void DrawFrame(const UniformBufferObject& cameraData, const std::vector<RenderCommand>& renderList);
+            void DrawFrame(const UniformBufferObject& cameraData, std::span<const RenderCommand> renderList);
             MeshHandle UploadMesh(const MeshData& meshData);
             void FreeMesh(const MeshHandle& handle);
             void UpdateTextureDescriptors(const std::vector<Texture>& textures);
             VkCommandBuffer BeginAsyncGraphicsCommand();
             void EndAndSubmitAsyncGraphicsCommand(VkCommandBuffer cmd, VkBuffer stagingBuffer, VmaAllocation stagingAllocation, uint32_t textureIndex = UINT32_MAX);
-            void CreateStagingBuffer(const void* data, VkDeviceSize size, VkBuffer& outBuffer, VmaAllocation& outAllocation);
+            void CreateStagingBuffer(const void* data, VkDeviceSize bufferSize, VkBuffer& outBuffer, VmaAllocation& outAllocation, VkDeviceSize& outOffset, void** outMapped = nullptr);
             uint32_t AddMaterial(const PBRMaterialData& material);
             void ClearMaterials();            
         #ifdef ANTELOPE_EDITOR_MODE
@@ -88,6 +132,7 @@ namespace Antelope
         #ifdef ANTELOPE_EDITOR_MODE
             inline void SetUIContext(std::shared_ptr<UIContext> uiContext) { m_UIContext = uiContext; }
             inline uint32_t GetMaxFramesInFlight() const { return m_MaxFramesInFlight; }
+            inline uint32_t GetCurrentFrame() const { return m_CurrentFrame; }
             inline std::shared_ptr<RenderTexture> GetFinalLDRTexture() const { return m_FinalLDRTexture; }
         #endif
             inline void SetSelectedEntityIDs(std::unordered_set<uint32_t> entityIDs, glm::vec4 outlineColor = { 1.0f, 0.6f, 0.0f, 1.0f })
@@ -100,7 +145,7 @@ namespace Antelope
             void UpdateUniformBuffer(uint32_t currentImage, const UniformBufferObject& cameraData);
             void ProcessPendingTransfers();
             VkCommandBuffer BeginFrame();
-            void DrawObjects(VkCommandBuffer cmd, const UniformBufferObject& cameraData, const std::vector<RenderCommand>& renderList);
+            void DrawObjects(VkCommandBuffer cmd, const UniformBufferObject& cameraData, std::span<const RenderCommand> renderList);
             void EndFrame(VkCommandBuffer cmd);
             void DestroySyncObjects();
         #ifdef ANTELOPE_EDITOR_MODE
@@ -170,6 +215,7 @@ namespace Antelope
             std::unordered_set<uint32_t> m_PendingTextureIndices;
             std::vector<FrameSyncObjects> m_FrameSync;
             std::unordered_set<uint32_t> m_SelectedEntityIDs;
+            std::vector<StagingArena> m_StagingArenas;
         #ifdef ANTELOPE_EDITOR_MODE
             std::vector<SemaphoreSlot> m_SemaphorePool;
             std::vector<VkSemaphore> m_RenderFinishedRing;

@@ -39,8 +39,8 @@ namespace Antelope
     {
         std::error_code ec;
 
-        std::unordered_map<uint64_t, std::filesystem::path> currentMetaByUUID;
-        std::unordered_map<uint64_t, std::vector<std::filesystem::path>> orphanedMetaByUUID;
+        std::pmr::unordered_map<uint64_t, std::filesystem::path> currentMetaByUUID;
+        std::pmr::unordered_map<uint64_t, std::pmr::vector<std::filesystem::path>> orphanedMetaByUUID;
 
         for (auto& entry : std::filesystem::recursive_directory_iterator(assetDirectory, ec))
         {
@@ -65,7 +65,7 @@ namespace Antelope
             }
         }
 
-        std::vector<std::filesystem::path> noMetaFiles;
+        std::pmr::vector<std::filesystem::path> noMetaFiles;
 
         for (auto& entry : std::filesystem::recursive_directory_iterator(assetDirectory, ec))
         {
@@ -78,7 +78,7 @@ namespace Antelope
             }
         }
 
-        std::unordered_set<size_t> matched;
+        std::pmr::unordered_set<size_t> matched;
 
         for (const auto& record : lastKnownAssets)
         {
@@ -255,7 +255,7 @@ namespace Antelope
     void AssetManager::ProcessDirectory(const std::filesystem::path& directory)
     {
         std::error_code ec;
-        std::unordered_map<std::string, std::filesystem::path> orphanedMetas;
+        std::pmr::unordered_map<std::string, std::filesystem::path> orphanedMetas;
 
         for (auto& entry : std::filesystem::recursive_directory_iterator(directory, ec))
         {

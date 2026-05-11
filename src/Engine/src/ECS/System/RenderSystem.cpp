@@ -8,6 +8,7 @@
 #include <Engine/Renderer/Graphics/Renderer.hpp>
 #include <Engine/Renderer/Vulkan/SwapChain.hpp>
 #include <Engine/Renderer/Graphics/RenderCommand.hpp>
+#include <Engine/Core/JobSystem.hpp>
 #ifdef ANTELOPE_EDITOR_MODE
 #include <Engine/Renderer/Vulkan/RenderTexture.hpp>
 #include <Engine/Renderer/Graphics/EditorCamera.hpp>
@@ -18,7 +19,15 @@
 
 namespace Antelope
 {
-    static std::vector<RenderCommand> s_RenderList;
+    namespace
+    {
+        struct RenderEntry
+        {
+            entt::entity entity;
+            const WorldMatrixComponent* worldMat;
+            const MeshComponent* meshComp;
+        };
+    }
 
     static void GatherLights(entt::registry& registry, UniformBufferObject& ubo)
     {
@@ -106,7 +115,7 @@ namespace Antelope
         if (ubo.shadowCaster > 0)
         {
             constexpr float shadowMapRes { 4096.0f };
-            constexpr float cascadeSplit { 15.0f };
+            constexpr float cascadeSplit { 20.0f };
             constexpr float cascadeFarEnd { 80.0f };
 
             float fovY { glm::radians(60.0f) };
@@ -136,6 +145,7 @@ namespace Antelope
             for (int i { 0 }; i < 2; i++)
             {
                 glm::vec3 corners[8];
+                
                 for (int j { 0 }; j < 8; j++)
                 {
                     float z { (j < 4) ? zStarts[i] : zEnds[i] };
@@ -149,6 +159,7 @@ namespace Antelope
                 sphereCenter /= 8.0f;
 
                 float sphereRadius { 0.0f };
+
                 for (const auto& c : corners)
                 {
                     float dist { glm::length(c - sphereCenter) };
@@ -161,7 +172,7 @@ namespace Antelope
                 glm::mat4 lightProj { glm::ortho(-sphereRadius, sphereRadius, -sphereRadius, sphereRadius, 1.0f, shadowDepthRange) };
                 lightProj[1][1] *= -1.0f;
 
-                glm::vec4 shadowOrigin { (lightProj * lightView) * glm::vec4(sphereCenter, 1.0f) };
+                glm::vec4 shadowOrigin { (lightProj * lightView) * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f) };
                 glm::vec2 originTexel { (glm::vec2(shadowOrigin) * 0.5f + 0.5f) * shadowMapRes };
                 glm::vec2 snapOffset { (glm::round(originTexel) - originTexel) * (2.0f / shadowMapRes) };
                 lightProj[3][0] += snapOffset.x;
@@ -239,32 +250,84 @@ namespace Antelope
 
         GatherLights(world.GetRegistry(), cameraUBO);
 
-        s_RenderList.clear();
         auto& registry { world.GetRegistry() };
+        auto& jobSystem { Application::Get().GetJobSystem() };
+        auto& frameAlloc { Application::Get().GetFrameAllocator() };
         auto view { registry.view<WorldMatrixComponent, MeshComponent, NormalMatrixComponent>(entt::exclude<DisabledComponent>) };
-        s_RenderList.reserve(view.size_hint());
 
-        for (auto [entityID, worldMat, meshComponent, normalMat] : view.each())
+        const size_t maxCount { view.size_hint() };
+        auto renderEntries { frameAlloc.AllocateArray<RenderEntry>(maxCount) };
+        auto renderList { frameAlloc.AllocateArray<RenderCommand>(maxCount) };
+        uint32_t count { 0 };
+
+        for (auto [entityID, worldMat, meshComp, normalMat] : view.each())
         {
-            glm::mat4 meshLocal { glm::scale(glm::mat4(1.0f), meshComponent.Scale) };
-            glm::mat4 combined { worldMat.Matrix * meshLocal };
-            combined[3] += glm::vec4(meshComponent.Offset, 0.0f);
-
-            RenderCommand cmd {};
-            cmd.transform = combined;
-            cmd.normalMatrix = glm::mat3(glm::transpose(glm::inverse(combined)));
-            cmd.mesh = meshComponent.Handle;
-
-            if (auto* mat { registry.try_get<MaterialComponent>(entityID) })
-            {
-                cmd.materialIndex = mat->MaterialIndex;
-            }
-
-            cmd.entityID = static_cast<uint32_t>(entityID);
-            s_RenderList.push_back(cmd);
+            renderEntries[count++] = { entityID, &worldMat, &meshComp };
         }
 
-        renderer->DrawFrame(cameraUBO, s_RenderList);
+        constexpr uint32_t k_BatchSize { 64 };
+
+        if (count <= k_BatchSize)
+        {
+            for (uint32_t i { 0 }; i < count; ++i)
+            {
+                auto& entry { renderEntries[i] };
+                glm::mat4 meshLocal { glm::scale(glm::mat4(1.0f), entry.meshComp->Scale) };
+                glm::mat4 combined { entry.worldMat->Matrix * meshLocal };
+                combined[3] += glm::vec4(entry.meshComp->Offset, 0.0f);
+
+                auto& cmd { renderList[i] };
+                cmd.transform = combined;
+                cmd.normalMatrix = glm::mat3(glm::transpose(glm::inverse(combined)));
+                cmd.mesh = entry.meshComp->Handle;
+                cmd.entityID = static_cast<uint32_t>(entry.entity);
+                cmd.materialIndex = 0;
+
+                if (auto* mat { registry.try_get<MaterialComponent>(entry.entity) })
+                {
+                    cmd.materialIndex = mat->MaterialIndex;
+                }
+            }
+        }
+        else
+        {
+            const uint32_t numBatches { (count + k_BatchSize - 1) / k_BatchSize };
+            std::vector<JobHandle> handles;
+            handles.reserve(numBatches);
+
+            for (uint32_t b { 0 }; b < numBatches; ++b)
+            {
+                uint32_t begin { b * k_BatchSize };
+                uint32_t end { count < (begin + k_BatchSize) ? count : (begin + k_BatchSize) };
+
+                handles.push_back(jobSystem.Submit("RenderListEditor", [begin, end, &registry, renderEntries, renderList]()
+                {
+                    for (uint32_t i { begin }; i < end; ++i)
+                    {
+                        auto& entry { renderEntries[i] };
+                        glm::mat4 meshLocal { glm::scale(glm::mat4(1.0f), entry.meshComp->Scale) };
+                        glm::mat4 combined  { entry.worldMat->Matrix * meshLocal };
+                        combined[3] += glm::vec4(entry.meshComp->Offset, 0.0f);
+
+                        auto& cmd { renderList[i] };
+                        cmd.transform = combined;
+                        cmd.normalMatrix = glm::mat3(glm::transpose(glm::inverse(combined)));
+                        cmd.mesh = entry.meshComp->Handle;
+                        cmd.entityID = static_cast<uint32_t>(entry.entity);
+                        cmd.materialIndex = 0;
+
+                        if (auto* mat { registry.try_get<MaterialComponent>(entry.entity) })
+                        {
+                            cmd.materialIndex = mat->MaterialIndex;
+                        }
+                    }
+                }));
+            }
+
+            for (auto& h : handles) { h.wait(); }
+        }
+
+        renderer->DrawFrame(cameraUBO, renderList.first(count));
     }
 #endif
 
@@ -301,28 +364,78 @@ namespace Antelope
 
         GatherLights(registry, cameraUBO);
 
-        s_RenderList.clear();
+        auto& jobSystem { Application::Get().GetJobSystem() };
+        auto& frameAlloc { Application::Get().GetFrameAllocator() };
         auto meshView { registry.view<WorldMatrixComponent, MeshComponent, NormalMatrixComponent>(entt::exclude<DisabledComponent>) };
-        s_RenderList.reserve(meshView.size_hint());
 
-        for (auto [entityID, worldMat, meshComponent, normalMat] : meshView.each())
+        const size_t maxCount { meshView.size_hint() };
+        auto renderEntries { frameAlloc.AllocateArray<RenderEntry>(maxCount) };
+        auto renderList { frameAlloc.AllocateArray<RenderCommand>(maxCount) };
+        uint32_t count { 0 };
+
+        for (auto [entityID, worldMat, meshComp, normalMat] : meshView.each())
         {
-            glm::mat4 meshLocal { glm::translate(glm::mat4(1.0f), meshComponent.Offset) * glm::scale(glm::mat4(1.0f), meshComponent.Scale) };
-            glm::mat4 combined { worldMat.Matrix * meshLocal };
-
-            RenderCommand cmd {};
-            cmd.transform = combined;
-            cmd.normalMatrix = glm::mat3(glm::transpose(glm::inverse(combined)));
-            cmd.mesh = meshComponent.Handle;
-
-            if (auto* mat { registry.try_get<MaterialComponent>(entityID) })
-            {
-                cmd.materialIndex = mat->MaterialIndex;
-            }
-
-            s_RenderList.push_back(cmd);
+            renderEntries[count++] = { entityID, &worldMat, &meshComp };
         }
 
-        renderer->DrawFrame(cameraUBO, s_RenderList);
+        constexpr uint32_t k_BatchSize { 64 };
+
+        if (count <= k_BatchSize)
+        {
+            for (uint32_t i { 0 }; i < count; ++i)
+            {
+                auto& entry { renderEntries[i] };
+                glm::mat4 meshLocal { glm::translate(glm::mat4(1.0f), entry.meshComp->Offset) * glm::scale(glm::mat4(1.0f), entry.meshComp->Scale) };
+                glm::mat4 combined { entry.worldMat->Matrix * meshLocal };
+
+                auto& cmd { renderList[i] };
+                cmd.transform = combined;
+                cmd.normalMatrix = glm::mat3(glm::transpose(glm::inverse(combined)));
+                cmd.mesh = entry.meshComp->Handle;
+                cmd.materialIndex = 0;
+
+                if (auto* mat { registry.try_get<MaterialComponent>(entry.entity) })
+                {
+                    cmd.materialIndex = mat->MaterialIndex;
+                }
+            }
+        }
+        else
+        {
+            const uint32_t numBatches { (count + k_BatchSize - 1) / k_BatchSize };
+            std::vector<JobHandle> handles;
+            handles.reserve(numBatches);
+
+            for (uint32_t b { 0 }; b < numBatches; ++b)
+            {
+                uint32_t begin { b * k_BatchSize };
+                uint32_t end { count < (begin + k_BatchSize) ? count : (begin + k_BatchSize) };
+
+                handles.push_back(jobSystem.Submit("RenderListRuntime", [begin, end, &registry, renderEntries, renderList]()
+                {
+                    for (uint32_t i { begin }; i < end; ++i)
+                    {
+                        auto& entry { renderEntries[i] };
+                        glm::mat4 meshLocal { glm::translate(glm::mat4(1.0f), entry.meshComp->Offset) * glm::scale(glm::mat4(1.0f), entry.meshComp->Scale) };
+                        glm::mat4 combined  { entry.worldMat->Matrix * meshLocal };
+
+                        auto& cmd { renderList[i] };
+                        cmd.transform = combined;
+                        cmd.normalMatrix = glm::mat3(glm::transpose(glm::inverse(combined)));
+                        cmd.mesh = entry.meshComp->Handle;
+                        cmd.materialIndex = 0;
+
+                        if (auto* mat { registry.try_get<MaterialComponent>(entry.entity) })
+                        {
+                            cmd.materialIndex = mat->MaterialIndex;
+                        }
+                    }
+                }));
+            }
+
+            for (auto& h : handles) { h.wait(); }
+        }
+
+        renderer->DrawFrame(cameraUBO, renderList.first(count));
     }
 }

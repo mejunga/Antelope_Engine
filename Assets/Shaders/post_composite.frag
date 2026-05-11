@@ -63,10 +63,13 @@ void main()
 
     color = pow(max(color, vec3(0.0)), vec3(1.0 / 2.2));
 
-    float noiseR = Hash(gl_FragCoord.xy + vec2(0.0, mod(pc.time, 1000.0)));
-    float noiseG = Hash(gl_FragCoord.xy + vec2(31.7, mod(pc.time, 1000.0)));
-    float noiseB = Hash(gl_FragCoord.xy + vec2(74.3, mod(pc.time, 1000.0)));
-    color += (vec3(noiseR, noiseG, noiseB) - 0.5) * 0.02;
+    float t = mod(pc.time, 1000.0);
+    float noiseR = Hash(gl_FragCoord.xy + vec2(t, t * 1.61803399));
+    float noiseG = Hash(gl_FragCoord.xy + vec2(t * 1.61803399 + 31.7, t + 11.3));
+    float noiseB = Hash(gl_FragCoord.xy + vec2(t * 2.61803399 + 74.3, t * 0.61803399 + 45.7));
+
+    float lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    color += (vec3(noiseR, noiseG, noiseB) - 0.5) * mix(0.008, 0.02, lum);
 
     outColor = vec4(color, 1.0);
 }

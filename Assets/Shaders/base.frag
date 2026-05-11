@@ -174,7 +174,7 @@ float ShadowPCF(vec3 worldPos, vec3 normal)
 
     vec2 texelSize = vec2(1.0 / 4096.0);
     
-    float spread = 12.0; 
+    float spread = 8.0; 
 
     const float blendRange = 3.0;
     float blend = clamp((viewDepth - (ubo.cascadeSplits.x - blendRange)) / (2.0 * blendRange), 0.0, 1.0);

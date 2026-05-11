@@ -58,8 +58,8 @@ namespace Antelope
 
         VkBuffer stagingBuffer { VK_NULL_HANDLE };
         VmaAllocation stagingAllocation { VK_NULL_HANDLE };
-
-        m_Renderer->CreateStagingBuffer(pixels, imageSize, stagingBuffer, stagingAllocation);
+        VkDeviceSize stagingOffset { 0 };
+        m_Renderer->CreateStagingBuffer(pixels, imageSize, stagingBuffer, stagingAllocation, stagingOffset);
 
         stbi_image_free(pixels);
 
@@ -76,7 +76,7 @@ namespace Antelope
         VkCommandBuffer cmd { m_Renderer->BeginAsyncGraphicsCommand() };
 
         TransitionImageLayout(cmd, newTexture.Image, format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-        CopyBufferToImage(cmd, stagingBuffer, newTexture.Image, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
+        CopyBufferToImage(cmd, stagingBuffer, newTexture.Image, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), stagingOffset);
         TransitionImageLayout(cmd, newTexture.Image, format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
         m_Renderer->EndAndSubmitAsyncGraphicsCommand(cmd, stagingBuffer, stagingAllocation, newTexture.GlobalIndex);
@@ -161,10 +161,10 @@ namespace Antelope
         vkCmdPipelineBarrier(cmd, sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
     }
 
-    void TextureManager::CopyBufferToImage(VkCommandBuffer cmd, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
+    void TextureManager::CopyBufferToImage(VkCommandBuffer cmd, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height, VkDeviceSize bufferOffset)
     {
         VkBufferImageCopy region {};
-        region.bufferOffset = 0;
+        region.bufferOffset = bufferOffset;
         region.bufferRowLength = 0;
         region.bufferImageHeight = 0;
         region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;

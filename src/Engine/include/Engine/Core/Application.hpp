@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Engine/Core/Allocator.hpp>
 #ifdef ANTELOPE_EDITOR_MODE
 #include <Engine/Asset/FileWatcher.hpp>
 #endif
@@ -17,6 +18,7 @@ namespace Antelope
     class Window;
     class TextureManager;
     class World;
+    class JobSystem;
 #ifdef ANTELOPE_EDITOR_MODE
     class UIContext;
 #endif
@@ -40,8 +42,11 @@ namespace Antelope
         #endif
             virtual void OnShutdown() {}
 
-            inline Window& GetWindow() const { return *m_Window; }
             inline static Application& Get() { return *s_Instance; }
+            inline Allocator& GetAllocator() { return *m_Allocator; }
+            inline FrameAllocator& GetFrameAllocator() { return *m_FrameAllocator; }
+            inline JobSystem& GetJobSystem() { return *m_JobSystem; }
+            inline Window& GetWindow() const { return *m_Window; }
             inline std::shared_ptr<VulkanContext> GetVulkanContext() const { return m_VulkanContext; }
             inline std::shared_ptr<SwapChain> GetSwapChain() const { return m_SwapChain; }
             inline std::shared_ptr<Renderer> GetRenderer() const { return m_Renderer; }
@@ -53,7 +58,12 @@ namespace Antelope
         #endif
 
         protected:
-            std::unique_ptr<Window> m_Window;
+            LinearAllocator m_SystemArena { 4 * 1024 * 1024 };
+            
+            Allocator* m_Allocator { nullptr };
+            FrameAllocator* m_FrameAllocator { nullptr };
+            JobSystem* m_JobSystem { nullptr };
+            Window* m_Window { nullptr };
             std::shared_ptr<VulkanContext> m_VulkanContext;
             std::shared_ptr<SwapChain> m_SwapChain;
             std::shared_ptr<Renderer> m_Renderer;
@@ -67,7 +77,6 @@ namespace Antelope
 
         private:
             static Application *s_Instance;
-
         #ifdef ANTELOPE_EDITOR_MODE
             FileWatcher m_FileWatcher;
         #endif

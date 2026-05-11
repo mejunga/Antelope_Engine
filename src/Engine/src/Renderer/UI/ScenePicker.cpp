@@ -89,7 +89,7 @@ namespace Antelope
         CreateResources(m_Width, m_Height);
     }
 
-    void ScenePicker::SubmitPick(uint32_t x, uint32_t y, const EditorCamera& camera, const std::vector<RenderCommand>& renderList)
+    void ScenePicker::SubmitPick(uint32_t x, uint32_t y, const EditorCamera& camera, std::span<const RenderCommand> renderList)
     {
         if (x >= m_Width || y >= m_Height || renderList.empty()) { return; }
         if (m_ReadbackPending) { return; }

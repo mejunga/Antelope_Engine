@@ -1,6 +1,8 @@
 #include <Engine/Asset/ModelLoader.hpp>
 #include <Engine/Renderer/Graphics/Model.hpp>
 #include <Engine/Debug/Log.hpp>
+#include <Engine/Core/Application.hpp>
+#include <Engine/Core/JobSystem.hpp>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -72,6 +74,52 @@ namespace Antelope
         return filename;
     }
 
+    static void ProcessMesh(aiMesh* mesh, SubMeshData& out)
+    {
+        out.Name = mesh->mName.C_Str();
+        out.MaterialIndex = mesh->mMaterialIndex;
+
+        out.Data.positions.reserve(mesh->mNumVertices);
+        out.Data.normals.reserve(mesh->mNumVertices);
+        out.Data.tangents.reserve(mesh->mNumVertices);
+        out.Data.colors.reserve(mesh->mNumVertices);
+        out.Data.uvs.reserve(mesh->mNumVertices);
+
+        for (unsigned int i { 0 }; i < mesh->mNumVertices; ++i)
+        {
+            out.Data.positions.push_back({ glm::vec3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z) });
+            out.Data.normals.push_back({ glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z) });
+
+            if (mesh->mTangents)
+            {
+                out.Data.tangents.push_back({ glm::vec3(mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z) });
+            }
+            else
+            {
+                out.Data.tangents.push_back({ glm::vec3(1.0f, 0.0f, 0.0f) });
+            }
+
+            out.Data.colors.push_back({ glm::vec3(1.0f) });
+
+            if (mesh->mTextureCoords[0])
+            {
+                out.Data.uvs.push_back({ {mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y} });
+            }
+            else
+            {
+                out.Data.uvs.push_back({ {0.0f, 0.0f} });
+            }
+        }
+
+        out.Data.faces.reserve(mesh->mNumFaces);
+
+        for (unsigned int i { 0 }; i < mesh->mNumFaces; ++i)
+        {
+            const aiFace& face { mesh->mFaces[i] };
+            out.Data.faces.push_back({ face.mIndices[0], face.mIndices[1], face.mIndices[2], 0 });
+        }
+    }
+
     ModelData ModelLoader::Load(const std::string& filepath, bool preserveSkeleton)
     {
         Assimp::Importer importer;
@@ -91,49 +139,33 @@ namespace Antelope
         }
 
         ModelData model;
+        model.SubMeshes.resize(scene->mNumMeshes);
+        model.Materials.reserve(scene->mNumMaterials);
 
-        for (unsigned int m { 0 }; m < scene->mNumMeshes; m++) 
+        const uint32_t numMeshes { scene->mNumMeshes };
+        auto& jobSystem { Application::Get().GetJobSystem() };
+
+        if (numMeshes <= 4)
         {
-            aiMesh* mesh { scene->mMeshes[m] };
-            SubMeshData subMesh;
-            subMesh.Name = mesh->mName.C_Str();
-            subMesh.MaterialIndex = mesh->mMaterialIndex;
-
-            for (unsigned int i { 0 }; i < mesh->mNumVertices; i++)
+            for (uint32_t m { 0 }; m < numMeshes; ++m)
             {
-                glm::vec3 pos { mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z };
+                ProcessMesh(scene->mMeshes[m], model.SubMeshes[m]);
+            }
+        }
+        else
+        {
+            std::vector<JobHandle> handles;
+            handles.reserve(numMeshes);
 
-                subMesh.Data.positions.push_back({ pos });
-                subMesh.Data.normals.push_back({ glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z) });
-                
-                if (mesh->mTangents)
+            for (uint32_t m { 0 }; m < numMeshes; ++m)
+            {
+                handles.push_back(jobSystem.Submit("MeshLoad", [m, scene, &model]()
                 {
-                    subMesh.Data.tangents.push_back({ glm::vec3(mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z) });
-                }
-                else
-                {
-                    subMesh.Data.tangents.push_back({ glm::vec3(1.0f, 0.0f, 0.0f) });
-                }
-
-                subMesh.Data.colors.push_back({ glm::vec3(1.0f) });
-                
-                if (mesh->mTextureCoords[0])
-                {
-                    subMesh.Data.uvs.push_back({ {mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y} });
-                }
-                else
-                {
-                    subMesh.Data.uvs.push_back({ {0.0f, 0.0f} });
-                }
+                    ProcessMesh(scene->mMeshes[m], model.SubMeshes[m]);
+                }));
             }
 
-            for (unsigned int i { 0 }; i < mesh->mNumFaces; i++)
-            {
-                aiFace face { mesh->mFaces[i] };
-                subMesh.Data.faces.push_back({ face.mIndices[0], face.mIndices[1], face.mIndices[2], 0 });
-            }
-
-            model.SubMeshes.push_back(subMesh);            
+            for (auto& h : handles) { h.wait(); }
         }
 
         std::filesystem::path modelDir { std::filesystem::path(filepath).parent_path() };

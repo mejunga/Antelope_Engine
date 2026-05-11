@@ -9,8 +9,23 @@
     find_package(Jolt CONFIG REQUIRED)
     find_package(yaml-cpp CONFIG REQUIRED)
     find_package(unofficial-shaderc CONFIG REQUIRED)
+    
+    find_package(enkiTS CONFIG REQUIRED)
 
     find_path(MINIAUDIO_INCLUDE_DIRS "miniaudio.h")
+
+    include(FetchContent)
+    FetchContent_Declare(
+        rpmalloc
+        GIT_REPOSITORY https://github.com/mjansson/rpmalloc.git
+        GIT_TAG 1.4.5
+    )
+    FetchContent_MakeAvailable(rpmalloc)
+
+    if(NOT TARGET rpmalloc)
+        add_library(rpmalloc STATIC ${rpmalloc_SOURCE_DIR}/rpmalloc/rpmalloc.c)
+        target_include_directories(rpmalloc PUBLIC ${rpmalloc_SOURCE_DIR})
+    endif()
 
     file(GLOB_RECURSE ENGINE_SRC CONFIGURE_DEPENDS "src/*.cpp")
     file(GLOB_RECURSE ENGINE_HDR CONFIGURE_DEPENDS "include/*.hpp")
@@ -37,4 +52,6 @@
         Jolt::Jolt 
         yaml-cpp::yaml-cpp
         unofficial::shaderc::shaderc
+        enkiTS::enkiTS
+        rpmalloc
     )

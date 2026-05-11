@@ -247,7 +247,7 @@ namespace Antelope
 
         if (!entitiesNode) { return {}; }
 
-        std::unordered_map<uint64_t, Entity> entityMap;
+        std::pmr::unordered_map<uint64_t, Entity> entityMap;
 
         for (auto entityNode : entitiesNode)
         {

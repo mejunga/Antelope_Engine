@@ -15,6 +15,7 @@
     "yaml-cpp",
     "miniaudio",
     "imguizmo",
+    "enkits",
     {
       "name": "imgui",
       "features": [

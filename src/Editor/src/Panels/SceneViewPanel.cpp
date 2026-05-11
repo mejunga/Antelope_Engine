@@ -96,23 +96,27 @@ namespace Antelope::Editor
 
             if (pickX >= 0 && pickY >= 0 && pickX < newWidth && pickY < newHeight) 
             {
-                static std::vector<RenderCommand> renderList;
-                renderList.clear();
-                
                 auto& registry { Application::Get().GetWorld()->GetRegistry() };
                 auto view { registry.view<WorldMatrixComponent, MeshComponent, NormalMatrixComponent>() };
+                size_t maxCount { view.size_hint() };
+                auto renderList { Application::Get().GetFrameAllocator().AllocateArray<RenderCommand>(maxCount) };
+                uint32_t count { 0 };
 
                 for (auto [entityID, worldMat, mesh, normalMat] : view.each())
                 {
+                    glm::mat4 meshLocal { glm::scale(glm::mat4(1.0f), mesh.Scale) };
+                    glm::mat4 combined { worldMat.Matrix * meshLocal };
+                    combined[3] += glm::vec4(mesh.Offset, 0.0f);
+
                     RenderCommand cmd {};
-                    cmd.transform = worldMat.Matrix;
+                    cmd.transform = combined;
                     cmd.normalMatrix = normalMat.Matrix;
                     cmd.mesh = mesh.Handle;
-                    cmd.entityID = static_cast<uint32_t>(entityID);
-                    renderList.push_back(cmd);
+                    cmd.entityID = static_cast<uint32_t>(entityID);                    
+                    renderList[count++] = cmd;
                 }
 
-                m_ScenePicker->SubmitPick(static_cast<uint32_t>(pickX), static_cast<uint32_t>(pickY), camera, renderList);
+                m_ScenePicker->SubmitPick(static_cast<uint32_t>(pickX), static_cast<uint32_t>(pickY), camera, renderList.first(count));
             }
         }
 

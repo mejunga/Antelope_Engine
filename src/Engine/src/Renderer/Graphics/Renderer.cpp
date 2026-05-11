@@ -11,6 +11,8 @@
 #include <Engine/Renderer/Vulkan/Descriptor.hpp>
 #include <Engine/Renderer/Vulkan/GpuMemoryAllocator.hpp>
 #include <Engine/Debug/Log.hpp>
+#include <Engine/Core/Application.hpp>
+#include <Engine/Core/JobSystem.hpp>
 #ifdef ANTELOPE_EDITOR_MODE
 #include <Engine/Renderer/Graphics/EditorCamera.hpp>
 #include <Engine/Renderer/Vulkan/RenderTexture.hpp>
@@ -25,10 +27,15 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <stdexcept>
+#include <memory_resource>
 
 
 namespace Antelope
 {
+    namespace {
+        std::vector<JobHandle> s_DrawHandles;
+    }
+
     Renderer::Renderer(std::shared_ptr<VulkanContext> context, std::shared_ptr<SwapChain> swapChain, uint32_t framesInFlight)
         : m_Context(context), m_SwapChain(swapChain), m_MaxFramesInFlight(framesInFlight)
     {
@@ -53,6 +60,25 @@ namespace Antelope
         );
     #endif
 
+        m_StagingArenas.resize(m_MaxFramesInFlight);
+
+        for (auto& arena : m_StagingArenas)
+        {
+            VkBufferCreateInfo stagingInfo {};
+            stagingInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            stagingInfo.size = arena.capacity;
+            stagingInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+            stagingInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+            VmaAllocationCreateInfo stagingAllocInfo {};
+            stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+            stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+            
+            VmaAllocationInfo result {};
+            vmaCreateBuffer(m_Context->GetAllocator(), &stagingInfo, &stagingAllocInfo, &arena.buffer, &arena.allocation, &result);
+            arena.mappedData = static_cast<char*>(result.pMappedData);
+        }
+
         m_LastUpdatedTextureCount.assign(m_MaxFramesInFlight, 0);
         m_GpuAllocator = std::make_unique<GpuMemoryAllocator>(m_Context);
         m_GlobalDescriptorAllocator = std::make_unique<DescriptorAllocator>();
@@ -75,11 +101,12 @@ namespace Antelope
         
         m_ShadowPasses[0] = std::make_shared<ShadowPass>(m_Context, m_PipelineLayout, 4096, 4096);
         m_ShadowPasses[1] = std::make_shared<ShadowPass>(m_Context, m_PipelineLayout, 4096, 4096);
-        AE_ENGINE_TRACE("Shadow Maps created (2 cascades).");
+        AE_ENGINE_TRACE("Shadow Maps created.");
 
     #ifdef ANTELOPE_EDITOR_MODE
         m_EditorGridPass = std::make_unique<EditorGridPass>(m_Context, m_PipelineLayout, sceneRenderPass);
         AE_ENGINE_TRACE("Grid Renderer created.");
+
         m_OutlinePass = std::make_unique<OutlinePass>(m_Context, m_PipelineLayout, m_FinalLDRTexture);
         AE_ENGINE_TRACE("Outline Renderer created.");
         VkRenderPass postRenderPass = m_FinalLDRTexture->GetRenderPass();
@@ -90,13 +117,7 @@ namespace Antelope
         m_BloomPass = std::make_unique<BloomPass>(m_Context, m_SceneHDRTexture, m_SceneHDRTexture->GetWidth(), m_SceneHDRTexture->GetHeight());
         AE_ENGINE_TRACE("BloomPass created.");
 
-        m_PostCompositePass = std::make_unique<PostCompositePass>(
-            m_Context, 
-            m_SceneHDRTexture, 
-            m_BloomPass->GetBloomTexture(), 
-            m_BloomPass->GetFlareTexture(),
-            postRenderPass
-        );
+        m_PostCompositePass = std::make_unique<PostCompositePass>(m_Context, m_SceneHDRTexture, m_BloomPass->GetBloomTexture(), m_BloomPass->GetFlareTexture(), postRenderPass);
         AE_ENGINE_TRACE("PostCompositePass created.");
 
         CreateCommandPool();
@@ -106,15 +127,14 @@ namespace Antelope
         CreateCommandBuffers();
         AE_ENGINE_TRACE("Command Buffers allocated for {0} frames.", m_MaxFramesInFlight);
         CreateSyncObjects();
-        AE_ENGINE_TRACE("Synchronization Objects created for {0} frames.", m_MaxFramesInFlight);
         CreateUniformBuffers();
-        AE_ENGINE_TRACE("Uniform buffers created and mapped for {0} frames.", m_MaxFramesInFlight);
+        AE_ENGINE_TRACE("Uniform buffers created.");
         CreateObjectBuffers();
-        AE_ENGINE_TRACE("Object buffers created and mapped for {0} frames.", m_MaxFramesInFlight);
+        AE_ENGINE_TRACE("Object buffers created.");
         CreateMaterialBuffers();
-        AE_ENGINE_TRACE("Material buffers created and mapped for {0} frames.", m_MaxFramesInFlight);
+        AE_ENGINE_TRACE("Material buffers created.");
         CreateIndirectBuffers();
-        AE_ENGINE_TRACE("Indirect command buffers created and mapped for {0} frames.", m_MaxFramesInFlight);
+        AE_ENGINE_TRACE("Indirect command buffers created.");
         CreateDescriptorPool();
         AE_ENGINE_TRACE("Descriptor pool created.");
         CreateDescriptorSets();
@@ -128,12 +148,24 @@ namespace Antelope
             vkDeviceWaitIdle(m_Context->GetDevice());
         }
 
+        for (auto& arena : m_StagingArenas)
+        {
+            if (arena.buffer != VK_NULL_HANDLE)
+            {
+                vmaDestroyBuffer(m_Context->GetAllocator(), arena.buffer, arena.allocation);
+            }
+        }
+
         for (auto& transfer : m_PendingTransfers)
         {
             vkDestroyFence(m_Context->GetDevice(), transfer.fence, nullptr);
             VkCommandPool poolToUse { (transfer.meshID == 0) ? m_CommandPool : m_TransferCommandPool };
             vkFreeCommandBuffers(m_Context->GetDevice(), poolToUse, 1, &transfer.commandBuffer);
-            vmaDestroyBuffer(m_Context->GetAllocator(), transfer.stagingBuffer, transfer.stagingAllocation);
+
+            if (transfer.stagingAllocation != VK_NULL_HANDLE)
+            {
+                vmaDestroyBuffer(m_Context->GetAllocator(), transfer.stagingBuffer, transfer.stagingAllocation);
+            }
         }
 
         m_PendingTransfers.clear();
@@ -177,7 +209,7 @@ namespace Antelope
         }
     }
 
-    void Renderer::DrawFrame(const UniformBufferObject& cameraData, const std::vector<RenderCommand>& renderList)
+    void Renderer::DrawFrame(const UniformBufferObject& cameraData, std::span<const RenderCommand> renderList)
     {
         VkCommandBuffer cmd { BeginFrame() };
 
@@ -222,26 +254,11 @@ namespace Antelope
         
         VkBuffer stagingBuffer { VK_NULL_HANDLE };
         VmaAllocation stagingAllocation { VK_NULL_HANDLE };
-
-        VkBufferCreateInfo stagingInfo {};
-        stagingInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        stagingInfo.size = totalSize;
-        stagingInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-        stagingInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-        VmaAllocationCreateInfo stagingAllocInfo {};
-        stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-
-        VmaAllocationInfo stagingAllocResult {};
-
-        if (vmaCreateBuffer(m_Context->GetAllocator(), &stagingInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, &stagingAllocResult) != VK_SUCCESS)
-        {
-            AE_ENGINE_CRITICAL("Failed to create mesh staging buffer! Size: {0} bytes.", totalSize);
-            throw std::runtime_error("Failed to create mesh staging buffer");
-        }
-
-        char* dst { static_cast<char*>(stagingAllocResult.pMappedData) };
+        VkDeviceSize stagingOffset { 0 };
+        void* mappedData { nullptr };
+        CreateStagingBuffer(nullptr, totalSize, stagingBuffer, stagingAllocation, stagingOffset, &mappedData);
+        
+        char* dst { static_cast<char*>(mappedData) };
         size_t writeOffset { 0 };
 
         if (posSize > 0) { memcpy(dst + writeOffset, meshData.positions.data(), posSize); writeOffset += posSize; }
@@ -266,7 +283,7 @@ namespace Antelope
         vkBeginCommandBuffer(commandBuffer, &beginInfo);
 
         VkBufferCopy copyRegion {};
-        VkDeviceSize srcOffset { 0 };
+        VkDeviceSize srcOffset { stagingOffset };
 
         auto addCopy { [&](VkBuffer dstBuf, VkDeviceSize dstOffset, VkDeviceSize size)
         {
@@ -371,35 +388,54 @@ namespace Antelope
         }
     }
 
-    void Renderer::CreateStagingBuffer(const void* data, VkDeviceSize bufferSize, VkBuffer& outBuffer, VmaAllocation& outAllocation)
+    void Renderer::CreateStagingBuffer(const void* data, VkDeviceSize bufferSize, VkBuffer& outBuffer, VmaAllocation& outAllocation, VkDeviceSize& outOffset, void** outMapped)
     {
-        VkBufferCreateInfo stagingBufferInfo {};
-        stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        stagingBufferInfo.size = bufferSize;
-        stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT; 
-        stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-        VmaAllocationCreateInfo allocationInfo {};
-        allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        allocationInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-
-        if (vmaCreateBuffer(m_Context->GetAllocator(), &stagingBufferInfo, &allocationInfo, &outBuffer, &outAllocation, nullptr) != VK_SUCCESS)
+        auto& arena { m_StagingArenas[m_CurrentFrame] };
+        size_t alignment { 256 };
+        size_t allocSize { (bufferSize + alignment - 1) & ~(alignment - 1) };
+        size_t currentOffset { arena.offset.fetch_add(allocSize, std::memory_order_relaxed) };
+        
+        if (currentOffset + allocSize <= arena.capacity)
         {
-            AE_ENGINE_CRITICAL("Failed to create staging buffer! Size: {0} bytes.", bufferSize);
-            throw std::runtime_error("Failed to create staging buffer");
+            outBuffer = arena.buffer;
+            outAllocation = VK_NULL_HANDLE;
+            outOffset = currentOffset;
+            
+            if (data) { memcpy(arena.mappedData + currentOffset, data, bufferSize); }
+            if (outMapped) { *outMapped = arena.mappedData + currentOffset; }
+
+            return;
         }
 
-        vmaCopyMemoryToAllocation(m_Context->GetAllocator(), data, outAllocation, 0, bufferSize);
+        outOffset = 0;
+        
+        VkBufferCreateInfo stagingInfo {};
+        stagingInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        stagingInfo.size = bufferSize;
+        stagingInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        stagingInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VmaAllocationCreateInfo stagingAllocInfo {};
+        stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+        
+        VmaAllocationInfo stagingAllocResult {};
+        vmaCreateBuffer(m_Context->GetAllocator(), &stagingInfo, &stagingAllocInfo, &outBuffer, &outAllocation, &stagingAllocResult);
+        
+        if (outMapped) { *outMapped = stagingAllocResult.pMappedData; }
+        if (data) { memcpy(stagingAllocResult.pMappedData, data, bufferSize); }
     }
 
     uint32_t Renderer::AddMaterial(const PBRMaterialData& material)
     {
         uint32_t index { static_cast<uint32_t>(m_GlobalMaterials.size()) };
+
         if (index >= MAX_MATERIALS)
         {
             AE_ENGINE_WARN("Max material limit reached! Overwriting last material.");
             return MAX_MATERIALS - 1;
         }
+
         m_GlobalMaterials.push_back(material);
         return index;
     }
@@ -538,7 +574,11 @@ namespace Antelope
                 vkQueueWaitIdle(queueToWait);
 
                 vkFreeCommandBuffers(m_Context->GetDevice(), poolToUse, 1, &transfer.commandBuffer);
-                vmaDestroyBuffer(m_Context->GetAllocator(), transfer.stagingBuffer, transfer.stagingAllocation);
+
+                if (transfer.stagingAllocation != VK_NULL_HANDLE)
+                {
+                    vmaDestroyBuffer(m_Context->GetAllocator(), transfer.stagingBuffer, transfer.stagingAllocation);
+                }
                 
                 if (transfer.meshID != 0)
                 {
@@ -564,6 +604,7 @@ namespace Antelope
     {
         ProcessPendingTransfers();
         vkWaitForFences(m_Context->GetDevice(), 1, &m_FrameSync[m_CurrentFrame].inFlightFence, VK_TRUE, UINT64_MAX);
+        m_StagingArenas[m_CurrentFrame].offset.store(0, std::memory_order_relaxed);
 
         VkResult result { vkAcquireNextImageKHR(
             m_Context->GetDevice(),
@@ -610,7 +651,7 @@ namespace Antelope
         return m_CommandBuffers[m_CurrentFrame];
     }
 
-    void Renderer::DrawObjects(VkCommandBuffer cmd, const UniformBufferObject& cameraData, const std::vector<RenderCommand>& renderList)
+    void Renderer::DrawObjects(VkCommandBuffer cmd, const UniformBufferObject& cameraData, std::span<const RenderCommand> renderList)
     {
         if (!m_GlobalMaterials.empty())
         {
@@ -643,43 +684,127 @@ namespace Antelope
         uint32_t objectCount { 0 };
         std::vector<uint32_t> selectedIndirectIndices;
 
-        for (const auto& command : renderList)
+        const bool anyPending { !m_PendingMeshIDs.empty() || !m_PendingTextureIndices.empty() };
+        const uint32_t listSize { static_cast<uint32_t>(renderList.size()) };
+
+        if (!anyPending && listSize <= MAX_OBJECTS)
         {
-            if (m_PendingMeshIDs.count(command.mesh.MeshID) > 0) { continue; }
-            if (m_PendingTextureIndices.count(command.materialIndex) > 0) { continue; }
+            objectCount = listSize;
+            constexpr uint32_t k_BatchSize { 64 };
+            auto& jobSystem { Application::Get().GetJobSystem() };
 
-            if (objectCount >= MAX_OBJECTS)
+            if (objectCount <= k_BatchSize)
             {
-                AE_ENGINE_WARN("Maximum object limit ({0}) reached! Remaining objects will not be drawn.", MAX_OBJECTS);
-                break;
+                for (uint32_t i { 0 }; i < objectCount; ++i)
+                {
+                    const auto& command { renderList[i] };
+                    objectDataMap[i].model = command.transform;
+                    objectDataMap[i].normalMatrix = glm::mat4(command.normalMatrix);
+                    objectDataMap[i].posOffset = command.mesh.posOffset;
+                    objectDataMap[i].colorOffset = command.mesh.colorOffset;
+                    objectDataMap[i].normalOffset = command.mesh.normalOffset;
+                    objectDataMap[i].faceOffset = command.mesh.faceOffset;
+                    objectDataMap[i].uvOffset = command.mesh.uvOffset;
+                    objectDataMap[i].tangentOffset = command.mesh.tangentOffset;
+                    objectDataMap[i].materialIndex = command.materialIndex;
+                #ifdef ANTELOPE_EDITOR_MODE
+                    objectDataMap[i].entityID = command.entityID;
+                #endif
+                    indirectCommandsMap[i].vertexCount = command.mesh.faceCount * 3;
+                    indirectCommandsMap[i].instanceCount = 1;
+                    indirectCommandsMap[i].firstVertex = 0;
+                    indirectCommandsMap[i].firstInstance = i;
+                }
+            }
+            else
+            {
+                const uint32_t numBatches { (objectCount + k_BatchSize - 1) / k_BatchSize };
+                s_DrawHandles.clear();
+                s_DrawHandles.reserve(numBatches);
+
+                for (uint32_t b { 0 }; b < numBatches; ++b)
+                {
+                    uint32_t begin { b * k_BatchSize };
+                    uint32_t end { objectCount < begin + k_BatchSize ? objectCount : begin + k_BatchSize };
+
+                    s_DrawHandles.push_back(jobSystem.Submit("ObjFill", [begin, end, &renderList, objectDataMap, indirectCommandsMap]()
+                    {
+                        for (uint32_t i { begin }; i < end; ++i)
+                        {
+                            const auto& command { renderList[i] };
+                            objectDataMap[i].model = command.transform;
+                            objectDataMap[i].normalMatrix = glm::mat4(command.normalMatrix);
+                            objectDataMap[i].posOffset = command.mesh.posOffset;
+                            objectDataMap[i].colorOffset = command.mesh.colorOffset;
+                            objectDataMap[i].normalOffset = command.mesh.normalOffset;
+                            objectDataMap[i].faceOffset = command.mesh.faceOffset;
+                            objectDataMap[i].uvOffset = command.mesh.uvOffset;
+                            objectDataMap[i].tangentOffset = command.mesh.tangentOffset;
+                            objectDataMap[i].materialIndex = command.materialIndex;
+                        #ifdef ANTELOPE_EDITOR_MODE
+                            objectDataMap[i].entityID = command.entityID;
+                        #endif
+                            indirectCommandsMap[i].vertexCount = command.mesh.faceCount * 3;
+                            indirectCommandsMap[i].instanceCount = 1;
+                            indirectCommandsMap[i].firstVertex = 0;
+                            indirectCommandsMap[i].firstInstance = i;
+                        }
+                    }));
+                }
+
+                for (auto& h : s_DrawHandles) { h.wait(); }
             }
 
-            objectDataMap[objectCount].model = command.transform;
-            objectDataMap[objectCount].normalMatrix = glm::mat4(command.normalMatrix);
-            objectDataMap[objectCount].posOffset = command.mesh.posOffset;
-            objectDataMap[objectCount].colorOffset = command.mesh.colorOffset;
-            objectDataMap[objectCount].normalOffset = command.mesh.normalOffset;
-            objectDataMap[objectCount].faceOffset = command.mesh.faceOffset;
-            objectDataMap[objectCount].uvOffset = command.mesh.uvOffset;
-            objectDataMap[objectCount].tangentOffset = command.mesh.tangentOffset;
-            objectDataMap[objectCount].materialIndex = command.materialIndex;
         #ifdef ANTELOPE_EDITOR_MODE
-            objectDataMap[objectCount].entityID = command.entityID;
-        #endif
-
-            indirectCommandsMap[objectCount].vertexCount = command.mesh.faceCount * 3;
-            indirectCommandsMap[objectCount].instanceCount = 1;
-            indirectCommandsMap[objectCount].firstVertex = 0;
-            indirectCommandsMap[objectCount].firstInstance = objectCount;
-        
-        #ifdef ANTELOPE_EDITOR_MODE
-            if (m_SelectedEntityIDs.count(command.entityID))
+            for (uint32_t i { 0 }; i < objectCount; ++i)
             {
-                selectedIndirectIndices.push_back(objectCount);
+                if (m_SelectedEntityIDs.count(renderList[i].entityID))
+                {
+                    selectedIndirectIndices.push_back(i);
+                }
             }
         #endif
+        }
+        else
+        {
+            for (const auto& command : renderList)
+            {
+                if (m_PendingMeshIDs.count(command.mesh.MeshID) > 0) { continue; }
+                if (m_PendingTextureIndices.count(command.materialIndex) > 0) { continue; }
 
-            objectCount++;
+                if (objectCount >= MAX_OBJECTS)
+                {
+                    AE_ENGINE_WARN("Maximum object limit ({0}) reached! Remaining objects will not be drawn.", MAX_OBJECTS);
+                    break;
+                }
+
+                objectDataMap[objectCount].model = command.transform;
+                objectDataMap[objectCount].normalMatrix = glm::mat4(command.normalMatrix);
+                objectDataMap[objectCount].posOffset = command.mesh.posOffset;
+                objectDataMap[objectCount].colorOffset = command.mesh.colorOffset;
+                objectDataMap[objectCount].normalOffset = command.mesh.normalOffset;
+                objectDataMap[objectCount].faceOffset = command.mesh.faceOffset;
+                objectDataMap[objectCount].uvOffset = command.mesh.uvOffset;
+                objectDataMap[objectCount].tangentOffset = command.mesh.tangentOffset;
+                objectDataMap[objectCount].materialIndex = command.materialIndex;
+            #ifdef ANTELOPE_EDITOR_MODE
+                objectDataMap[objectCount].entityID = command.entityID;
+            #endif
+
+                indirectCommandsMap[objectCount].vertexCount = command.mesh.faceCount * 3;
+                indirectCommandsMap[objectCount].instanceCount = 1;
+                indirectCommandsMap[objectCount].firstVertex = 0;
+                indirectCommandsMap[objectCount].firstInstance = objectCount;
+
+            #ifdef ANTELOPE_EDITOR_MODE
+                if (m_SelectedEntityIDs.count(command.entityID))
+                {
+                    selectedIndirectIndices.push_back(objectCount);
+                }
+            #endif
+
+                objectCount++;
+            }
         }
 
         UpdateUniformBuffer(m_CurrentFrame, cameraData);
@@ -966,7 +1091,7 @@ namespace Antelope
         }
     #endif
 
-        AE_ENGINE_TRACE("Sync objects destroyed.");
+        AE_ENGINE_TRACE("Synchronization objects destroyed.");
     }
 
     void Renderer::CreateGraphicsPipeline()
@@ -1045,8 +1170,8 @@ namespace Antelope
                 #endif
                 vkCreateFence(m_Context->GetDevice(), &fenceInfo, nullptr, &m_FrameSync[i].inFlightFence) != VK_SUCCESS)
             {
-                AE_ENGINE_CRITICAL("Failed to create per-frame sync objects!");
-                throw std::runtime_error("Failed to create per-frame sync objects");
+                AE_ENGINE_CRITICAL("Failed to create per-frame synchronization objects!");
+                throw std::runtime_error("Failed to create per-frame synchronization objects");
             }
         }
 
@@ -1066,7 +1191,7 @@ namespace Antelope
                 }
             }
 
-            AE_ENGINE_TRACE("Sync objects created. {0} frame slots, {1} semaphore pool slots (maintenance1).", m_MaxFramesInFlight, poolSize);
+            AE_ENGINE_TRACE("Synchronization objects created. {0} frame slots, {1} semaphore pool slots (maintenance1).", m_MaxFramesInFlight, poolSize);
         }
         else
         {
@@ -1082,10 +1207,10 @@ namespace Antelope
                 }
             }
 
-            AE_ENGINE_TRACE("Sync objects created. {0} frame slots, ring size: {1} (fallback).", m_MaxFramesInFlight, ringSize);
+            AE_ENGINE_TRACE("Synchronization objects created. {0} frame slots, ring size: {1} (fallback).", m_MaxFramesInFlight, ringSize);
         }
     #else
-        AE_ENGINE_TRACE("Sync objects created. {0} frame slots.", m_MaxFramesInFlight);
+        AE_ENGINE_TRACE("Synchronization objects created. {0} frame slots.", m_MaxFramesInFlight);
     #endif
     }
 
@@ -1203,7 +1328,6 @@ namespace Antelope
             writer.WriteBuffer(9, m_GpuAllocator->GetTangentBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
             writer.WriteImage(10, m_ShadowPasses[0]->GetDepthImageView(), m_ShadowPasses[0]->GetSampler(), VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
             writer.WriteImage(11, m_ShadowPasses[1]->GetDepthImageView(), m_ShadowPasses[1]->GetSampler(), VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-
             writer.UpdateSet(m_Context, m_DescriptorSets[i]);
         }
     }

@@ -31,7 +31,6 @@ namespace Antelope
         }
 
         m_Pages.clear();
-        AE_ENGINE_TRACE("PagedVirtualBuffer '{0}' destroyed.", m_Name);
     }
 
     VirtualAllocation PagedVirtualBuffer::Allocate(VkDeviceSize size, VkDeviceSize alignment)
@@ -117,7 +116,7 @@ namespace Antelope
         }
 
         m_Pages.push_back(newPage);
-        AE_ENGINE_INFO("Created new page (Index: {0}) for '{1}' - Size: {2} MB", m_Pages.size() - 1, m_Name, m_PageSize / (1024 * 1024));
+        AE_ENGINE_TRACE("Created new page (Index: {0}) for '{1}' - Size: {2} MB", m_Pages.size() - 1, m_Name, m_PageSize / (1024 * 1024));
     }
 
     GpuMemoryAllocator::GpuMemoryAllocator(std::shared_ptr<VulkanContext> context)

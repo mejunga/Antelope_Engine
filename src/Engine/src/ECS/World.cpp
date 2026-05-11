@@ -16,13 +16,14 @@
 #include <Engine/Renderer/Graphics/Renderer.hpp>
 
 #include <vector>
+#include <unordered_map>
 
 
 namespace Antelope
 {
     World::World()
     {
-        m_PhysicsContext = std::make_unique<PhysicsContext>();
+        m_PhysicsContext = std::make_unique<PhysicsContext>(Application::Get().GetAllocator(), Application::Get().GetJobSystem());
 
         m_Registry.on_construct<TransformComponent>().connect<[](entt::registry& reg, entt::entity e)
         {
@@ -91,29 +92,31 @@ namespace Antelope
 
         auto renderer { Application::Get().GetRenderer() };
         auto textureManager { Application::Get().GetTextureManager() };
-        
+
         std::vector<uint32_t> ssboMaterialIndices;
         ssboMaterialIndices.reserve(modelData.Materials.size());
+        std::unordered_map<std::string, std::filesystem::path> texturePaths;
+
+        for (const auto& [uuid, meta] : AssetManager::GetRegistry())
+        {
+            if (meta.Type == AssetType::Texture2D)
+            {
+                texturePaths.emplace(meta.FilePath.filename().string(), meta.FilePath);
+            }
+        }
+
+        auto loadTex { [&](const std::string& filename, bool isSRGB) -> uint32_t {
+            if (filename.empty()) { return 0xFFFFFFFF; }
+            auto it { texturePaths.find(filename) };
+            if (it == texturePaths.end()) { return 0xFFFFFFFF; }
+            return textureManager->LoadTexture(it->second.string(), isSRGB);
+        }};
 
         for (const auto& modelMat : modelData.Materials)
         {
             PBRMaterialData pbrMat;
             pbrMat.AlbedoFactor = modelMat.AlbedoFactor;
             pbrMat.MetallicRoughnessFactors = modelMat.MetallicRoughnessFactors;
-
-            auto loadTex { [&](const std::string& filename, bool isSRGB) -> uint32_t {
-                if (filename.empty()) { return 0xFFFFFFFF; }
-
-                for (const auto& [uuid, meta] : AssetManager::GetRegistry())
-                {
-                    if (meta.Type == AssetType::Texture2D && meta.FilePath.filename().string() == filename)
-                    {
-                        return textureManager->LoadTexture(meta.FilePath.string(), isSRGB); 
-                    }
-                }
-
-                return 0xFFFFFFFF;
-            }};
 
             pbrMat.AlbedoTexIndex = loadTex(modelMat.AlbedoTexPath, true);
             pbrMat.EmissiveTexIndex = loadTex(modelMat.EmissiveTexPath, true);
@@ -239,10 +242,18 @@ namespace Antelope
 #endif
 
     void World::OnUpdateRuntime(float timeStep)
-    {        
+    {
         if (!m_IsSimulating) { OnSimulationStart(); }
 
-        StepSimulation(timeStep);
+        constexpr float k_FixedTimestep { 1.0f / 60.0f };
+        constexpr float k_MaxFrameTime { 0.25f };
+
+        m_Accumulator += timeStep < k_MaxFrameTime ? timeStep : k_MaxFrameTime;
+        while (m_Accumulator >= k_FixedTimestep)
+        {
+            StepSimulation(k_FixedTimestep);
+            m_Accumulator -= k_FixedTimestep;
+        }
 
         if (m_HierarchyDirty)
         {

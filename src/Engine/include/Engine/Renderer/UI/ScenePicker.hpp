@@ -26,7 +26,7 @@ namespace Antelope
 
             void Resize(uint32_t width, uint32_t height);
             
-            void SubmitPick(uint32_t x, uint32_t y, const EditorCamera& camera, const std::vector<RenderCommand>& renderList);
+            void SubmitPick(uint32_t x, uint32_t y, const EditorCamera& camera, std::span<const RenderCommand> renderList);
             std::optional<uint32_t> TryGetPickResult();
 
         private:

@@ -52,13 +52,15 @@ namespace Antelope
             Entity SpawnModelNodeRecursive(const ModelNode& node, const ModelData& modelData, UUID modelAssetUUID, Entity parentEntity, std::vector<AssetBinding>* outBindings, const std::vector<uint32_t>& materialIndices);
             void OnCameraConstructed(entt::registry& reg, entt::entity e);
             void OnCameraDestroyed(entt::registry& reg, entt::entity e);
+
         private:
             std::unique_ptr<PhysicsContext> m_PhysicsContext;
 
             entt::registry m_Registry;
             entt::entity m_PrimaryCamera { entt::null };
             bool m_HierarchyDirty { true };
-            bool m_IsSimulating { false }; 
+            bool m_IsSimulating { false };
+            float m_Accumulator { 0.0f };
 
             friend class Entity;
     };

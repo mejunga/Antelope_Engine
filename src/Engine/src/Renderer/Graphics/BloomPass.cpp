@@ -43,8 +43,6 @@ namespace Antelope
         CreateMipChain(width, height);
         CreatePipelines();
         UpdateDescriptorSets(sceneTexture);
-        
-        AE_ENGINE_TRACE("BloomPass initialized.");
     }
 
     BloomPass::~BloomPass()

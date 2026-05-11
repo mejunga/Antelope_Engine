@@ -227,13 +227,15 @@ namespace Antelope::Editor
     {
         auto& registry { GetWorld()->GetRegistry() };
         auto view { registry.view<MeshComponent>() };
+        uint32_t count { 0 };
 
         for (auto [entity, mesh] : view.each())
         {
             GetRenderer()->FreeMesh(mesh.Handle);
+            ++count;
         }
 
-        AE_CLIENT_INFO("All meshes freed from GPU.");
+        if (count > 0) { AE_CLIENT_INFO("{0} meshes freed from GPU.", count); }
     }
 
     void AntelopeApp::NewUnnamedScene()
@@ -266,6 +268,28 @@ namespace Antelope::Editor
         std::unordered_map<uint64_t, ModelData> loadedModels;
         auto& registry { GetWorld()->GetRegistry() };
 
+        std::unordered_map<uint64_t, entt::entity> entityByUUID;
+        for (auto e : registry.view<IDComponent>())
+        {
+            entityByUUID[(uint64_t)registry.get<IDComponent>(e).ID] = e;
+        }
+
+        std::unordered_map<std::string, std::filesystem::path> texturePaths;
+        for (const auto& [assetUUID, meta] : AssetManager::GetRegistry())
+        {
+            if (meta.Type == AssetType::Texture2D)
+            {
+                texturePaths.emplace(meta.FilePath.filename().string(), meta.FilePath);
+            }
+        }
+
+        auto loadTex { [&](const std::string& filename) -> uint32_t {
+            if (filename.empty()) { return 0xFFFFFFFF; }
+            auto it { texturePaths.find(filename) };
+            if (it == texturePaths.end()) { return 0xFFFFFFFF; }
+            return GetTextureManager()->LoadTexture(it->second.string());
+        }};
+
         for (auto& binding : m_AssetBindings)
         {
             if (binding.ComponentType != "MeshComponent") { continue; }
@@ -294,19 +318,6 @@ namespace Antelope::Editor
                 pbrMat.AlbedoFactor = modelMat.AlbedoFactor;
                 pbrMat.MetallicRoughnessFactors = modelMat.MetallicRoughnessFactors;
 
-                auto loadTex { [&](const std::string& filename) -> uint32_t {
-                    if (filename.empty()) { return 0xFFFFFFFF; }
-                    for (const auto& [assetUUID, meta] : AssetManager::GetRegistry())
-                    {
-                        if (meta.Type == AssetType::Texture2D &&
-                            meta.FilePath.filename().string() == filename)
-                        {
-                            return GetTextureManager()->LoadTexture(meta.FilePath.string());
-                        }
-                    }
-                    return 0xFFFFFFFF;
-                }};
-
                 pbrMat.AlbedoTexIndex = loadTex(modelMat.AlbedoTexPath);
                 pbrMat.NormalTexIndex = loadTex(modelMat.NormalTexPath);
                 pbrMat.MetRoughAOTexIndex = loadTex(modelMat.MetRoughAOTexPath);
@@ -315,17 +326,12 @@ namespace Antelope::Editor
 
             uint32_t matBufferIndex { GetRenderer()->AddMaterial(pbrMat) };
 
-            auto view { registry.view<IDComponent>() };
-            for (auto e : view)
-            {
-                if (registry.get<IDComponent>(e).ID == binding.EntityID)
-                {
-                    if (registry.all_of<MeshComponent>(e)) { registry.get<MeshComponent>(e).Handle = handle; }
-                    
-                    registry.emplace_or_replace<MaterialComponent>(e).MaterialIndex = matBufferIndex;
-                    break;
-                }
-            }
+            auto entityIt { entityByUUID.find((uint64_t)binding.EntityID) };
+            if (entityIt == entityByUUID.end()) { continue; }
+
+            auto e { entityIt->second };
+            if (registry.all_of<MeshComponent>(e)) { registry.get<MeshComponent>(e).Handle = handle; }
+            registry.emplace_or_replace<MaterialComponent>(e).MaterialIndex = matBufferIndex;
         }
 
         m_CurrentScenePath = virtualPath;

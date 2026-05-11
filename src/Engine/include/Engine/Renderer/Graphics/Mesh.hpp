@@ -4,6 +4,7 @@
 
 #include <vector>
 #include <cstdint>
+#include <memory_resource>
 
 
 namespace Antelope
@@ -17,12 +18,12 @@ namespace Antelope
 
     struct MeshData
     {
-        std::vector<VertexPosition> positions;
-        std::vector<VertexColor> colors;
-        std::vector<VertexNormal> normals;
-        std::vector<VertexUV> uvs;
-        std::vector<VertexTangent> tangents;
-        std::vector<Face> faces;
+        std::pmr::vector<VertexPosition> positions;
+        std::pmr::vector<VertexColor> colors;
+        std::pmr::vector<VertexNormal> normals;
+        std::pmr::vector<VertexUV> uvs;
+        std::pmr::vector<VertexTangent> tangents;
+        std::pmr::vector<Face> faces;
     };
 
     struct MeshHandle
