@@ -372,33 +372,31 @@ namespace Antelope::Editor
         {
             ed::NodeId ctxNode;
             ed::LinkId ctxLink;
+            bool showState { false }, showLink { false }, showBg { false };
 
             if (ed::ShowNodeContextMenu(&ctxNode))
             {
                 uint32_t nid { static_cast<uint32_t>(ctxNode.Get()) };
                 m_ContextMenuState = (nid >= 10) ? (nid - 10) / 3 : UINT32_MAX;
                 m_IsRenamingState = false;
-                m_ContextMenuPos = ImGui::GetMousePos();
-                ImGui::OpenPopup("##StateCtx");
+                showState = true;
             }
-
-            if (ed::ShowLinkContextMenu(&ctxLink))
+            else if (ed::ShowLinkContextMenu(&ctxLink))
             {
                 uint32_t lid { static_cast<uint32_t>(ctxLink.Get()) };
                 m_ContextLinkIdx = (lid >= 10000) ? lid - 10000 : UINT32_MAX;
-                m_ContextMenuPos = ImGui::GetMousePos();
-                ImGui::OpenPopup("##TransCtx");
+                showLink = true;
             }
-
-            if (ed::ShowBackgroundContextMenu())
+            else if (ed::ShowBackgroundContextMenu())
             {
-                m_ContextMenuPos = ImGui::GetMousePos();
-                ImGui::OpenPopup("##CanvasCtx");
+                showBg = true;
             }
 
             ed::Suspend();
 
-            ImGui::SetNextWindowPos(m_ContextMenuPos, ImGuiCond_Always);
+            if (showState) { ImGui::OpenPopup("##StateCtx"); }
+            if (showLink) { ImGui::OpenPopup("##TransCtx"); }
+            if (showBg) { ImGui::OpenPopup("##CanvasCtx"); }
 
             if (ImGui::BeginPopup("##StateCtx"))
             {
@@ -447,7 +445,7 @@ namespace Antelope::Editor
                         {
                             if (anim.Controller.Clips.empty())
                             {
-                                ImGui::TextDisabled("Drag a clip to canvas first");
+                                ImGui::TextDisabled("Drag a clip in the Inspector");
                             }
                             else
                             {
@@ -472,8 +470,6 @@ namespace Antelope::Editor
                 ImGui::EndPopup();
             }
 
-            ImGui::SetNextWindowPos(m_ContextMenuPos, ImGuiCond_Always);
-
             if (ImGui::BeginPopup("##TransCtx"))
             {
                 if (m_ContextLinkIdx < anim.Controller.Transitions.size())
@@ -482,8 +478,8 @@ namespace Antelope::Editor
                     ImGui::TextDisabled("Transition");
                     ImGui::Separator();
                     ImGui::DragFloat("Blend", &tr.BlendDuration, 0.01f, 0.0f, 2.0f, "%.2fs");
-                    
-                    if (ImGui::Checkbox("Exit Time", &tr.HasExitTime) && !tr.HasExitTime) {}
+                    ImGui::Checkbox("Exit Time", &tr.HasExitTime);
+
                     if (tr.HasExitTime) { ImGui::DragFloat("Exit At", &tr.ExitTime, 0.01f, 0.0f, 1.0f, "%.2f"); }
                     
                     ImGui::Separator();
@@ -492,8 +488,6 @@ namespace Antelope::Editor
                 }
                 ImGui::EndPopup();
             }
-
-            ImGui::SetNextWindowPos(m_ContextMenuPos, ImGuiCond_Always);
 
             if (ImGui::BeginPopup("##CanvasCtx"))
             {

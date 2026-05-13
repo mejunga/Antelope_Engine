@@ -38,7 +38,6 @@ namespace Antelope::Editor
         uint32_t m_SelectedLink { UINT32_MAX };
         uint32_t m_ContextMenuState { UINT32_MAX };
         uint32_t m_ContextLinkIdx { UINT32_MAX };
-        ImVec2 m_ContextMenuPos { 0.0f, 0.0f };
         char m_NewParamName[64] { "Param" };
         int m_NewParamType { 0 };
         char m_NewStateName[64] { "New State" };

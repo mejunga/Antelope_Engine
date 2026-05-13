@@ -1,9 +1,9 @@
 ProjectName: Unnamed Project
 LastScene: assets://Scenes/BearScene.antelope
 Camera:
-  Position: [0.32952073, 1.5457071, 1.662816]
-  Yaw: -6991.516
-  Pitch: -17.399609
+  Position: [2.9085677, 1.9333284, 0.8128816]
+  Yaw: -7007.6846
+  Pitch: -3.8000576
 Assets:
   - UUID: 12928269464334836696
     Path: Scenes/BearScene.antelope
