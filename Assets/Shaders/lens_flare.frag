@@ -108,7 +108,7 @@ void main()
     {
         vec2 moonPos = pc.moonUV - 0.5;
         moonPos.x *= aspect;
-        float vis = sampleVisibility(pc.moonUV);
+        float vis = (any(lessThan(pc.moonUV, vec2(0.01))) || any(greaterThan(pc.moonUV, vec2(0.99)))) ? 0.0 : 1.0;
         color += vec3(0.8, 0.9, 1.1) * lensflare(uv, moonPos) * vis * clamp(pc.moonIntensity * 0.3, 0.0, 0.3);
     }
 

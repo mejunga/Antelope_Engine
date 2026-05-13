@@ -162,6 +162,7 @@ namespace Antelope
             void CreateSyncObjects();
             void CreateUniformBuffers();
             void CreateObjectBuffers();
+            void CreateBoneBuffers();
             void CreateMaterialBuffers();
             void CreateIndirectBuffers();
             void CreateDescriptorPool();
@@ -192,6 +193,7 @@ namespace Antelope
             VkCommandPool m_TransferCommandPool { VK_NULL_HANDLE };
 
             static constexpr uint32_t MAX_OBJECTS { 128000 };
+            static constexpr uint32_t MAX_BONES { 2000 };
             uint32_t m_MaxFramesInFlight;
             uint32_t m_CurrentFrame { 0 };
             uint32_t m_CurrentImageIndex { 0 };
@@ -204,6 +206,7 @@ namespace Antelope
             std::vector<VkCommandBuffer> m_CommandBuffers;
             std::vector<std::unique_ptr<Buffer>> m_UniformBuffers;
             std::vector<std::unique_ptr<Buffer>> m_ObjectBuffers;
+            std::vector<std::unique_ptr<Buffer>> m_BoneBuffers;
             std::vector<std::unique_ptr<Buffer>> m_MaterialBuffers;
             std::vector<std::unique_ptr<Buffer>> m_IndirectBuffers;
             std::vector<VkDescriptorSet> m_DescriptorSets;

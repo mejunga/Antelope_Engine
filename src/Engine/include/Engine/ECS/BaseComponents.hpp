@@ -2,6 +2,8 @@
 
 #include <Engine/Renderer/Graphics/Mesh.hpp>
 #include <Engine/Core/UUID.hpp>
+#include <Engine/ECS/AnimatorController.hpp>
+#include <Engine/Renderer/Graphics/Model.hpp>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -225,5 +227,39 @@ namespace Antelope
 
         TimeCycleComponent() = default;
         TimeCycleComponent(const TimeCycleComponent&) = default;
+    };
+
+    struct AnimatorComponent
+    {
+        AnimatorController Controller;
+        ModelData* Model { nullptr };
+
+        float Speed { 1.0f };
+
+        uint32_t ActiveState { UINT32_MAX };
+        uint32_t BlendingFrom { UINT32_MAX };
+        float StateTime { 0.0f };
+        float BlendFromTime { 0.0f };
+        float BlendTimer { 0.0f };
+        float BlendDuration { 0.0f };
+
+        std::vector<float> FloatValues;
+        std::vector<int> IntValues;
+        std::vector<bool> BoolValues;
+        std::vector<bool> TriggerValues;
+
+        std::vector<glm::mat4> FinalBoneMatrices;
+
+        AnimatorComponent() = default;
+        AnimatorComponent(const AnimatorComponent&) = default;
+    };
+
+    struct SkinnedMeshComponent
+    {
+        UUID ModelAssetUUID { 0 };
+        ModelData* Model { nullptr };
+
+        SkinnedMeshComponent() = default;
+        SkinnedMeshComponent(const SkinnedMeshComponent&) = default;
     };
 }

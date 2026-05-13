@@ -3,9 +3,35 @@
 
 #include <imgui.h>
 
+#include <vector>
+
 
 namespace Antelope::Editor
 {
+    static void DestroyRecursive(World* world, Entity entity)
+    {
+        if (!entity.HasComponent<RelationshipComponent>())
+        {
+            world->DestroyEntity(entity);
+            return;
+        }
+
+        auto& rel { entity.GetComponent<RelationshipComponent>() };
+        std::vector<entt::entity> children;
+        entt::entity ch { rel.FirstChild };
+
+        while (ch != entt::null)
+        {
+            Entity childEnt { ch, world };
+            ch = childEnt.GetComponent<RelationshipComponent>().NextSibling;
+            children.push_back(childEnt.GetHandle());
+        }
+
+        for (auto c : children) { DestroyRecursive(world, Entity { c, world }); }
+
+        world->DestroyEntity(entity);
+    }
+
     void HierarchyPanel::OnUIRender(World* world, Entity& selectedEntity)
     {
         ImGui::Begin("Hierarchy");
@@ -55,6 +81,12 @@ namespace Antelope::Editor
 
         if (ImGui::IsMouseDown(0) && ImGui::IsWindowHovered())
         {
+            selectedEntity = {};
+        }
+
+        if (ImGui::IsWindowFocused() && ImGui::IsKeyPressed(ImGuiKey_Delete) && selectedEntity)
+        {
+            DestroyRecursive(world, selectedEntity);
             selectedEntity = {};
         }
 

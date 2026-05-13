@@ -13,7 +13,8 @@ struct ObjectData
     mat4 normalMatrix;
     uint posOffset; uint colorOffset; uint normalOffset; uint uvOffset;
     uint faceOffset; uint materialIndex;
-    uint tangentOffset;
+    uint tangentOffset; uint jointOffset;
+    uint boneOffset; uint isAnimated;
     uint entityID;
 };
 

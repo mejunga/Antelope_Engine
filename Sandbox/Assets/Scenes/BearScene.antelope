@@ -21,6 +21,81 @@ AssetBindings:
     AssetUUID: 4479196892811573101
     MeshIndex: 0
 Entities:
+  - Entity: 999000000000000001
+    TagComponent:
+      Tag: Ambient System
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    AmbientComponent:
+      SkyColorDay: [0.26, 0.42, 0.77]
+      HorizonColorDay: [0.65, 0.8, 0.98]
+      GroundColor: [0.23, 0.22, 0.23]
+      SkyColorNight: [0.05, 0.06, 0.13]
+      HorizonColorNight: [0.03, 0.04, 0.08]
+      StarIntensity: 1.5
+      SunEntity: 999000000000000003
+      MoonEntity: 999000000000000004
+      SunMaxIntensity: 5
+      MoonMaxIntensity: 0.15
+    TimeCycleComponent:
+      TimeOfDay: 12
+      TimeScale: 60
+      CurrentDay: 0
+  - Entity: 999000000000000003
+    ParentID: 999000000000000001
+    TagComponent:
+      Tag: Sun
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [1.1693707, -3.1415927, 0]
+      Scale: [1, 1, 1]
+    DirectionalLightComponent:
+      Color: [1, 0.98, 0.92]
+      Intensity: 4.6025243
+  - Entity: 999000000000000004
+    ParentID: 999000000000000001
+    TagComponent:
+      Tag: Moon
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [1.1584743, 2.882497, 0]
+      Scale: [1, 1, 1]
+    DirectionalLightComponent:
+      Color: [0.7, 0.8, 1]
+      Intensity: 0.00038928
+  - Entity: 999000000000000002
+    Disabled: true
+    TagComponent:
+      Tag: PointLight
+    TransformComponent:
+      Translation: [-2, 11.5, -1]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+    PointLightComponent:
+      Color: [0.110371605, 0.61846155, 0.14476526]
+      Intensity: 10
+      Radius: 15
+  - Entity: 1227023538173895054
+    TagComponent:
+      Tag: Ground
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    MeshComponent:
+      Offset: [0, 0, 0]
+      Scale: [5, 1, 5]
+    RigidBodyComponent:
+      Type: 1
+      Mass: 1
+      Friction: 0.2
+      Restitution: 0
+    ColliderComponent:
+      Type: 0
+      Size: [20, 0, 20]
+      Offset: [0, 0, 0]
   - Entity: 16603395071575905790
     TagComponent:
       Tag: Bear_Sculpture_Root
@@ -45,6 +120,27 @@ Entities:
       Type: 0
       Size: [2, 1.2, 1.5]
       Offset: [0.25, 0.6, 0]
+    AnimatorComponent:
+      Speed: 1
+      DefaultState: 0
+      Clips:
+        - Bear|DEMO_Idle
+      States:
+        - Name: New State
+          ClipIndex: 0
+          Speed: 1
+          Loop: true
+          EditorPos: [124, 204]
+      Transitions:
+        - FromState: 4294967295
+          ToState: 0
+          BlendDuration: 0.15
+          HasExitTime: false
+          ExitTime: 1
+          Conditions:
+            []
+      Parameters:
+        []
   - Entity: 12476797892596032151
     ParentID: 8990208328687078625
     TagComponent:
@@ -1124,6 +1220,27 @@ Entities:
       Type: 0
       Size: [2, 1.2, 1.5]
       Offset: [0.25, 0.6, 0]
+    AnimatorComponent:
+      Speed: 1
+      DefaultState: 0
+      Clips:
+        - Bear|DEMO_Snorting
+      States:
+        - Name: New State
+          ClipIndex: 0
+          Speed: 1
+          Loop: true
+          EditorPos: [156, 252]
+      Transitions:
+        - FromState: 4294967295
+          ToState: 0
+          BlendDuration: 0.15
+          HasExitTime: false
+          ExitTime: 1
+          Conditions:
+            []
+      Parameters:
+        []
   - Entity: 9290983550822796326
     ParentID: 9381375498182791711
     TagComponent:
@@ -2191,74 +2308,3 @@ Entities:
     MeshComponent:
       Offset: [0, 0, 0]
       Scale: [1, 1, 1]
-  - Entity: 1227023538173895054
-    TagComponent:
-      Tag: Ground
-    TransformComponent:
-      Translation: [0, 0, 0]
-      Rotation: [0, 0, 0]
-      Scale: [1, 1, 1]
-    MeshComponent:
-      Offset: [0, 0, 0]
-      Scale: [5, 1, 5]
-    RigidBodyComponent:
-      Type: 1
-      Mass: 1
-      Friction: 0.2
-      Restitution: 0
-    ColliderComponent:
-      Type: 0
-      Size: [20, 0, 20]
-      Offset: [0, 0, 0]
-  - Entity: 999000000000000002
-    Disabled: true
-    TagComponent:
-      Tag: PointLight
-    TransformComponent:
-      Translation: [-2, 11.5, -1]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-    PointLightComponent:
-      Color: [0.110371605, 0.61846155, 0.14476526]
-      Intensity: 10
-      Radius: 15
-  - Entity: 999000000000000001
-    TagComponent:
-      Tag: Ambient System
-    AmbientComponent:
-      SkyColorDay: [0.26, 0.42, 0.77]
-      HorizonColorDay: [0.65, 0.8, 0.98]
-      GroundColor: [0.23, 0.22, 0.23]
-      SkyColorNight: [0.05, 0.06, 0.13]
-      HorizonColorNight: [0.03, 0.04, 0.08]
-      StarIntensity: 1.5
-      SunEntity: 999000000000000003
-      MoonEntity: 999000000000000004
-      SunMaxIntensity: 5.0
-      MoonMaxIntensity: 0.15
-    TimeCycleComponent:
-      TimeOfDay: 12.0
-      TimeScale: 60.0
-      CurrentDay: 0
-  - Entity: 999000000000000003
-    ParentID: 999000000000000001
-    TagComponent:
-      Tag: Sun
-    TransformComponent:
-      Translation: [0, 0, 0]
-      Rotation: [0, 0, 0]
-      Scale: [1, 1, 1]
-    DirectionalLightComponent:
-      Color: [1, 0.98, 0.92]
-      Intensity: 5.0
-  - Entity: 999000000000000004
-    ParentID: 999000000000000001
-    TagComponent:
-      Tag: Moon
-    TransformComponent:
-      Translation: [0, 0, 0]
-      Rotation: [0, 0, 0]
-      Scale: [1, 1, 1]
-    DirectionalLightComponent:
-      Color: [0.7, 0.8, 1.0]
-      Intensity: 0.15

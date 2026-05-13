@@ -15,7 +15,8 @@ namespace Antelope
     struct VertexUV { alignas(8)  glm::vec2 uv; };
     struct VertexTangent { alignas(16) glm::vec3 tangent; };
     struct Face { uint32_t v0, v1, v2; uint32_t normalIndex; };
-
+    struct VertexJointData { alignas(16) glm::ivec4 boneIDs; alignas(16) glm::vec4 weights; };
+    
     struct MeshData
     {
         std::pmr::vector<VertexPosition> positions;
@@ -24,6 +25,7 @@ namespace Antelope
         std::pmr::vector<VertexUV> uvs;
         std::pmr::vector<VertexTangent> tangents;
         std::pmr::vector<Face> faces;
+        std::pmr::vector<VertexJointData> joints;
     };
 
     struct MeshHandle
@@ -36,5 +38,6 @@ namespace Antelope
         uint32_t tangentOffset { 0 };
         uint32_t faceOffset { 0 };
         uint32_t faceCount { 0 };
+        uint32_t jointOffset { 0 };
     };
 }

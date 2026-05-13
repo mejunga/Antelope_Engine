@@ -65,6 +65,9 @@ namespace Antelope
         glm::mat3 normalMatrix;
         MeshHandle mesh;
         uint32_t materialIndex { 0 };
+        const glm::mat4* BoneMatrices { nullptr }; 
+        uint32_t BoneCount { 0 };
+        uint32_t isAnimated { 0 };
     #ifdef ANTELOPE_EDITOR_MODE
         uint32_t entityID { 0 };
     #endif
@@ -81,10 +84,14 @@ namespace Antelope
         uint32_t faceOffset { 0 };
         uint32_t materialIndex { 0 };
         uint32_t tangentOffset { 0 };
+        uint32_t jointOffset { 0 };
+        uint32_t boneOffset { 0 };
+        uint32_t isAnimated { 0 };
     #ifdef ANTELOPE_EDITOR_MODE
         uint32_t entityID { 0 };
-    #else
         uint32_t padding { 0 };
+    #else
+        uint32_t padding[2] { 0 };
     #endif
     };
 }

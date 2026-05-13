@@ -5,13 +5,16 @@
 #include <Editor/Panels/PropertiesPanel.hpp>
 #include <Editor/Panels/ConsolePanel.hpp>
 #include <Editor/Panels/ProjectPanel.hpp>
+#include <Editor/Panels/AnimatorPanel.hpp>
 #include <Editor/Core/Project.hpp>
 
 #include <Engine/Core/Application.hpp>
 #include <Engine/ECS/Entity.hpp>
 #include <Engine/Renderer/Graphics/EditorCamera.hpp>
 #include <Engine/Scene/SceneSerializer.hpp>
+#include <Engine/Renderer/Graphics/Model.hpp>
 
+#include <unordered_map>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -37,6 +40,7 @@ namespace Antelope::Editor
             void FreeSceneMeshes();
             void RenderSaveAsPopup();
             void PopulateAssetRecords();
+            Entity SpawnModel(UUID assetUUID, glm::vec3 spawnPos);
 
         private:
             std::filesystem::path m_ProjectRoot;
@@ -49,6 +53,7 @@ namespace Antelope::Editor
             char m_SaveAsNameBuf[128] { "Unnamed" };
 
             std::vector<AssetBinding> m_AssetBindings;
+            std::unordered_map<uint64_t, ModelData> m_ModelCache;
 
             float m_DebounceTimer { 0.0f };
             static constexpr float DEBOUNCE_DELAY { 0.2f };
@@ -59,5 +64,6 @@ namespace Antelope::Editor
             PropertiesPanel m_PropertiesPanel;
             ConsolePanel m_ConsolePanel;
             ProjectPanel m_ProjectPanel;
+            AnimatorPanel m_AnimatorPanel;
     };
 }

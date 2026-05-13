@@ -74,10 +74,63 @@ namespace Antelope::Editor
         }
 
         void* textureID { Application::Get().GetUIContext()->GetSceneTextureID() };
+        
         if (textureID)
         {
             ImGui::Image(reinterpret_cast<ImTextureID>(textureID), viewportSize);
+
+            if (ImGui::BeginDragDropTarget())
+            {
+                if (auto* payload { ImGui::AcceptDragDropPayload("ASSET_MESH") })
+                {
+                    if (m_OnMeshDropped)
+                    {
+                        auto viewportMinRegion { ImGui::GetWindowContentRegionMin() };
+                        auto viewportMaxRegion { ImGui::GetWindowContentRegionMax() };
+                        auto viewportOffset    { ImGui::GetWindowPos() };
+
+                        float bMinX { viewportMinRegion.x + viewportOffset.x };
+                        float bMinY { viewportMinRegion.y + viewportOffset.y };
+                        float vpW { viewportMaxRegion.x - viewportMinRegion.x };
+                        float vpH { viewportMaxRegion.y - viewportMinRegion.y };
+
+                        auto mouse { ImGui::GetMousePos() };
+                        float mx { (mouse.x - bMinX) / vpW };
+                        float my { (mouse.y - bMinY) / vpH };
+
+                        glm::mat4 cameraProj { camera.GetProjectionMatrix(vpW, vpH) };
+                        cameraProj[1][1] *= -1.0f;
+                        glm::mat4 invPV { glm::inverse(cameraProj * camera.GetViewMatrix()) };
+
+                        float ndcX { 2.0f * mx - 1.0f };
+                        float ndcY { 2.0f * my - 1.0f };
+
+                        glm::vec4 n4 { invPV * glm::vec4(ndcX, ndcY, 0.0f, 1.0f) };
+                        glm::vec4 f4 { invPV * glm::vec4(ndcX, ndcY, 1.0f, 1.0f) };
+                        glm::vec3 nearPt { glm::vec3(n4) / n4.w };
+                        glm::vec3 farPt { glm::vec3(f4) / f4.w };
+                        glm::vec3 dir { glm::normalize(farPt - nearPt) };
+
+                        glm::vec3 spawnPos { nearPt + 10.0f * dir };
+
+                        if (glm::abs(dir.y) > 0.0001f)
+                        {
+                            float t { -nearPt.y / dir.y };
+
+                            if (t > 0.0f && t < 500.0f) { spawnPos = nearPt + t * dir; }
+                        }
+
+                        UUID uuid { *reinterpret_cast<const UUID*>(payload->Data) };
+                        Entity spawned { m_OnMeshDropped(uuid, spawnPos) };
+                        
+                        if (spawned) { m_SelectedEntity = spawned; }
+                    }
+                }
+
+                ImGui::EndDragDropTarget();
+            }
         }
+
 
         if (m_ViewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGuizmo::IsOver())
         {

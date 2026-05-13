@@ -10,6 +10,7 @@
 #include <Engine/Debug/Log.hpp>
 #include <Engine/Core/FileSystem.hpp>
 #include <Engine/Renderer/Graphics/Material.hpp>
+#include <Engine/ECS/BaseComponents.hpp>
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -37,10 +38,12 @@ namespace Antelope::Editor
     void AntelopeApp::OnInit()
     {
         FileSystem::Mount("engine", "Assets");
-
         std::filesystem::path assetsDir { m_ProjectRoot / "Assets" };
         FileSystem::Mount("assets", assetsDir);
 
+        m_ProjectPanel.SetAssetsRoot(assetsDir);
+        m_ScenePanel.SetOnMeshDropped([this](UUID uuid, glm::vec3 pos) -> Entity { return SpawnModel(uuid, pos); });
+        m_AnimatorPanel.SetModelCache(&m_ModelCache);
         m_ProjectFilePath = Project::FindProjectFile(m_ProjectRoot);
 
         if (m_ProjectFilePath.empty())
@@ -148,6 +151,71 @@ namespace Antelope::Editor
 
         if (GetWorld()->IsSimulating()) { GetWorld()->StepSimulation(timeStep); }
 
+        {
+            auto& registry { GetWorld()->GetRegistry() };
+
+            for (auto [entity, anim, smc] : registry.view<AnimatorComponent, SkinnedMeshComponent>().each())
+            {
+                if (anim.Model) { continue; }
+
+                auto it { m_ModelCache.find((uint64_t)smc.ModelAssetUUID) };
+
+                if (it != m_ModelCache.end())
+                {
+                    smc.Model = &it->second;
+                    anim.Model = smc.Model;
+                    for (auto& clip : anim.Controller.Clips)
+                    {
+                        if (!clip.Channels.empty()) { continue; }
+                        for (const auto& src : anim.Model->Animations)
+                        {
+                            if (src.Name == clip.Name) { clip = src; break; }
+                        }
+                    }
+                }
+            }
+
+            for (auto [entity, anim, rel] : registry.view<AnimatorComponent, RelationshipComponent>().each())
+            {
+                if (anim.Model) { continue; }
+
+                entt::entity child { rel.FirstChild };
+
+                while (child != entt::null && !anim.Model)
+                {
+                    if (registry.all_of<IDComponent>(child))
+                    {
+                        UUID childUUID { registry.get<IDComponent>(child).ID };
+
+                        for (const auto& binding : m_AssetBindings)
+                        {
+                            if (binding.EntityID != childUUID || binding.ComponentType != "MeshComponent") { continue; }
+
+                            auto it { m_ModelCache.find((uint64_t)binding.AssetUUID) };
+                            
+                            if (it != m_ModelCache.end())
+                            {
+                                anim.Model = &it->second;
+                                for (auto& clip : anim.Controller.Clips)
+                                {
+                                    if (!clip.Channels.empty()) { continue; }
+                                    for (const auto& src : anim.Model->Animations)
+                                    {
+                                        if (src.Name == clip.Name) { clip = src; break; }
+                                    }
+                                }
+                            }
+
+                            break;
+                        }
+                    }
+
+                    auto* cRel { registry.try_get<RelationshipComponent>(child) };
+                    child = cRel ? cRel->NextSibling : entt::null;
+                }
+            }
+        }
+
         m_EditorCamera.OnUpdate(timeStep);
         GetWorld()->OnUpdateEditor(timeStep, m_EditorCamera);
     }
@@ -191,6 +259,7 @@ namespace Antelope::Editor
             ImGui::DockBuilderDockWindow("Properties", dock_id_right);
             ImGui::DockBuilderDockWindow("Console", dock_id_bottom);
             ImGui::DockBuilderDockWindow("Project", dock_id_bottom);
+            ImGui::DockBuilderDockWindow("Animator", dock_id_main);
             ImGui::DockBuilderDockWindow("Scene", dock_id_main);
 
             ImGui::DockBuilderFinish(dockspace_id);
@@ -199,12 +268,18 @@ namespace Antelope::Editor
         ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
 
         m_ScenePanel.OnUIRender(m_EditorCamera);
+        m_AnimatorPanel.OnUIRender(m_ScenePanel.GetSelectedEntity());
         m_HierarchyPanel.OnUIRender(Application::Get().GetWorld().get(), m_ScenePanel.GetSelectedEntity());
         m_PropertiesPanel.OnUIRender(m_ScenePanel.GetSelectedEntity());
         m_ConsolePanel.OnUIRender();
         m_ProjectPanel.OnUIRender();
 
         RenderSaveAsPopup();
+
+        if (ImGui::GetDragDropPayload() != nullptr && !ImGui::IsDragDropPayloadBeingAccepted())
+        {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_NotAllowed);
+        }
 
         ImGui::End();
     }
@@ -243,6 +318,7 @@ namespace Antelope::Editor
         FreeSceneMeshes();
         GetWorld()->Clear();
         m_AssetBindings.clear();
+        m_ModelCache.clear();   
         m_CurrentScenePath = "";
         m_SceneIsUntitled = true;
         std::strncpy(m_SaveAsNameBuf, "Untitled", sizeof(m_SaveAsNameBuf) - 1);
@@ -265,7 +341,7 @@ namespace Antelope::Editor
 
         m_AssetBindings = SceneSerializer::Deserialize(virtualPath, *GetWorld());
 
-        std::unordered_map<uint64_t, ModelData> loadedModels;
+        m_ModelCache.clear();
         auto& registry { GetWorld()->GetRegistry() };
 
         std::unordered_map<uint64_t, entt::entity> entityByUUID;
@@ -296,14 +372,15 @@ namespace Antelope::Editor
 
             uint64_t uuid { (uint64_t)binding.AssetUUID };
 
-            if (loadedModels.find(uuid) == loadedModels.end())
+            if (m_ModelCache.find(uuid) == m_ModelCache.end())
             {
                 const auto& meta { AssetManager::GetMetadata(binding.AssetUUID) };
                 if (!meta.IsValid()) { continue; }
-                loadedModels[uuid] = ModelLoader::Load(meta.FilePath.string(), true);
+                m_ModelCache[uuid] = ModelLoader::Load(meta.FilePath.string(), true);
             }
 
-            const auto& modelData { loadedModels[uuid] };
+            const auto& modelData { m_ModelCache[uuid] };
+
             if (binding.MeshIndex >= modelData.SubMeshes.size()) { continue; }
 
             const auto& subMesh { modelData.SubMeshes[binding.MeshIndex] };
@@ -411,5 +488,27 @@ namespace Antelope::Editor
 
             m_ProjectState.LastKnownAssets.push_back(record);
         }
+    }
+
+    Entity AntelopeApp::SpawnModel(UUID assetUUID, glm::vec3 spawnPos)
+    {
+        const auto& meta { AssetManager::GetMetadata(assetUUID) };
+        
+        if (!meta.IsValid()) { return {}; }
+
+        if (m_ModelCache.find((uint64_t)assetUUID) == m_ModelCache.end())
+        {
+            m_ModelCache[(uint64_t)assetUUID] = ModelLoader::Load(meta.FilePath.string(), true);
+        }
+
+        std::string name { meta.FilePath.stem().string() };
+        Entity root { GetWorld()->SpawnModel(m_ModelCache[(uint64_t)assetUUID], name, assetUUID, &m_AssetBindings) };
+
+        auto& tc { root.GetComponent<TransformComponent>() };
+        tc.Translation = spawnPos;
+        GetWorld()->MarkTransformDirty(root);
+
+        AE_CLIENT_INFO("Spawned model '{0}' into scene.", name);
+        return root;
     }
 }

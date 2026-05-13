@@ -31,7 +31,7 @@ namespace Antelope
 
     struct MeshFreeData
     {
-        VirtualAllocation pos, color, normal, uv, tangent, face;
+        VirtualAllocation pos, color, normal, uv, tangent, face, joint;
     };
 
     struct MeshAllocationResult
@@ -49,6 +49,7 @@ namespace Antelope
         uint32_t uvOffset { 0 };
         uint32_t tangentOffset { 0 };
         uint32_t faceOffset { 0 };
+        uint32_t jointOffset { 0 };
 
         AttribCopyInfo pos;
         AttribCopyInfo color;
@@ -56,6 +57,7 @@ namespace Antelope
         AttribCopyInfo uv;
         AttribCopyInfo tangent;
         AttribCopyInfo face;
+        AttribCopyInfo joint;
     };
 
     class PagedVirtualBuffer
@@ -90,8 +92,8 @@ namespace Antelope
             GpuMemoryAllocator(std::shared_ptr<VulkanContext> context);
             ~GpuMemoryAllocator() = default;
 
-            MeshAllocationResult AllocateMesh(VkDeviceSize posSize, VkDeviceSize colorSize, VkDeviceSize normalSize, 
-                                              VkDeviceSize uvSize, VkDeviceSize tangentSize, VkDeviceSize faceSize, uint32_t meshID);
+            MeshAllocationResult AllocateMesh(VkDeviceSize posSize, VkDeviceSize colorSize, VkDeviceSize normalSize, VkDeviceSize uvSize, 
+                                              VkDeviceSize tangentSize, VkDeviceSize faceSize, VkDeviceSize jointSize, uint32_t meshID);
             void FreeMesh(uint32_t meshID);
 
             inline VkBuffer GetPosBuffer(uint32_t pageIndex = 0) const { return m_PosBuffer->GetBuffer(pageIndex); }
@@ -100,7 +102,8 @@ namespace Antelope
             inline VkBuffer GetUvBuffer(uint32_t pageIndex = 0) const { return m_UvBuffer->GetBuffer(pageIndex); }
             inline VkBuffer GetTangentBuffer(uint32_t pageIndex = 0) const { return m_TangentBuffer->GetBuffer(pageIndex); }
             inline VkBuffer GetFaceBuffer(uint32_t pageIndex = 0) const { return m_FaceBuffer->GetBuffer(pageIndex); }
-
+            inline VkBuffer GetJointBuffer(uint32_t pageIndex = 0) const { return m_JointBuffer->GetBuffer(pageIndex); }
+            
         private:
             std::shared_ptr<VulkanContext> m_Context;
 
@@ -112,6 +115,7 @@ namespace Antelope
             std::shared_ptr<PagedVirtualBuffer> m_UvBuffer;
             std::shared_ptr<PagedVirtualBuffer> m_TangentBuffer;
             std::shared_ptr<PagedVirtualBuffer> m_FaceBuffer;
+            std::shared_ptr<PagedVirtualBuffer> m_JointBuffer;
 
             std::unordered_map<uint32_t, MeshFreeData> m_FreeDataMap;
     };

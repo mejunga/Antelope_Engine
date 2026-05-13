@@ -282,10 +282,40 @@ namespace Antelope
                 cmd.mesh = entry.meshComp->Handle;
                 cmd.entityID = static_cast<uint32_t>(entry.entity);
                 cmd.materialIndex = 0;
+                cmd.BoneMatrices = nullptr;
+                cmd.BoneCount = 0;
+                cmd.isAnimated = 0;
 
                 if (auto* mat { registry.try_get<MaterialComponent>(entry.entity) })
                 {
                     cmd.materialIndex = mat->MaterialIndex;
+                }
+
+                {
+                    AnimatorComponent* animator { nullptr };
+                    entt::entity animRoot { entt::null };
+                    entt::entity e { entry.entity };
+
+                    while (e != entt::null && !animator)
+                    {
+                        animator = registry.try_get<AnimatorComponent>(e);
+                        if (animator) { animRoot = e; }
+                        auto* r { registry.try_get<RelationshipComponent>(e) };
+                        e = r ? r->Parent : entt::null;
+                    }
+
+                    if (animator && animator->ActiveState != UINT32_MAX && !animator->FinalBoneMatrices.empty())
+                    {
+                        cmd.BoneMatrices = animator->FinalBoneMatrices.data();
+                        cmd.BoneCount = static_cast<uint32_t>(animator->FinalBoneMatrices.size());
+                        cmd.isAnimated = 1;
+
+                        if (auto* rootWorld { registry.try_get<WorldMatrixComponent>(animRoot) })
+                        {
+                            cmd.transform = rootWorld->Matrix;
+                            cmd.normalMatrix = glm::mat3(glm::transpose(glm::inverse(cmd.transform)));
+                        }
+                    }
                 }
             }
         }

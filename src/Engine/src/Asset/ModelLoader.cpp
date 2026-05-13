@@ -3,6 +3,7 @@
 #include <Engine/Debug/Log.hpp>
 #include <Engine/Core/Application.hpp>
 #include <Engine/Core/JobSystem.hpp>
+#include <Engine/Renderer/Graphics/Animation.hpp>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -10,10 +11,71 @@
 
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 
 
 namespace Antelope
 {
+    static void SetVertexBoneData(VertexJointData& vertex, uint32_t boneID, float weight)
+    {
+        for (int i { 0 }; i < 4; ++i)
+        {
+            if (vertex.boneIDs[i] < 0)
+            {
+                vertex.boneIDs[i] = boneID;
+                vertex.weights[i] = weight;
+                break;
+            }
+        }
+    }
+
+        static void ProcessAnimation(const aiScene* scene, ModelData& outModel)
+    {
+        if (!scene->HasAnimations()) { return; }
+
+        for (unsigned int i { 0 }; i < scene->mNumAnimations; ++i)
+        {
+            aiAnimation* aiAnim { scene->mAnimations[i] };
+            AnimationClip clip;
+            clip.Name = aiAnim->mName.C_Str();
+            clip.Duration = static_cast<float>(aiAnim->mDuration);
+            clip.TicksPerSecond = static_cast<float>(aiAnim->mTicksPerSecond != 0.0 ? aiAnim->mTicksPerSecond : 24.0);
+
+            for (unsigned int c { 0 }; c < aiAnim->mNumChannels; ++c)
+            {
+                aiNodeAnim* channel { aiAnim->mChannels[c] };
+                BoneAnimationNode nodeAnim;
+                nodeAnim.NodeName = channel->mNodeName.C_Str();
+
+                for (unsigned int p { 0 }; p < channel->mNumPositionKeys; ++p)
+                {
+                    aiVector3D pos { channel->mPositionKeys[p].mValue };
+                    float time { static_cast<float>(channel->mPositionKeys[p].mTime) };
+                    nodeAnim.Positions.push_back({ glm::vec3(pos.x, pos.y, pos.z), time });
+                }
+                
+                for (unsigned int r { 0 }; r < channel->mNumRotationKeys; ++r)
+                {
+                    aiQuaternion rot { channel->mRotationKeys[r].mValue };
+                    float time { static_cast<float>(channel->mRotationKeys[r].mTime) };
+                    nodeAnim.Rotations.push_back({ glm::quat(rot.w, rot.x, rot.y, rot.z), time }); 
+                }
+                
+                for (unsigned int s { 0 }; s < channel->mNumScalingKeys; ++s)
+                {
+                    aiVector3D scale { channel->mScalingKeys[s].mValue };
+                    float time { static_cast<float>(channel->mScalingKeys[s].mTime) };
+                    nodeAnim.Scales.push_back({ glm::vec3(scale.x, scale.y, scale.z), time });
+                }
+
+                clip.Channels.push_back(nodeAnim);
+            }
+
+            outModel.Animations.push_back(clip);
+            AE_ENGINE_INFO("Animation loaded: {0} (Duration: {1} ticks)", clip.Name, clip.Duration);
+        }
+    }
+
     static glm::mat4 ConvertMatrixToGLMFormat(const aiMatrix4x4& from)
     {
         glm::mat4 to;
@@ -74,7 +136,7 @@ namespace Antelope
         return filename;
     }
 
-    static void ProcessMesh(aiMesh* mesh, SubMeshData& out)
+    static void ProcessMesh(aiMesh* mesh, SubMeshData& out, ModelData& outModel, std::mutex& boneMutex)
     {
         out.Name = mesh->mName.C_Str();
         out.MaterialIndex = mesh->mMaterialIndex;
@@ -84,6 +146,7 @@ namespace Antelope
         out.Data.tangents.reserve(mesh->mNumVertices);
         out.Data.colors.reserve(mesh->mNumVertices);
         out.Data.uvs.reserve(mesh->mNumVertices);
+        out.Data.joints.resize(mesh->mNumVertices, { glm::ivec4(-1), glm::vec4(0.0f) });
 
         for (unsigned int i { 0 }; i < mesh->mNumVertices; ++i)
         {
@@ -108,6 +171,28 @@ namespace Antelope
             else
             {
                 out.Data.uvs.push_back({ {0.0f, 0.0f} });
+            }
+        }
+
+        if (mesh->HasBones())
+        {
+            for (unsigned int b { 0 }; b < mesh->mNumBones; b++)
+            {
+                aiBone* bone { mesh->mBones[b] };
+                std::string boneName { bone->mName.C_Str() };
+                uint32_t boneID { 0 };
+                {
+                    std::lock_guard<std::mutex> lock(boneMutex);
+                    if (outModel.BoneMapping.find(boneName) == outModel.BoneMapping.end())
+                    {
+                        boneID = outModel.BoneCount;
+                        outModel.BoneMapping[boneName] = { boneID, ConvertMatrixToGLMFormat(bone->mOffsetMatrix) };
+                        outModel.BoneCount++;
+                    }
+                    else { boneID = outModel.BoneMapping[boneName].id; }
+                }
+                for (unsigned int w { 0 }; w < bone->mNumWeights; w++)
+                    SetVertexBoneData(out.Data.joints[bone->mWeights[w].mVertexId], boneID, bone->mWeights[w].mWeight);
             }
         }
 
@@ -139,6 +224,7 @@ namespace Antelope
         }
 
         ModelData model;
+        std::mutex boneMutex;
         model.SubMeshes.resize(scene->mNumMeshes);
         model.Materials.reserve(scene->mNumMaterials);
 
@@ -149,22 +235,20 @@ namespace Antelope
         {
             for (uint32_t m { 0 }; m < numMeshes; ++m)
             {
-                ProcessMesh(scene->mMeshes[m], model.SubMeshes[m]);
+                ProcessMesh(scene->mMeshes[m], model.SubMeshes[m], model, boneMutex);
             }
         }
         else
         {
             std::vector<JobHandle> handles;
             handles.reserve(numMeshes);
-
             for (uint32_t m { 0 }; m < numMeshes; ++m)
             {
-                handles.push_back(jobSystem.Submit("MeshLoad", [m, scene, &model]()
+                handles.push_back(jobSystem.Submit("MeshLoad", [m, scene, &model, &boneMutex]()
                 {
-                    ProcessMesh(scene->mMeshes[m], model.SubMeshes[m]);
+                    ProcessMesh(scene->mMeshes[m], model.SubMeshes[m], model, boneMutex);
                 }));
             }
-
             for (auto& h : handles) { h.wait(); }
         }
 
@@ -230,6 +314,7 @@ namespace Antelope
         if (preserveSkeleton) 
         {
             ProcessNode(scene->mRootNode, scene, model.RootNode);
+            ProcessAnimation(scene, model);  
             AE_ENGINE_INFO("Model Loaded with Hierarchy: {0}", filepath);
         }
         else

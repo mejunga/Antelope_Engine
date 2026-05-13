@@ -1,14 +1,14 @@
 ProjectName: Unnamed Project
 LastScene: assets://Scenes/BearScene.antelope
 Camera:
-  Position: [8.407407, 2.9379165, -1.9577206]
-  Yaw: -6692.529
-  Pitch: -57.30007
+  Position: [0.32952073, 1.5457071, 1.662816]
+  Yaw: -6991.516
+  Pitch: -17.399609
 Assets:
   - UUID: 12928269464334836696
     Path: Scenes/BearScene.antelope
     Type: 1
-    LastModified: 134215028143159274
+    LastModified: 134231059764328855
   - UUID: 1669307296476971368
     Path: Models/Bear_DEMO.fbx
     Type: 3

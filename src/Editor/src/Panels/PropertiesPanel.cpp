@@ -4,6 +4,7 @@
 #include <Engine/ECS/World.hpp>
 #include <Engine/ECS/System/PhysicsSystem.hpp>
 #include <Engine/Physics/PhysicsContext.hpp>
+#include <Engine/ECS/AnimatorController.hpp>
 
 #include <glm/gtc/type_ptr.hpp>
 
@@ -215,6 +216,81 @@ namespace Antelope::Editor
             }
         });
 
+        DrawComponent<AnimatorComponent>("Animator", entity, [](auto& component)
+        {
+            ImGui::DragFloat("Speed", &component.Speed, 0.01f, 0.0f, 10.0f, "%.2f");
+
+            const char* stateName { "None" };
+            
+            if (component.ActiveState != UINT32_MAX && component.ActiveState < component.Controller.States.size())
+            {
+                stateName = component.Controller.States[component.ActiveState].Name.c_str();
+            }
+
+            ImGui::LabelText("State", "%s", stateName);
+            ImGui::LabelText("State Time", "%.2f", component.StateTime);
+
+            if (!component.Controller.Parameters.empty())
+            {
+                ImGui::Separator();
+                ImGui::TextDisabled("Parameters");
+
+                for (uint32_t i { 0 }; i < component.Controller.Parameters.size(); ++i)
+                {
+                    auto& p { component.Controller.Parameters[i] };
+                    ImGui::PushID(static_cast<int>(i));
+
+                    switch (p.ParamType)
+                    {
+                        case AnimatorParameter::Type::Float:
+                        {
+                            if (i < component.FloatValues.size())
+                            {
+                                ImGui::DragFloat(p.Name.c_str(), &component.FloatValues[i], 0.01f);
+                            }
+
+                            break;
+                        }
+                        case AnimatorParameter::Type::Int:
+                        {
+                            if (i < component.IntValues.size())
+                            {
+                                int v { component.IntValues[i] };
+
+                                if (ImGui::DragInt(p.Name.c_str(), &v)) { component.IntValues[i] = v; }
+                            }
+
+                            break;
+                        }
+                        case AnimatorParameter::Type::Bool:
+                        {
+                            if (i < component.BoolValues.size())
+                            {
+                                bool v { component.BoolValues[i] };
+
+                                if (ImGui::Checkbox(p.Name.c_str(), &v)) { component.BoolValues[i] = v; }
+                            }
+
+                            break;
+                        }
+                        case AnimatorParameter::Type::Trigger:
+                        {
+                            if (ImGui::Button(p.Name.c_str()))
+                            {
+                                if (i < component.TriggerValues.size())
+                                {
+                                    component.TriggerValues[i] = true;
+                                }
+                            }
+
+                            break;
+                        }
+                    }
+                    ImGui::PopID();
+                }
+            }
+        });
+
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
@@ -261,6 +337,15 @@ namespace Antelope::Editor
                 if (ImGui::MenuItem("Ambient"))
                 {
                     entity.AddComponent<AmbientComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
+            if (!entity.HasComponent<AnimatorComponent>())
+            {
+                if (ImGui::MenuItem("Animator"))
+                {
+                    entity.AddComponent<AnimatorComponent>();
                     ImGui::CloseCurrentPopup();
                 }
             }

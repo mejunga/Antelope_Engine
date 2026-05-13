@@ -167,6 +167,78 @@ namespace Antelope
             out << YAML::EndMap;
         }
 
+        if (entity.HasComponent<SkinnedMeshComponent>())
+        {
+            const auto& smc { entity.GetComponent<SkinnedMeshComponent>() };
+            out << YAML::Key << "SkinnedMeshComponent" << YAML::Value << YAML::BeginMap;
+            out << YAML::Key << "ModelAssetUUID" << YAML::Value << (uint64_t)smc.ModelAssetUUID;
+            out << YAML::EndMap;
+        }
+
+        if (entity.HasComponent<AnimatorComponent>())
+        {
+            const auto& anim { entity.GetComponent<AnimatorComponent>() };
+            const auto& ctrl { anim.Controller };
+            out << YAML::Key << "AnimatorComponent" << YAML::Value << YAML::BeginMap;
+            out << YAML::Key << "Speed" << YAML::Value << anim.Speed;
+            out << YAML::Key << "DefaultState" << YAML::Value << ctrl.DefaultStateIndex;
+
+            out << YAML::Key << "Clips" << YAML::Value << YAML::BeginSeq;
+            for (const auto& clip : ctrl.Clips) { out << clip.Name; }
+            out << YAML::EndSeq;
+
+            out << YAML::Key << "States" << YAML::Value << YAML::BeginSeq;
+            for (const auto& state : ctrl.States)
+            {
+                out << YAML::BeginMap;
+                out << YAML::Key << "Name" << YAML::Value << state.Name;
+                out << YAML::Key << "ClipIndex" << YAML::Value << state.ClipIndex;
+                out << YAML::Key << "Speed" << YAML::Value << state.Speed;
+                out << YAML::Key << "Loop" << YAML::Value << state.Loop;
+                out << YAML::Key << "EditorPos" << YAML::Value << YAML::Flow << YAML::BeginSeq << state.EditorPos.x << state.EditorPos.y << YAML::EndSeq;
+                out << YAML::EndMap;
+            }
+            out << YAML::EndSeq;
+
+            out << YAML::Key << "Transitions" << YAML::Value << YAML::BeginSeq;
+            for (const auto& t : ctrl.Transitions)
+            {
+                out << YAML::BeginMap;
+                out << YAML::Key << "FromState" << YAML::Value << t.FromState;
+                out << YAML::Key << "ToState" << YAML::Value << t.ToState;
+                out << YAML::Key << "BlendDuration" << YAML::Value << t.BlendDuration;
+                out << YAML::Key << "HasExitTime" << YAML::Value << t.HasExitTime;
+                out << YAML::Key << "ExitTime" << YAML::Value << t.ExitTime;
+                out << YAML::Key << "Conditions" << YAML::Value << YAML::BeginSeq;
+                for (const auto& cond : t.Conditions)
+                {
+                    out << YAML::BeginMap;
+                    out << YAML::Key << "Param" << YAML::Value << cond.ParameterIndex;
+                    out << YAML::Key << "Op" << YAML::Value << (int)cond.Operation;
+                    out << YAML::Key << "Threshold" << YAML::Value << cond.Threshold;
+                    out << YAML::EndMap;
+                }
+                out << YAML::EndSeq;
+                out << YAML::EndMap;
+            }
+            out << YAML::EndSeq;
+
+            out << YAML::Key << "Parameters" << YAML::Value << YAML::BeginSeq;
+            for (const auto& param : ctrl.Parameters)
+            {
+                out << YAML::BeginMap;
+                out << YAML::Key << "Name" << YAML::Value << param.Name;
+                out << YAML::Key << "Type" << YAML::Value << (int)param.ParamType;
+                out << YAML::Key << "FloatValue" << YAML::Value << param.FloatValue;
+                out << YAML::Key << "IntValue" << YAML::Value << param.IntValue;
+                out << YAML::Key << "BoolValue" << YAML::Value << param.BoolValue;
+                out << YAML::EndMap;
+            }
+            out << YAML::EndSeq;
+
+            out << YAML::EndMap;
+        }
+
         out << YAML::EndMap;
 
         entt::entity child { rel.FirstChild };
@@ -386,6 +458,90 @@ namespace Antelope
                 time.TimeOfDay = node["TimeOfDay"].as<float>();
                 time.TimeScale = node["TimeScale"].as<float>();
                 time.CurrentDay = node["CurrentDay"].as<uint32_t>();
+            }
+
+            if (auto node { entityNode["SkinnedMeshComponent"] })
+            {
+                auto& smc { entity.AddComponent<SkinnedMeshComponent>() };
+                smc.ModelAssetUUID = UUID(node["ModelAssetUUID"].as<uint64_t>());
+            }
+
+            if (auto node { entityNode["AnimatorComponent"] })
+            {
+                auto& anim { entity.HasComponent<AnimatorComponent>()
+                        ? entity.GetComponent<AnimatorComponent>()
+                        : entity.AddComponent<AnimatorComponent>() };
+                auto& ctrl { anim.Controller };
+
+                anim.Speed = node["Speed"].as<float>();
+                ctrl.DefaultStateIndex = node["DefaultState"].as<uint32_t>();
+
+                if (auto clipsNode { node["Clips"] })
+                {
+                    ctrl.Clips.clear();
+                    for (auto cn : clipsNode)
+                    {
+                        AnimationClip clip;
+                        clip.Name = cn.as<std::string>();
+                        ctrl.Clips.push_back(std::move(clip));
+                    }
+                }
+
+                if (auto statesNode { node["States"] })
+                {
+                    ctrl.States.clear();
+                    for (auto sn : statesNode)
+                    {
+                        AnimationStateNode state;
+                        state.Name = sn["Name"].as<std::string>();
+                        state.ClipIndex = sn["ClipIndex"].as<uint32_t>();
+                        state.Speed = sn["Speed"].as<float>();
+                        state.Loop = sn["Loop"].as<bool>();
+                        if (sn["EditorPos"]) { state.EditorPos = { sn["EditorPos"][0].as<float>(), sn["EditorPos"][1].as<float>() }; }
+                        ctrl.States.push_back(std::move(state));
+                    }
+                }
+
+                if (auto transNode { node["Transitions"] })
+                {
+                    ctrl.Transitions.clear();
+                    for (auto tn : transNode)
+                    {
+                        AnimationTransition t;
+                        t.FromState = tn["FromState"].as<uint32_t>();
+                        t.ToState = tn["ToState"].as<uint32_t>();
+                        t.BlendDuration = tn["BlendDuration"].as<float>();
+                        t.HasExitTime = tn["HasExitTime"].as<bool>();
+                        t.ExitTime = tn["ExitTime"].as<float>();
+                        if (auto condsNode { tn["Conditions"] })
+                        {
+                            for (auto cn : condsNode)
+                            {
+                                TransitionCondition cond;
+                                cond.ParameterIndex = cn["Param"].as<uint32_t>();
+                                cond.Operation = (TransitionCondition::Op)cn["Op"].as<int>();
+                                cond.Threshold = cn["Threshold"].as<float>();
+                                t.Conditions.push_back(cond);
+                            }
+                        }
+                        ctrl.Transitions.push_back(std::move(t));
+                    }
+                }
+
+                if (auto paramsNode { node["Parameters"] })
+                {
+                    ctrl.Parameters.clear();
+                    for (auto pn : paramsNode)
+                    {
+                        AnimatorParameter param;
+                        param.Name = pn["Name"].as<std::string>();
+                        param.ParamType = (AnimatorParameter::Type)pn["Type"].as<int>();
+                        param.FloatValue = pn["FloatValue"].as<float>();
+                        param.IntValue = pn["IntValue"].as<int>();
+                        param.BoolValue = pn["BoolValue"].as<bool>();
+                        ctrl.Parameters.push_back(std::move(param));
+                    }
+                }
             }
         }
 

@@ -10,6 +10,7 @@
 #include <Engine/Debug/Log.hpp>
 #include <Engine/Asset/AssetManager.hpp>
 #include <Engine/Asset/TextureManager.hpp>
+#include <Engine/ECS/System/AnimationSystem.hpp>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
@@ -78,6 +79,11 @@ namespace Antelope
         Entity rootEntity { CreateEntity(rootName) };
 
         if (parentEntity) { rootEntity.SetParent(parentEntity); }
+
+        if (modelData.BoneCount > 0)
+        {
+            rootEntity.AddComponent<SkinnedMeshComponent>().ModelAssetUUID = modelAssetUUID;
+        }
 
         glm::vec3 scale, translation, skew;
         glm::quat rotation;
@@ -234,8 +240,9 @@ namespace Antelope
         }
 
         AmbientSystem::OnUpdate(*this, m_IsSimulating ? timeStep : 0.0f);
+        AnimationSystem::Update(*this, m_IsSimulating ? timeStep : 0.0f);
         TransformSystem::OnUpdate(*this);
-        
+
         auto renderer { Application::Get().GetRenderer() };
         RenderSystem::RenderEditor(*this, renderer, camera);
     }
@@ -261,6 +268,7 @@ namespace Antelope
             m_HierarchyDirty = false;
         }
 
+        AnimationSystem::Update(*this, timeStep);
         AmbientSystem::OnUpdate(*this, timeStep);
         TransformSystem::OnUpdate(*this);
 

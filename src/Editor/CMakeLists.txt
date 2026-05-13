@@ -1,5 +1,6 @@
 find_package(imgui CONFIG REQUIRED)
 find_package(imguizmo CONFIG REQUIRED)
+find_package(unofficial-imgui-node-editor CONFIG REQUIRED)
 
 file(GLOB_RECURSE EDITOR_SRC CONFIGURE_DEPENDS "src/*.cpp")
 file(GLOB_RECURSE EDITOR_HDR CONFIGURE_DEPENDS "include/*.hpp")
@@ -13,6 +14,7 @@ target_link_libraries(AntelopeApp PRIVATE
     Antelope 
     imgui::imgui
     imguizmo::imguizmo
+    unofficial::imgui-node-editor::imgui-node-editor
 )
 
 set_target_properties(AntelopeApp PROPERTIES OUTPUT_NAME "AntelopeEngine")

@@ -1,15 +1,23 @@
 #pragma once
 
 #include <Engine/Renderer/Graphics/Mesh.hpp>
+#include <Engine/Renderer/Graphics/Animation.hpp>
 
 #include <glm/glm.hpp>
 
 #include <vector>
 #include <string>
+#include <unordered_map>
 
 
 namespace Antelope
 {
+    struct BoneInfo
+    {
+        uint32_t id { 0 };
+        glm::mat4 offsetMatrix { 1.0f };
+    };
+
     struct SubMeshData
     {
         MeshData Data;
@@ -41,5 +49,10 @@ namespace Antelope
         std::vector<SubMeshData> SubMeshes;
         std::vector<ModelMaterial> Materials;
         ModelNode RootNode;
+
+        std::unordered_map<std::string, BoneInfo> BoneMapping;
+        uint32_t BoneCount { 0 };
+
+        std::vector<AnimationClip> Animations;
     };
 }

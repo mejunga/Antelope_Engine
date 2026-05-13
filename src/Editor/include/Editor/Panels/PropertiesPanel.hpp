@@ -26,22 +26,33 @@ namespace Antelope::Editor
             template<typename T, typename UIFunction>
             void DrawComponent(const std::string& name, Entity entity, UIFunction uiFunction)
             {
-                const ImGuiTreeNodeFlags treeNodeFlags { ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_FramePadding };                
-                
-                if (entity.HasComponent<T>())
-                {
-                    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{ 4, 4 });
-                    ImGui::Separator();
+                const ImGuiTreeNodeFlags treeNodeFlags {
+                    ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed |
+                    ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap |
+                    ImGuiTreeNodeFlags_FramePadding };
 
-                    bool open { ImGui::TreeNodeEx((void*)typeid(T).hash_code(), treeNodeFlags, "%s", name.c_str()) };
-                    ImGui::PopStyleVar();
-                    
-                    if (open)
-                    {
-                        auto& component { entity.GetComponent<T>() };
-                        uiFunction(component);
-                        ImGui::TreePop();
-                    }
+                if (!entity.HasComponent<T>()) { return; }
+
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{ 4, 4 });
+                ImGui::Separator();
+
+                float lineHeight { ImGui::GetFontSize() + ImGui::GetStyle().FramePadding.y * 2.0f };
+                bool open { ImGui::TreeNodeEx((void*)typeid(T).hash_code(), treeNodeFlags, "%s", name.c_str()) };
+                ImGui::PopStyleVar();
+                ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - lineHeight);
+
+                if (ImGui::Button("x", ImVec2{ lineHeight, lineHeight }))
+                {
+                    entity.RemoveComponent<T>();
+                    if (open) { ImGui::TreePop(); }
+                    return;
+                }
+
+                if (open)
+                {
+                    auto& component { entity.GetComponent<T>() };
+                    uiFunction(component);
+                    ImGui::TreePop();
                 }
             }
     };

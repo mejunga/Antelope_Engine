@@ -133,11 +133,6 @@ vec3 CalcRadiance(vec3 L, vec3 V, vec3 N, vec3 radiance, vec3 albedo, float meta
     return (diffuseTerm + specularTerm) * radiance;
 }
 
-vec3 ACESFilm(vec3 x)
-{
-    return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
-}
-
 float InterleavedGradientNoise(vec2 position_screen)
 {
     vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
@@ -171,38 +166,39 @@ float ShadowPCF(vec3 worldPos, vec3 normal)
     vec3 biasedPos = worldPos + normal * normalBias;
 
     float viewDepth = -(ubo.view * vec4(biasedPos, 1.0)).z;
-
     vec2 texelSize = vec2(1.0 / 4096.0);
-    
-    float spread = 8.0; 
+    float spread = 8.0;
 
-    const float blendRange = 3.0;
+    const float blendRange = 15.0;
     float blend = clamp((viewDepth - (ubo.cascadeSplits.x - blendRange)) / (2.0 * blendRange), 0.0, 1.0);
 
-    float shadow = 0.0;
-
-    if (blend < 1.0)
+    float s0 = 1.0;
     {
         vec4 sc = ubo.lightSpaceMatrices[0] * vec4(biasedPos, 1.0);
         sc.xyz /= sc.w;
         sc.xy = sc.xy * 0.5 + 0.5;
-        
-        float s = (sc.z > 1.0 || sc.z < 0.0) ? 1.0 : PCFSample(shadowMap0, sc.xyz, texelSize, spread * 0.6);
-        shadow += s * (1.0 - blend);
+        if (sc.z <= 1.0 && sc.z >= 0.0)
+        {
+            s0 = PCFSample(shadowMap0, sc.xyz, texelSize, spread * 0.6);
+        }
     }
 
-    if (blend > 0.0)
+    if (blend < 0.001) { return s0; }
+
+    float s1 = s0;
     {
         vec4 sc = ubo.lightSpaceMatrices[1] * vec4(biasedPos, 1.0);
         sc.xyz /= sc.w;
         sc.xy = sc.xy * 0.5 + 0.5;
-        
-        float s = (sc.z > 1.0 || sc.z < 0.0) ? 1.0 : PCFSample(shadowMap1, sc.xyz, texelSize, spread * 1.5);
-        shadow += s * blend;
+        if (sc.z <= 1.0 && sc.z >= 0.0)
+        {
+            s1 = PCFSample(shadowMap1, sc.xyz, texelSize, spread * 1.0);
+        }
     }
 
-    return shadow;
+    return mix(s0, s1, blend);
 }
+
 
 void main() 
 {

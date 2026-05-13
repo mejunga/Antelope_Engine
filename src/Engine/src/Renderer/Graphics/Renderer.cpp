@@ -131,6 +131,8 @@ namespace Antelope
         AE_ENGINE_TRACE("Uniform buffers created.");
         CreateObjectBuffers();
         AE_ENGINE_TRACE("Object buffers created.");
+        CreateBoneBuffers();
+        AE_ENGINE_TRACE("Bone buffers created.");
         CreateMaterialBuffers();
         AE_ENGINE_TRACE("Material buffers created.");
         CreateIndirectBuffers();
@@ -235,7 +237,8 @@ namespace Antelope
         VkDeviceSize uvSize { sizeof(VertexUV) * meshData.uvs.size() };
         VkDeviceSize tangentSize { sizeof(VertexTangent) * meshData.tangents.size() };
         VkDeviceSize faceSize { sizeof(Face) * meshData.faces.size() };
-        VkDeviceSize totalSize { posSize + colorSize + normalSize + uvSize + tangentSize + faceSize };
+        VkDeviceSize jointSize { sizeof(VertexJointData) * meshData.joints.size() };
+        VkDeviceSize totalSize { posSize + colorSize + normalSize + uvSize + tangentSize + faceSize + jointSize };
 
         MeshHandle handle {};
 
@@ -244,13 +247,14 @@ namespace Antelope
         handle.MeshID = m_NextMeshID++;
         handle.faceCount = static_cast<uint32_t>(meshData.faces.size());
 
-        MeshAllocationResult allocation { m_GpuAllocator->AllocateMesh(posSize, colorSize, normalSize, uvSize, tangentSize, faceSize, handle.MeshID) };
+        MeshAllocationResult allocation { m_GpuAllocator->AllocateMesh(posSize, colorSize, normalSize, uvSize, tangentSize, faceSize, jointSize, handle.MeshID) };
         handle.posOffset = allocation.posOffset;
         handle.colorOffset = allocation.colorOffset;
         handle.normalOffset = allocation.normalOffset;
         handle.uvOffset = allocation.uvOffset;
         handle.tangentOffset = allocation.tangentOffset;
         handle.faceOffset = allocation.faceOffset;
+        handle.jointOffset = allocation.jointOffset;
         
         VkBuffer stagingBuffer { VK_NULL_HANDLE };
         VmaAllocation stagingAllocation { VK_NULL_HANDLE };
@@ -266,7 +270,8 @@ namespace Antelope
         if (normalSize > 0) { memcpy(dst + writeOffset, meshData.normals.data(), normalSize); writeOffset += normalSize; }
         if (uvSize > 0) { memcpy(dst + writeOffset, meshData.uvs.data(), uvSize); writeOffset += uvSize; }
         if (tangentSize > 0) { memcpy(dst + writeOffset, meshData.tangents.data(), tangentSize); writeOffset += tangentSize; }
-        if (faceSize > 0) { memcpy(dst + writeOffset, meshData.faces.data(), faceSize); }
+        if (faceSize > 0) { memcpy(dst + writeOffset, meshData.faces.data(), faceSize); writeOffset += faceSize; }
+        if (jointSize > 0) { memcpy(dst + writeOffset, meshData.joints.data(), jointSize); writeOffset += jointSize; }
 
         VkCommandBufferAllocateInfo allocateInfo {};
         allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -303,6 +308,7 @@ namespace Antelope
         addCopy(allocation.uv.Buffer, allocation.uv.Offset, uvSize);
         addCopy(allocation.tangent.Buffer, allocation.tangent.Offset, tangentSize);
         addCopy(allocation.face.Buffer, allocation.face.Offset, faceSize);
+        addCopy(allocation.joint.Buffer, allocation.joint.Offset, jointSize);
 
         vkEndCommandBuffer(commandBuffer);
 
@@ -518,19 +524,23 @@ namespace Antelope
         builder.AddBinding(9, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
         builder.AddBinding(10, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
         builder.AddBinding(11, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+        builder.AddBinding(12, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
+        builder.AddBinding(13, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT); 
 
-        std::array<VkDescriptorBindingFlags, 12> bindingFlags {};
+        std::array<VkDescriptorBindingFlags, 14> bindingFlags {};
 
-        for (int i { 0 }; i < 12; ++i) 
+        for (int i { 0 }; i < 14; ++i) 
         {
             bindingFlags[i] = 0;
         }
 
         bindingFlags[7] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+        bindingFlags[12] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
+        bindingFlags[13] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
 
         VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo {};
         flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
-        flagsInfo.bindingCount = 12;
+        flagsInfo.bindingCount = 14;
         flagsInfo.pBindingFlags = bindingFlags.data();
 
         m_DescriptorSetLayout = builder.Build(m_Context, &flagsInfo, VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT);
@@ -568,11 +578,7 @@ namespace Antelope
             if (vkGetFenceStatus(m_Context->GetDevice(), transfer.fence) == VK_SUCCESS)
             {
                 vkDestroyFence(m_Context->GetDevice(), transfer.fence, nullptr);
-
                 VkCommandPool poolToUse { (transfer.meshID == 0) ? m_CommandPool : m_TransferCommandPool };
-                VkQueue queueToWait { (transfer.meshID == 0) ? m_Context->GetGraphicsQueue() : m_Context->GetTransferQueue() };
-                vkQueueWaitIdle(queueToWait);
-
                 vkFreeCommandBuffers(m_Context->GetDevice(), poolToUse, 1, &transfer.commandBuffer);
 
                 if (transfer.stagingAllocation != VK_NULL_HANDLE)
@@ -680,6 +686,8 @@ namespace Antelope
 
         ObjectData* objectDataMap { static_cast<ObjectData*>(m_ObjectBuffers[m_CurrentFrame]->GetMappedMemory()) };
         VkDrawIndirectCommand* indirectCommandsMap { static_cast<VkDrawIndirectCommand*>(m_IndirectBuffers[m_CurrentFrame]->GetMappedMemory()) };
+        glm::mat4* boneDataMap { static_cast<glm::mat4*>(m_BoneBuffers[m_CurrentFrame]->GetMappedMemory()) };
+        std::atomic<uint32_t> currentGlobalBoneOffset { 0 };
 
         uint32_t objectCount { 0 };
         std::vector<uint32_t> selectedIndirectIndices;
@@ -704,6 +712,7 @@ namespace Antelope
                     objectDataMap[i].colorOffset = command.mesh.colorOffset;
                     objectDataMap[i].normalOffset = command.mesh.normalOffset;
                     objectDataMap[i].faceOffset = command.mesh.faceOffset;
+                    objectDataMap[i].jointOffset = command.mesh.jointOffset;
                     objectDataMap[i].uvOffset = command.mesh.uvOffset;
                     objectDataMap[i].tangentOffset = command.mesh.tangentOffset;
                     objectDataMap[i].materialIndex = command.materialIndex;
@@ -714,6 +723,20 @@ namespace Antelope
                     indirectCommandsMap[i].instanceCount = 1;
                     indirectCommandsMap[i].firstVertex = 0;
                     indirectCommandsMap[i].firstInstance = i;
+
+                    if (command.isAnimated && command.BoneMatrices)
+                    {
+                        uint32_t offset { currentGlobalBoneOffset.fetch_add(command.BoneCount) };
+                        memcpy(boneDataMap + offset, command.BoneMatrices, command.BoneCount * sizeof(glm::mat4));
+
+                        objectDataMap[i].boneOffset = offset;
+                        objectDataMap[i].isAnimated = 1;
+                    }
+                    else
+                    {
+                        objectDataMap[i].boneOffset = 0;
+                        objectDataMap[i].isAnimated = 0;
+                    }
                 }
             }
             else
@@ -727,7 +750,7 @@ namespace Antelope
                     uint32_t begin { b * k_BatchSize };
                     uint32_t end { objectCount < begin + k_BatchSize ? objectCount : begin + k_BatchSize };
 
-                    s_DrawHandles.push_back(jobSystem.Submit("ObjFill", [begin, end, &renderList, objectDataMap, indirectCommandsMap]()
+                    s_DrawHandles.push_back(jobSystem.Submit("ObjFill", [begin, end, &renderList, objectDataMap, indirectCommandsMap, &currentGlobalBoneOffset, boneDataMap]()
                     {
                         for (uint32_t i { begin }; i < end; ++i)
                         {
@@ -738,6 +761,7 @@ namespace Antelope
                             objectDataMap[i].colorOffset = command.mesh.colorOffset;
                             objectDataMap[i].normalOffset = command.mesh.normalOffset;
                             objectDataMap[i].faceOffset = command.mesh.faceOffset;
+                            objectDataMap[i].jointOffset = command.mesh.jointOffset;
                             objectDataMap[i].uvOffset = command.mesh.uvOffset;
                             objectDataMap[i].tangentOffset = command.mesh.tangentOffset;
                             objectDataMap[i].materialIndex = command.materialIndex;
@@ -748,6 +772,20 @@ namespace Antelope
                             indirectCommandsMap[i].instanceCount = 1;
                             indirectCommandsMap[i].firstVertex = 0;
                             indirectCommandsMap[i].firstInstance = i;
+
+                            if (command.isAnimated && command.BoneMatrices)
+                            {
+                                uint32_t offset { currentGlobalBoneOffset.fetch_add(command.BoneCount) };
+                                memcpy(boneDataMap + offset, command.BoneMatrices, command.BoneCount * sizeof(glm::mat4));
+                                
+                                objectDataMap[i].boneOffset = offset;
+                                objectDataMap[i].isAnimated = 1;
+                            }
+                            else
+                            {
+                                objectDataMap[i].boneOffset = 0;
+                                objectDataMap[i].isAnimated = 0;
+                            }
                         }
                     }));
                 }
@@ -813,16 +851,6 @@ namespace Antelope
         {
             vkCmdPushConstants(cmd, m_PipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(uint32_t), &cascade);
             m_ShadowPasses[cascade]->Draw(cmd, m_DescriptorSets[m_CurrentFrame], objectCount, m_IndirectBuffers[m_CurrentFrame]->GetBuffer());
-
-            VkImageMemoryBarrier shadowBarrier {};
-            shadowBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            shadowBarrier.oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-            shadowBarrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-            shadowBarrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-            shadowBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            shadowBarrier.image = m_ShadowPasses[cascade]->GetDepthImage();
-            shadowBarrier.subresourceRange = { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1 };
-            vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &shadowBarrier);
         }
 
         VkRenderPassBeginInfo renderPassInfo {};
@@ -915,7 +943,8 @@ namespace Antelope
 
         glm::vec2 sunUV { (cameraData.sunDirection.w  > 0.5f) ? projectToScreenUV(cameraData.sunDirection)  : glm::vec2(-2.0f) };
         glm::vec2 moonUV { (cameraData.moonDirection.w > 0.5f) ? projectToScreenUV(cameraData.moonDirection) : glm::vec2(-2.0f) };
-
+        
+        float nightFade = 1.0f - glm::smoothstep(0.0f, 0.35f, cameraData.sunDirection.y);
         m_BloomPass->Draw(cmd, m_SceneHDRTexture, 1.8f, 0.1f, sunUV, cameraData.sunColor.a, moonUV, cameraData.moonColor.a);
 
         vkCmdBeginRenderPass(cmd, &postPassInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -1248,6 +1277,22 @@ namespace Antelope
         }
     }
 
+    void Renderer::CreateBoneBuffers()
+    {
+        VkDeviceSize bufferSize { sizeof(glm::mat4) * 2000 };
+        m_BoneBuffers.reserve(m_MaxFramesInFlight);
+        for (size_t i { 0 }; i < m_MaxFramesInFlight; i++)
+        {
+            m_BoneBuffers.push_back(std::make_unique<Buffer>(
+                m_Context, 
+                bufferSize, 
+                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, 
+                VMA_MEMORY_USAGE_AUTO, 
+                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT
+            ));
+        }
+    }
+
     void Renderer::CreateMaterialBuffers()
     {
         VkDeviceSize bufferSize { sizeof(PBRMaterialData) * MAX_MATERIALS };
@@ -1328,6 +1373,8 @@ namespace Antelope
             writer.WriteBuffer(9, m_GpuAllocator->GetTangentBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
             writer.WriteImage(10, m_ShadowPasses[0]->GetDepthImageView(), m_ShadowPasses[0]->GetSampler(), VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
             writer.WriteImage(11, m_ShadowPasses[1]->GetDepthImageView(), m_ShadowPasses[1]->GetSampler(), VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+            writer.WriteBuffer(12, m_GpuAllocator->GetJointBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+            writer.WriteBuffer(13, m_BoneBuffers[i]->GetBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
             writer.UpdateSet(m_Context, m_DescriptorSets[i]);
         }
     }
