@@ -29,6 +29,8 @@ namespace Antelope
         };
     }
 
+    static auto s_EditorStartTime { std::chrono::high_resolution_clock::now() };
+
     static void GatherLights(entt::registry& registry, UniformBufferObject& ubo)
     {
         entt::entity sunEnt  { entt::null };
@@ -120,11 +122,20 @@ namespace Antelope
 
             float fovY { glm::radians(60.0f) };
             float zNear { 0.1f };
-            auto camQuery { registry.view<CameraComponent>() };
-            for (auto [ent, cam] : camQuery.each())
+            uint32_t bestCamPrio { 0 };
+            bool camFound { false };
+            
+            for (auto [ent, cam] : registry.view<CameraComponent>().each())
             {
-                if (cam.IsPrimary) { fovY = cam.PerspectiveFOV; zNear = cam.PerspectiveNear; break; }
+                if (!camFound || cam.prio > bestCamPrio)
+                {
+                    fovY = cam.PerspectiveFOV;
+                    zNear = cam.PerspectiveNear;
+                    bestCamPrio = cam.prio;
+                    camFound = true;
+                }
             }
+
 
             float tanHalfFovY { tanf(fovY * 0.5f) };
             float tanHalfFovX { 1.0f / ubo.proj[0][0] };
@@ -229,25 +240,8 @@ namespace Antelope
         else { ubo.ambientEnabled = 0.0f; }
     }
 
-#ifdef ANTELOPE_EDITOR_MODE
-    void RenderSystem::RenderEditor(World& world, std::shared_ptr<Renderer> renderer, const EditorCamera& camera)
+    static void RenderEditorInternal(World& world, std::shared_ptr<Renderer> renderer, UniformBufferObject cameraUBO)
     {
-        if (!renderer) { return; }
-
-        UniformBufferObject cameraUBO {};
-        cameraUBO.view = camera.GetViewMatrix();
-        
-        auto renderExtent { renderer->GetFinalLDRTexture()->GetExtent() };
-        cameraUBO.proj = camera.GetProjectionMatrix(
-            static_cast<float>(renderExtent.width), 
-            static_cast<float>(renderExtent.height)
-        );
-
-        glm::mat4 invView { glm::inverse(cameraUBO.view) };
-        cameraUBO.cameraPos = glm::vec4(invView[3][0], invView[3][1], invView[3][2], 1.0f);
-        static auto s_StartTime { std::chrono::high_resolution_clock::now() };
-        cameraUBO.time = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - s_StartTime).count();
-
         GatherLights(world.GetRegistry(), cameraUBO);
 
         auto& registry { world.GetRegistry() };
@@ -345,10 +339,40 @@ namespace Antelope
                         cmd.mesh = entry.meshComp->Handle;
                         cmd.entityID = static_cast<uint32_t>(entry.entity);
                         cmd.materialIndex = 0;
+                        cmd.BoneMatrices = nullptr;
+                        cmd.BoneCount = 0;
+                        cmd.isAnimated = 0;
 
                         if (auto* mat { registry.try_get<MaterialComponent>(entry.entity) })
                         {
                             cmd.materialIndex = mat->MaterialIndex;
+                        }
+
+                        {
+                            AnimatorComponent* animator { nullptr };
+                            entt::entity animRoot { entt::null };
+                            entt::entity e { entry.entity };
+
+                            while (e != entt::null && !animator)
+                            {
+                                animator = registry.try_get<AnimatorComponent>(e);
+                                if (animator) { animRoot = e; }
+                                auto* r { registry.try_get<RelationshipComponent>(e) };
+                                e = r ? r->Parent : entt::null;
+                            }
+
+                            if (animator && animator->ActiveState != UINT32_MAX && !animator->FinalBoneMatrices.empty())
+                            {
+                                cmd.BoneMatrices = animator->FinalBoneMatrices.data();
+                                cmd.BoneCount = static_cast<uint32_t>(animator->FinalBoneMatrices.size());
+                                cmd.isAnimated = 1;
+
+                                if (auto* rootWorld { registry.try_get<WorldMatrixComponent>(animRoot) })
+                                {
+                                    cmd.transform = rootWorld->Matrix;
+                                    cmd.normalMatrix = glm::mat3(glm::transpose(glm::inverse(cmd.transform)));
+                                }
+                            }
                         }
                     }
                 }));
@@ -358,6 +382,45 @@ namespace Antelope
         }
 
         renderer->DrawFrame(cameraUBO, renderList.first(count));
+    }
+
+#ifdef ANTELOPE_EDITOR_MODE
+    void RenderSystem::RenderEditor(World& world, std::shared_ptr<Renderer> renderer, const EditorCamera& camera)
+    {
+        if (!renderer) { return; }
+
+        UniformBufferObject cameraUBO {};
+        cameraUBO.view = camera.GetViewMatrix();
+        auto renderExtent { renderer->GetFinalLDRTexture()->GetExtent() };
+        cameraUBO.proj = camera.GetProjectionMatrix(
+            static_cast<float>(renderExtent.width),
+            static_cast<float>(renderExtent.height)
+        );
+        glm::mat4 invView { glm::inverse(cameraUBO.view) };
+        cameraUBO.cameraPos = glm::vec4(invView[3][0], invView[3][1], invView[3][2], 1.0f);
+        cameraUBO.time = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - s_EditorStartTime).count();
+
+        RenderEditorInternal(world, renderer, cameraUBO);
+    }
+
+    void RenderSystem::RenderEditor(World& world, std::shared_ptr<Renderer> renderer, const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos)
+    {
+        if (!renderer) { return; }
+
+        UniformBufferObject cameraUBO {};
+        cameraUBO.view = view;
+        cameraUBO.proj = proj;
+        cameraUBO.cameraPos = glm::vec4(cameraPos, 1.0f);
+        cameraUBO.time = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - s_EditorStartTime).count();
+
+        RenderEditorInternal(world, renderer, cameraUBO);
+    }
+    
+    void RenderSystem::RenderBlack(std::shared_ptr<Renderer> renderer)
+    {
+        if (!renderer) { return; }
+        UniformBufferObject nullUBO {};
+        renderer->DrawFrame(nullUBO, {});
     }
 #endif
 

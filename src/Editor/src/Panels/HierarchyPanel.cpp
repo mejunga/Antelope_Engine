@@ -8,6 +8,44 @@
 
 namespace Antelope::Editor
 {
+    static void UnlinkFromParent(World* world, Entity entity)
+    {
+        if (!entity.HasComponent<RelationshipComponent>()) { return; }
+        auto& rel { entity.GetComponent<RelationshipComponent>() };
+
+        if (rel.Parent != entt::null)
+        {
+            Entity parentEnt { rel.Parent, world };
+            if (parentEnt.HasComponent<RelationshipComponent>())
+            {
+                auto& parentRel { parentEnt.GetComponent<RelationshipComponent>() };
+                if (parentRel.FirstChild == entity.GetHandle())
+                {
+                    parentRel.FirstChild = rel.NextSibling;
+                }
+            }
+        }
+        if (rel.PreviousSibling != entt::null)
+        {
+            Entity prevEnt { rel.PreviousSibling, world };
+            if (prevEnt.HasComponent<RelationshipComponent>())
+            {
+                prevEnt.GetComponent<RelationshipComponent>().NextSibling = rel.NextSibling;
+            }
+        }
+        if (rel.NextSibling != entt::null)
+        {
+            Entity nextEnt { rel.NextSibling, world };
+            if (nextEnt.HasComponent<RelationshipComponent>())
+            {
+                nextEnt.GetComponent<RelationshipComponent>().PreviousSibling = rel.PreviousSibling;
+            }
+        }
+        rel.Parent = entt::null;
+        rel.PreviousSibling = entt::null;
+        rel.NextSibling = entt::null;
+    }
+
     static void DestroyRecursive(World* world, Entity entity)
     {
         if (!entity.HasComponent<RelationshipComponent>())
@@ -15,6 +53,8 @@ namespace Antelope::Editor
             world->DestroyEntity(entity);
             return;
         }
+
+        UnlinkFromParent(world, entity);
 
         auto& rel { entity.GetComponent<RelationshipComponent>() };
         std::vector<entt::entity> children;
@@ -79,6 +119,30 @@ namespace Antelope::Editor
             }
         }
 
+        if (ImGui::GetDragDropPayload() != nullptr)
+        {
+            ImVec2 avail { ImGui::GetContentRegionAvail() };
+
+            if (avail.y > 1.0f)
+            {
+                ImGui::Dummy(avail);
+
+                if (ImGui::BeginDragDropTarget())
+                {
+                    if (const ImGuiPayload* payload { ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY") })
+                    {
+                        entt::entity draggedHandle { *static_cast<const entt::entity*>(payload->Data) };
+                        Entity dragged { draggedHandle, world };
+                        UnlinkFromParent(world, dragged);
+                        world->MarkTransformDirty(dragged);
+                        world->MarkHierarchyDirty();
+                    }
+                    
+                    ImGui::EndDragDropTarget();
+                }
+            }
+        }
+
         if (ImGui::IsMouseDown(0) && ImGui::IsWindowHovered())
         {
             selectedEntity = {};
@@ -90,9 +154,19 @@ namespace Antelope::Editor
             selectedEntity = {};
         }
 
+        if (ImGui::BeginPopupContextWindow("##hier_ctx", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
+        {
+            if (ImGui::MenuItem("Create Empty Entity"))
+            {
+                selectedEntity = world->CreateEntity("Entity");
+            }
+            ImGui::EndPopup();
+        }
+
         if (m_SelectionChanged)
         {
             m_NodesToExpand.clear();
+
             m_LastSelectedEntity = selectedEntity;
         }
 
@@ -101,10 +175,11 @@ namespace Antelope::Editor
 
     void HierarchyPanel::DrawEntityNode(Entity entity, Entity& selectedEntity)
     {
+        if (!entity.HasComponent<TagComponent>()) { return; }
+
         auto& tag { entity.GetComponent<TagComponent>().Tag };
-        
         ImGuiTreeNodeFlags flags { ((selectedEntity == entity) ? ImGuiTreeNodeFlags_Selected : 0) | ImGuiTreeNodeFlags_OpenOnArrow };
-        flags |= ImGuiTreeNodeFlags_SpanAvailWidth; 
+        flags |= ImGuiTreeNodeFlags_SpanAvailWidth;
 
         bool hasChildren { false };
         if (entity.HasComponent<RelationshipComponent>())
@@ -112,7 +187,7 @@ namespace Antelope::Editor
             hasChildren = (entity.GetComponent<RelationshipComponent>().FirstChild != entt::null);
         }
 
-        if (!hasChildren) 
+        if (!hasChildren)
         {
             flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
         }
@@ -123,7 +198,31 @@ namespace Antelope::Editor
         }
 
         bool opened { ImGui::TreeNodeEx((void*)(uint64_t)(uint32_t)entity.GetHandle(), flags, "%s", tag.c_str()) };
-        
+
+        if (ImGui::BeginDragDropSource())
+        {
+            entt::entity handle { entity.GetHandle() };
+            ImGui::SetDragDropPayload("HIERARCHY_ENTITY", &handle, sizeof(entt::entity));
+            ImGui::Text("%s", tag.c_str());
+            ImGui::EndDragDropSource();
+        }
+
+        if (ImGui::BeginDragDropTarget())
+        {
+            if (const ImGuiPayload* payload { ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY") })
+            {
+                entt::entity draggedHandle { *static_cast<const entt::entity*>(payload->Data) };
+                if (draggedHandle != entity.GetHandle())
+                {
+                    Entity dragged { draggedHandle, entity.GetWorld() };
+                    UnlinkFromParent(entity.GetWorld(), dragged);
+                    entity.GetWorld()->MarkTransformDirty(dragged);
+                    dragged.SetParent(entity);
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
+
         if (ImGui::IsItemClicked())
         {
             selectedEntity = entity;
@@ -137,15 +236,14 @@ namespace Antelope::Editor
         if (opened && hasChildren)
         {
             entt::entity childID { entity.GetComponent<RelationshipComponent>().FirstChild };
-            
+
             while (childID != entt::null)
             {
                 Entity child { childID, entity.GetWorld() };
                 DrawEntityNode(child, selectedEntity);
-                
                 childID = child.GetComponent<RelationshipComponent>().NextSibling;
             }
-            
+
             ImGui::TreePop();
         }
     }

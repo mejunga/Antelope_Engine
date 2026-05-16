@@ -74,7 +74,7 @@ namespace Antelope
             out << YAML::Key << "FOV" << YAML::Value << cam.PerspectiveFOV;
             out << YAML::Key << "Near" << YAML::Value << cam.PerspectiveNear;
             out << YAML::Key << "Far" << YAML::Value << cam.PerspectiveFar;
-            out << YAML::Key << "IsPrimary" << YAML::Value << cam.IsPrimary;
+            out << YAML::Key << "Prio" << YAML::Value << cam.prio;
             out << YAML::EndMap;
         }
 
@@ -97,6 +97,11 @@ namespace Antelope
             out << YAML::Key << "Size" << YAML::Value; EmitVec3(out, col.Size);
             out << YAML::Key << "Offset" << YAML::Value; EmitVec3(out, col.Offset);
             out << YAML::EndMap;
+        }
+
+        if (entity.HasComponent<MeshColliderComponent>())
+        {
+            out << YAML::Key << "MeshColliderComponent" << YAML::Value << true;
         }
 
         if (entity.HasComponent<DirectionalLightComponent>())
@@ -377,7 +382,7 @@ namespace Antelope
                 cam.PerspectiveFOV = node["FOV"].as<float>();
                 cam.PerspectiveNear = node["Near"].as<float>();
                 cam.PerspectiveFar = node["Far"].as<float>();
-                cam.IsPrimary = node["IsPrimary"].as<bool>();
+                cam.prio = node["Prio"].as<uint32_t>();
             }
 
             if (auto node { entityNode["RigidBodyComponent"] })
@@ -395,6 +400,11 @@ namespace Antelope
                 col.Type = (ColliderType)node["Type"].as<int>();
                 col.Size = DecodeVec3(node["Size"]);
                 col.Offset = DecodeVec3(node["Offset"]);
+            }
+
+            if (entityNode["MeshColliderComponent"])
+            {
+                entity.AddComponent<MeshColliderComponent>();
             }
 
             if (auto node { entityNode["DirectionalLightComponent"] })

@@ -19,6 +19,11 @@ namespace Antelope::Editor
         m_SelectedDir = assetsRoot;
     }
 
+    void ProjectPanel::SetModelCache(std::unordered_map<uint64_t, ModelData>* cache)
+    {
+        m_ModelCache = cache;
+    }
+
     void ProjectPanel::OnUIRender()
     {
         ImGui::Begin("Project");
@@ -124,8 +129,16 @@ namespace Antelope::Editor
                 const auto& meta { AssetManager::GetMetadata(uuid) };
                 if (meta.IsValid())
                 {
-                    ModelData data { ModelLoader::Load(meta.FilePath.string(), true) };
-                    m_AnimCache[(uint64_t)uuid] = std::move(data.Animations);
+                    if (m_ModelCache && m_ModelCache->count((uint64_t)uuid))
+                    {
+                        m_AnimCache[(uint64_t)uuid] = (*m_ModelCache)[(uint64_t)uuid].Animations;
+                    }
+                    else
+                    {
+                        ModelData data { ModelLoader::Load(meta.FilePath.string(), true) };
+                        m_AnimCache[(uint64_t)uuid] = data.Animations;
+                        if (m_ModelCache) { (*m_ModelCache)[(uint64_t)uuid] = std::move(data); }
+                    }
                 }
                 else
                 {

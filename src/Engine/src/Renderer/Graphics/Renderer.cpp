@@ -426,7 +426,12 @@ namespace Antelope
         stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
         
         VmaAllocationInfo stagingAllocResult {};
-        vmaCreateBuffer(m_Context->GetAllocator(), &stagingInfo, &stagingAllocInfo, &outBuffer, &outAllocation, &stagingAllocResult);
+        if (vmaCreateBuffer(m_Context->GetAllocator(), &stagingInfo, &stagingAllocInfo, &outBuffer, &outAllocation, &stagingAllocResult) != VK_SUCCESS)
+        {
+            AE_ENGINE_CRITICAL("UploadMesh: staging buffer allocation failed (size = {} bytes)", bufferSize);
+            if (outMapped) { *outMapped = nullptr; }
+            return;
+        }
         
         if (outMapped) { *outMapped = stagingAllocResult.pMappedData; }
         if (data) { memcpy(stagingAllocResult.pMappedData, data, bufferSize); }

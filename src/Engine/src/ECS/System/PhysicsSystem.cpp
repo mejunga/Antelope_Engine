@@ -10,6 +10,7 @@
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
 
 
@@ -24,6 +25,71 @@ namespace Antelope
     static JPH::ShapeRefC CreateEntityShape(World& world, entt::entity entity)
     {
         auto& registry { world.GetRegistry() };
+
+        if (registry.all_of<MeshColliderComponent>(entity))
+        {
+            auto& mc { registry.get<MeshColliderComponent>(entity) };
+
+            if (mc.CachedShape)
+            {
+                return *static_cast<JPH::ShapeRefC*>(mc.CachedShape.get());
+            }
+
+            if (!mc.Vertices.empty() && mc.Indices.size() >= 3)
+            {
+                glm::vec3 scale { 1.0f };
+
+                if (registry.all_of<WorldMatrixComponent>(entity))
+                {
+                    const auto& wm { registry.get<WorldMatrixComponent>(entity).Matrix };
+                    scale = { glm::length(glm::vec3(wm[0])), glm::length(glm::vec3(wm[1])), glm::length(glm::vec3(wm[2])) };
+                }
+
+                JPH::VertexList verts;
+                verts.reserve(mc.Vertices.size());
+
+                for (const auto& v : mc.Vertices)
+                {
+                    verts.push_back({ v.x * scale.x, v.y * scale.y, v.z * scale.z });
+                }
+
+                JPH::IndexedTriangleList tris;
+                tris.reserve(mc.Indices.size() / 3);
+
+                for (size_t i { 0 }; i + 2 < mc.Indices.size(); i += 3)
+                {
+                    tris.push_back(JPH::IndexedTriangle(mc.Indices[i], mc.Indices[i + 1], mc.Indices[i + 2]));
+                }
+
+                auto result { JPH::MeshShapeSettings(std::move(verts), std::move(tris)).Create() };
+
+                if (result.IsValid())
+                {
+                    if (registry.all_of<RigidBodyComponent>(entity))
+                    {
+                        auto type { registry.get<RigidBodyComponent>(entity).Type };
+                        
+                        if (type == RigidBodyType::Dynamic || type == RigidBodyType::Kinematic)
+                        {
+                            AE_ENGINE_WARN("MeshCollider on Dynamic/Kinematic body is not supported — falling back to box.");
+                        }
+                        else
+                        {
+                            auto* ref { new JPH::ShapeRefC(result.Get()) };
+                            mc.CachedShape = std::shared_ptr<void>(ref, [](void* p){ delete static_cast<JPH::ShapeRefC*>(p); });
+                            return result.Get();
+                        }
+                    }
+                    else
+                    {
+                        auto* ref { new JPH::ShapeRefC(result.Get()) };
+                        mc.CachedShape = std::shared_ptr<void>(ref, [](void* p){ delete static_cast<JPH::ShapeRefC*>(p); });
+                        return result.Get();
+                    }
+                }
+            }
+        }
+
         JPH::ShapeRefC shape;
 
         std::vector<glm::vec3> childOffsets;
@@ -179,7 +245,8 @@ namespace Antelope
             const auto& worldMat { registry.get<WorldMatrixComponent>(entity) };
             glm::mat3 rotMat { worldMat.Matrix };
             
-            glm::vec3 globalScale {
+            glm::vec3 globalScale
+            {
                 glm::length(rotMat[0]),
                 glm::length(rotMat[1]),
                 glm::length(rotMat[2])
@@ -201,7 +268,7 @@ namespace Antelope
 
             JPH::BodyCreationSettings bodySettings(
                 shape,
-                ToJoltVec3(worldPosition + worldRotation * (colliderOffset * globalScale)),
+                ToJoltVec3(worldPosition + worldRotation * colliderOffset),
                 ToJoltQuat(worldRotation),
                 motionType,
                 layer
@@ -350,8 +417,15 @@ namespace Antelope
         glm::vec3 worldPosition { worldMat[3] };
         glm::quat worldRotation { glm::normalize(glm::quat_cast(glm::mat3(worldMat))) };
 
+        glm::vec3 colliderOffset { 0.0f };
+
+        if (registry.all_of<ColliderComponent>(rbEntity))
+        {
+            colliderOffset = registry.get<ColliderComponent>(rbEntity).Offset;
+        }
+
         JPH::ShapeRefC newShape { CreateEntityShape(world, rbEntity) };
-        
+
         if (newShape)
         {
             bodyInterface.SetShape(bodyID, newShape, false, JPH::EActivation::Activate);
@@ -359,9 +433,12 @@ namespace Antelope
 
         bodyInterface.SetPositionAndRotation(
             bodyID,
-            ToJoltVec3(worldPosition),
+            ToJoltVec3(worldPosition + worldRotation * colliderOffset),
             ToJoltQuat(worldRotation),
             JPH::EActivation::Activate
         );
+
+        bodyInterface.SetLinearVelocity(bodyID, JPH::Vec3::sZero());
+        bodyInterface.SetAngularVelocity(bodyID, JPH::Vec3::sZero());
     }
 }

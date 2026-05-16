@@ -34,5 +34,5 @@ void main()
 
     vec3 currentDetail = texture(currentMipTexture, inUV).rgb;
     
-    outColor = vec4(upsample + currentDetail, 1.0);
+    outColor = vec4(currentDetail + upsample * 0.5, 1.0);
 }

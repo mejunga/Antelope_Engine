@@ -1,26 +1,34 @@
 ProjectName: Unnamed Project
 LastScene: assets://Scenes/BearScene.antelope
 Camera:
-  Position: [2.9085677, 1.9333284, 0.8128816]
-  Yaw: -7007.6846
-  Pitch: -3.8000576
+  Position: [-42.283413, 8.34954, 13.942915]
+  Yaw: -9150.029
+  Pitch: -29.100088
 Assets:
+  - UUID: 9848119482274293016
+    Path: Textures/Kust_1.jpg
+    Type: 2
+    LastModified: 134233358357774253
   - UUID: 12928269464334836696
     Path: Scenes/BearScene.antelope
     Type: 1
-    LastModified: 134231059764328855
+    LastModified: 134233725214240716
   - UUID: 1669307296476971368
     Path: Models/Bear_DEMO.fbx
     Type: 3
     LastModified: 134187177423306219
-  - UUID: 4508731122345488918
-    Path: Models/Gorilla_hd.fbx
-    Type: 3
-    LastModified: 134207663098976023
   - UUID: 4479196892811573101
     Path: Models/square_plane.glb
     Type: 3
     LastModified: 134210188248840491
+  - UUID: 9057049987548632325
+    Path: Models/Forest.obj
+    Type: 3
+    LastModified: 134233359325807759
+  - UUID: 4508731122345488918
+    Path: Models/Gorilla_hd.fbx
+    Type: 3
+    LastModified: 134207663098976023
   - UUID: 11766189970472800795
     Path: Textures/Bear.png
     Type: 2
@@ -29,3 +37,27 @@ Assets:
     Path: Textures/gorilla.png
     Type: 2
     LastModified: 134187342225171046
+  - UUID: 16855670048073087857
+    Path: Textures/grass3.jpg
+    Type: 2
+    LastModified: 134233358357729100
+  - UUID: 5628228952229832134
+    Path: Textures/Kust_2.png
+    Type: 2
+    LastModified: 134233358357814246
+  - UUID: 14833457201917434243
+    Path: Textures/Tree_android.png
+    Type: 2
+    LastModified: 134233358357939347
+  - UUID: 12457050546218628291
+    Path: Textures/Paporotnik.png
+    Type: 2
+    LastModified: 134233358357859305
+  - UUID: 13171073638226959883
+    Path: Textures/Tree.jpg
+    Type: 2
+    LastModified: 134233358357899350
+  - UUID: 16639699504353579366
+    Path: Textures/Vetka_elka.png
+    Type: 2
+    LastModified: 134233358358024469

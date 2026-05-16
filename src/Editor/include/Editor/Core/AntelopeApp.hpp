@@ -6,6 +6,7 @@
 #include <Editor/Panels/ConsolePanel.hpp>
 #include <Editor/Panels/ProjectPanel.hpp>
 #include <Editor/Panels/AnimatorPanel.hpp>
+#include <Editor/Panels/GameViewPanel.hpp>
 #include <Editor/Core/Project.hpp>
 
 #include <Engine/Core/Application.hpp>
@@ -65,5 +66,6 @@ namespace Antelope::Editor
             ConsolePanel m_ConsolePanel;
             ProjectPanel m_ProjectPanel;
             AnimatorPanel m_AnimatorPanel;
+            GameViewPanel m_GameViewPanel;
     };
 }

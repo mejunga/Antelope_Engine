@@ -74,17 +74,23 @@ vec3 lensflare(vec2 uv, vec2 pos)
 
 float sampleVisibility(vec2 screenUV)
 {
-    if (any(lessThan(screenUV, vec2(0.01))) || any(greaterThan(screenUV, vec2(0.99)))) { return 0.0; }
-
     float lum = 0.0;
-    vec2 d = vec2(0.01, 0.0);
-    lum += dot(texture(brightTexture, screenUV).rgb, vec3(0.333));
-    lum += dot(texture(brightTexture, screenUV + d).rgb, vec3(0.333));
-    lum += dot(texture(brightTexture, screenUV - d).rgb, vec3(0.333));
-    lum += dot(texture(brightTexture, screenUV + d.yx).rgb, vec3(0.333));
-    lum += dot(texture(brightTexture, screenUV - d.yx).rgb, vec3(0.333));
-    return clamp(lum / 5.0 * 8.0, 0.0, 1.0);
+    const float r = 0.03;
+    const int N = 12;
+    const float GOLDEN_ANGLE = 2.39996;
+
+    for (int i = 0; i < N; ++i)
+    {
+        float theta = float(i) * GOLDEN_ANGLE;
+        float ri = sqrt(float(i) + 0.5) / sqrt(float(N));
+        vec2 off = vec2(cos(theta), sin(theta)) * ri * r;
+        vec2 uv = clamp(screenUV + off, vec2(0.001), vec2(0.999));
+        lum += dot(texture(brightTexture, uv).rgb, vec3(0.333));
+    }
+    
+    return clamp(lum / float(N) * 5.0, 0.0, 1.0);
 }
+
 
 void main()
 {

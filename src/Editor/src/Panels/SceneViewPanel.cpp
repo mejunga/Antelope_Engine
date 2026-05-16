@@ -1,4 +1,5 @@
 #include <Editor/Panels/SceneViewPanel.hpp>
+#include <Editor/Panels/GameViewPanel.hpp>
 
 #include <Engine/Core/Application.hpp>
 #include <Engine/Renderer/Graphics/Renderer.hpp>
@@ -21,7 +22,7 @@ namespace Antelope::Editor
         m_ScenePicker = std::make_unique<ScenePicker>(Application::Get().GetVulkanContext(), 1, 1);
     }
 
-    void SceneViewPanel::OnUIRender(EditorCamera& camera)
+    void SceneViewPanel::OnUIRender(EditorCamera& camera, GameViewPanel& gamePanel)
     {
         ImGuiWindowFlags windowFlags { ImGuizmo::IsUsing() ? ImGuiWindowFlags_NoMove : 0 };
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2 { 0.0f, 0.0f });
@@ -131,8 +132,23 @@ namespace Antelope::Editor
             }
         }
 
+        constexpr float k_BtnSize { 34.0f };
+        constexpr float k_Gap { 9.0f };
+        constexpr float k_Pad { 6.0f };
+        constexpr float k_BarW { 3 * k_BtnSize + 2 * k_Gap };
 
-        if (m_ViewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGuizmo::IsOver())
+        {
+            ImVec2 wp { ImGui::GetWindowPos() };
+            ImVec2 cMin { ImGui::GetWindowContentRegionMin() };
+            ImVec2 cMax { ImGui::GetWindowContentRegionMax() };
+            float bx { wp.x + cMin.x + (cMax.x - cMin.x - k_BarW) * 0.5f };
+            float by { wp.y + cMax.y - k_BtnSize - 8.0f };
+            ImVec2 mouse { ImGui::GetMousePos() };
+
+            m_MouseOverPlaybar = mouse.x >= bx - k_Pad && mouse.x <= bx + k_BarW + k_Pad && mouse.y >= by - k_Pad && mouse.y <= by + k_BtnSize + k_Pad;
+        }
+
+        if (m_ViewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGuizmo::IsOver() && !m_MouseOverPlaybar)
         {
             auto viewportMinRegion { ImGui::GetWindowContentRegionMin() };
             auto viewportMaxRegion { ImGui::GetWindowContentRegionMax() };
@@ -165,7 +181,32 @@ namespace Antelope::Editor
                     cmd.transform = combined;
                     cmd.normalMatrix = normalMat.Matrix;
                     cmd.mesh = mesh.Handle;
-                    cmd.entityID = static_cast<uint32_t>(entityID);                    
+                    cmd.entityID = static_cast<uint32_t>(entityID);
+
+                    AnimatorComponent* animator { nullptr };
+                    entt::entity animRoot { entt::null };
+                    entt::entity e { entityID };
+
+                    while (e != entt::null && !animator)
+                    {
+                        animator = registry.try_get<AnimatorComponent>(e);
+                        if (animator) { animRoot = e; }
+                        auto* r { registry.try_get<RelationshipComponent>(e) };
+                        e = r ? r->Parent : entt::null;
+                    }
+
+                    if (animator && !animator->FinalBoneMatrices.empty())
+                    {
+                        cmd.isAnimated = 1;
+                        cmd.BoneMatrices = animator->FinalBoneMatrices.data();
+                        cmd.BoneCount = static_cast<uint32_t>(animator->FinalBoneMatrices.size());
+                        
+                        if (auto* rootWorld { registry.try_get<WorldMatrixComponent>(animRoot) })
+                        {
+                            cmd.transform = rootWorld->Matrix;
+                        }
+                    }
+
                     renderList[count++] = cmd;
                 }
 
@@ -286,6 +327,8 @@ namespace Antelope::Editor
 
         glm::mat4 vp { cameraProjection * cameraView };
         DrawColliderGizmos(vp, ImGui::GetWindowPos(), { (float)newWidth, (float)newHeight });
+
+        gamePanel.DrawPlaybackControls(Application::Get().GetWorld().get());
 
         ImGui::End();
         ImGui::PopStyleVar();

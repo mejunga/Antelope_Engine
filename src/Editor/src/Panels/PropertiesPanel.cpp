@@ -5,6 +5,7 @@
 #include <Engine/ECS/System/PhysicsSystem.hpp>
 #include <Engine/Physics/PhysicsContext.hpp>
 #include <Engine/ECS/AnimatorController.hpp>
+#include <Engine/Renderer/Graphics/EditorCamera.hpp>
 
 #include <glm/gtc/type_ptr.hpp>
 
@@ -29,19 +30,19 @@ namespace Antelope::Editor
         }
     }
 
-    void PropertiesPanel::OnUIRender(Entity entity)
+    void PropertiesPanel::OnUIRender(Entity entity, const EditorCamera& camera)
     {
         ImGui::Begin("Properties");
 
         if (entity)
         {
-            DrawComponents(entity);
+            DrawComponents(entity, camera);
         }
 
         ImGui::End();
     }
 
-    void PropertiesPanel::DrawComponents(Entity entity)
+    void PropertiesPanel::DrawComponents(Entity entity, const EditorCamera& camera)
     {
         if (entity.HasComponent<TagComponent>())
         {
@@ -97,7 +98,7 @@ namespace Antelope::Editor
             ImGui::Text("Mesh ID: %d", component.Handle.MeshID);
             ImGui::Text("Polygons: %d", component.Handle.faceCount);
             this->DrawVec3Control("Offset", component.Offset);
-            this->DrawVec3Control("Scale",  component.Scale, 1.0f);
+            this->DrawVec3Control("Scale", component.Scale, 1.0f);
         });
 
         DrawComponent<MaterialComponent>("Material", entity, [](auto& component)
@@ -107,8 +108,8 @@ namespace Antelope::Editor
 
         DrawComponent<RigidBodyComponent>("Rigid Body", entity, [](auto& component)
         {
-            const char* bodyTypes[] = { "Static", "Dynamic", "Kinematic" };
-            int currentBodyType = static_cast<int>(component.Type);
+            const char* bodyTypes[] { "Static", "Kinematic", "Dynamic" };
+            int currentBodyType { static_cast<int>(component.Type) };
 
             if (ImGui::Combo("Body Type", &currentBodyType, bodyTypes, IM_ARRAYSIZE(bodyTypes)))
             {
@@ -123,8 +124,8 @@ namespace Antelope::Editor
 
         DrawComponent<ColliderComponent>("Collider", entity, [this](auto& component)
         {
-            const char* colliderTypes[] = { "Box", "Sphere", "Capsule" };
-            int currentColliderType = static_cast<int>(component.Type);
+            const char* colliderTypes[] { "Box", "Sphere", "Capsule" };
+            int currentColliderType { static_cast<int>(component.Type) };
 
             if (ImGui::Combo("Collider Type", &currentColliderType, colliderTypes, IM_ARRAYSIZE(colliderTypes)))
             {
@@ -145,6 +146,47 @@ namespace Antelope::Editor
             {
                 ImGui::DragFloat("Radius", &component.Size.x, 0.05f, 0.0f, 1000.0f, "%.2f");
                 ImGui::DragFloat("Height", &component.Size.y, 0.05f, 0.0f, 1000.0f, "%.2f");
+            }
+        });
+
+        DrawComponent<MeshColliderComponent>("Mesh Collider", entity, [](auto& component)
+        {
+            ImGui::Text("Vertices: %zu | Triangles: %zu", component.Vertices.size(), component.Indices.size() / 3);
+
+            if (component.Vertices.empty())
+            {
+                ImGui::TextDisabled("Waiting for wiring — will build on next frame.");
+            }
+        });
+
+        DrawComponent<CameraComponent>("Camera", entity, [&camera, entity](auto& component) mutable
+        {
+            float fovDeg { glm::degrees(component.PerspectiveFOV) };
+            
+            if (ImGui::DragFloat("FOV", &fovDeg, 0.5f, 1.0f, 179.0f, "%.1f deg"))
+            {
+                component.PerspectiveFOV = glm::radians(fovDeg);
+            }
+            
+            ImGui::DragFloat("Near", &component.PerspectiveNear, 0.01f, 0.001f, 10.0f, "%.3f");
+            ImGui::DragFloat("Far",  &component.PerspectiveFar,  1.0f,  10.0f,  10000.0f, "%.1f");
+            int prio { static_cast<int>(component.prio) };
+            
+            if (ImGui::DragInt("Priority", &prio, 1, 0, 255))
+            {
+                component.prio = static_cast<uint32_t>(prio);
+            }
+            
+            if (ImGui::Button("Align with View"))
+            {
+                auto& tc { entity.GetComponent<TransformComponent>() };
+                tc.Translation = camera.GetPosition();
+                tc.Rotation = glm::vec3(
+                    glm::radians(camera.GetPitch()),
+                    -glm::radians(camera.GetYaw()) - glm::radians(90.0f),
+                    0.0f
+                );
+                Application::Get().GetWorld()->MarkTransformDirty(entity);
             }
         });
 
@@ -305,6 +347,15 @@ namespace Antelope::Editor
 
         if (ImGui::BeginPopup("AddComponentPopup"))
         {
+            if (!entity.HasComponent<CameraComponent>())
+            {
+                if (ImGui::MenuItem("Camera"))
+                {
+                    entity.AddComponent<CameraComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
             if (!entity.HasComponent<DirectionalLightComponent>())
             {
                 if (ImGui::MenuItem("Directional Light"))
@@ -313,7 +364,7 @@ namespace Antelope::Editor
                     ImGui::CloseCurrentPopup();
                 }
             }
-            
+
             if (!entity.HasComponent<PointLightComponent>())
             {
                 if (ImGui::MenuItem("Point Light"))
@@ -346,6 +397,33 @@ namespace Antelope::Editor
                 if (ImGui::MenuItem("Animator"))
                 {
                     entity.AddComponent<AnimatorComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
+            if (!entity.HasComponent<RigidBodyComponent>())
+            {
+                if (ImGui::MenuItem("Rigid Body"))
+                {
+                    entity.AddComponent<RigidBodyComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
+            if (!entity.HasComponent<ColliderComponent>())
+            {
+                if (ImGui::MenuItem("Collider"))
+                {
+                    entity.AddComponent<ColliderComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
+            if (!entity.HasComponent<MeshColliderComponent>())
+            {
+                if (ImGui::MenuItem("Mesh Collider"))
+                {
+                    entity.AddComponent<MeshColliderComponent>();
                     ImGui::CloseCurrentPopup();
                 }
             }

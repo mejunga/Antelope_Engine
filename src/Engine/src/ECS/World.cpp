@@ -11,6 +11,7 @@
 #include <Engine/Asset/AssetManager.hpp>
 #include <Engine/Asset/TextureManager.hpp>
 #include <Engine/ECS/System/AnimationSystem.hpp>
+#include <Engine/Renderer/Vulkan/RenderTexture.hpp>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
@@ -114,7 +115,18 @@ namespace Antelope
         auto loadTex { [&](const std::string& filename, bool isSRGB) -> uint32_t {
             if (filename.empty()) { return 0xFFFFFFFF; }
             auto it { texturePaths.find(filename) };
-            if (it == texturePaths.end()) { return 0xFFFFFFFF; }
+            if (it == texturePaths.end())
+            {
+                std::string lower { filename };
+                std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c){ return std::tolower(c); });
+                for (const auto& [key, path] : texturePaths)
+                {
+                    std::string keyLower { key };
+                    std::transform(keyLower.begin(), keyLower.end(), keyLower.begin(), [](unsigned char c){ return std::tolower(c); });
+                    if (keyLower == lower) { it = texturePaths.find(key); break; }
+                }
+                if (it == texturePaths.end()) { return 0xFFFFFFFF; }
+            }
             return textureManager->LoadTexture(it->second.string(), isSRGB);
         }};
 
@@ -201,6 +213,30 @@ namespace Antelope
         Application::Get().GetRenderer()->ClearMaterials();
     }
 
+    void World::TakeSnapshot()
+    {
+        m_SimulationSnapshot.clear();
+        auto view { m_Registry.view<TransformComponent>() };
+        for (auto [entity, transform] : view.each())
+        {
+            m_SimulationSnapshot.push_back({ entity, transform });
+        }
+    }
+
+    void World::RestoreSnapshot()
+    {
+        for (auto& [entity, transform] : m_SimulationSnapshot)
+        {
+            if (m_Registry.valid(entity) && m_Registry.all_of<TransformComponent>(entity))
+            {
+                m_Registry.get<TransformComponent>(entity) = transform;
+                m_Registry.emplace_or_replace<DirtyTransform>(entity);
+            }
+        }
+        m_SimulationSnapshot.clear();
+        TransformSystem::OnUpdate(*this);
+    }
+
     void World::OnSimulationStart()
     {
         if (m_IsSimulating) { return; }
@@ -227,6 +263,7 @@ namespace Antelope
         if (m_IsSimulating)
         {
             PhysicsSystem::OnUpdate(*this, *m_PhysicsContext, timeStep);
+            AnimationSystem::Update(*this, timeStep);
         }
     }
 
@@ -239,12 +276,34 @@ namespace Antelope
             m_HierarchyDirty = false;
         }
 
-        AmbientSystem::OnUpdate(*this, m_IsSimulating ? timeStep : 0.0f);
-        AnimationSystem::Update(*this, m_IsSimulating ? timeStep : 0.0f);
+        float simDelta { (m_IsSimulating && !m_IsPaused) ? timeStep : 0.0f };
+        AmbientSystem::OnUpdate(*this, simDelta);
+        AnimationSystem::Update(*this, simDelta);
         TransformSystem::OnUpdate(*this);
 
         auto renderer { Application::Get().GetRenderer() };
-        RenderSystem::RenderEditor(*this, renderer, camera);
+
+        if (m_GameViewActive)
+        {
+            if (m_PrimaryCamera != entt::null && m_Registry.all_of<WorldMatrixComponent, CameraComponent>(m_PrimaryCamera))
+            {
+                auto& worldMat { m_Registry.get<WorldMatrixComponent>(m_PrimaryCamera) };
+                auto& cam { m_Registry.get<CameraComponent>(m_PrimaryCamera) };
+                auto extent { renderer->GetFinalLDRTexture()->GetExtent() };
+                cam.CalculateProjection(static_cast<float>(extent.width) / static_cast<float>(extent.height));
+                glm::mat4 view { glm::inverse(worldMat.Matrix) };
+                glm::vec3 pos { worldMat.Matrix[3] };
+                RenderSystem::RenderEditor(*this, renderer, view, cam.Projection, pos);
+            }
+            else
+            {
+                RenderSystem::RenderBlack(renderer);
+            }
+        }
+        else
+        {
+            RenderSystem::RenderEditor(*this, renderer, camera);
+        }
     }
 #endif
 
@@ -326,11 +385,34 @@ namespace Antelope
 
     void World::OnCameraConstructed(entt::registry& reg, entt::entity e)
     {
-        if (reg.get<CameraComponent>(e).IsPrimary) { m_PrimaryCamera = e; }
+        auto& cam { reg.get<CameraComponent>(e) };
+
+        if (m_PrimaryCamera == entt::null || !reg.all_of<CameraComponent>(m_PrimaryCamera) || cam.prio >= reg.get<CameraComponent>(m_PrimaryCamera).prio)
+        {
+            m_PrimaryCamera = e;
+        }
     }
 
     void World::OnCameraDestroyed(entt::registry& reg, entt::entity e)
     {
-        if (m_PrimaryCamera == e) { m_PrimaryCamera = entt::null; }
+        if (m_PrimaryCamera != e) { return; }
+
+        m_PrimaryCamera = entt::null;
+        uint32_t bestPrio { 0 };
+        bool first { true };
+
+        for (auto camEntity : reg.view<CameraComponent>())
+        {
+            if (camEntity == e) { continue; }
+
+            auto& cam { reg.get<CameraComponent>(camEntity) };
+
+            if (first || cam.prio > bestPrio)
+            {
+                m_PrimaryCamera = camEntity;
+                bestPrio = cam.prio;
+                first = false;
+            }
+        }
     }
 }

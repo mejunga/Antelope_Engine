@@ -10,6 +10,11 @@
 #include <string>
 
 
+namespace Antelope
+{
+    class EditorCamera;
+}
+
 namespace Antelope::Editor
 {
     class PropertiesPanel
@@ -17,10 +22,10 @@ namespace Antelope::Editor
         public:
             PropertiesPanel() = default;
 
-            void OnUIRender(Entity entity);
+            void OnUIRender(Entity entity, const EditorCamera& camera);
 
         private:
-            void DrawComponents(Entity entity);
+            void DrawComponents(Entity entity, const EditorCamera& camera);
             bool DrawVec3Control(const std::string& label, glm::vec3& values, float resetValue = 0.0f, float columnWidth = 100.0f);
 
             template<typename T, typename UIFunction>

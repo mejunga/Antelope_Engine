@@ -97,7 +97,7 @@ namespace Antelope
         float PerspectiveNear { 0.1f };
         float PerspectiveFar { 1000.0f };
 
-        bool IsPrimary { true };
+        uint32_t prio { 0 };
 
         CameraComponent() = default;
         CameraComponent(const CameraComponent&) = default;
@@ -261,5 +261,15 @@ namespace Antelope
 
         SkinnedMeshComponent() = default;
         SkinnedMeshComponent(const SkinnedMeshComponent&) = default;
+    };
+
+    struct MeshColliderComponent
+    {
+        std::vector<glm::vec3> Vertices;
+        std::vector<uint32_t> Indices;
+        std::shared_ptr<void> CachedShape;
+
+        MeshColliderComponent() = default;
+        MeshColliderComponent(const MeshColliderComponent&) = default;
     };
 }

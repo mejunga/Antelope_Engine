@@ -64,6 +64,7 @@ void main()
         
         mat4 boneTransform = mat4(0.0);
         bool hasBones = false;
+        
         for(int i = 0; i < 4; ++i)
         {
             if(joint.boneIDs[i] >= 0)

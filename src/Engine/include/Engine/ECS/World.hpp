@@ -3,6 +3,7 @@
 #include <Engine/Renderer/Graphics/Model.hpp>
 #include <Engine/Scene/SceneSerializer.hpp>
 #include <Engine/Core/UUID.hpp>
+#include <Engine/ECS/BaseComponents.hpp>
 
 #include <entt/entt.hpp>
 
@@ -34,6 +35,8 @@ namespace Antelope
             void MarkHierarchyDirty() { m_HierarchyDirty = true; }
             void Clear();
 
+            void TakeSnapshot();
+            void RestoreSnapshot();
             void OnSimulationStart();
             void OnSimulationStop();
             void StepSimulation(float timeStep);
@@ -45,6 +48,8 @@ namespace Antelope
             inline entt::registry& GetRegistry() { return m_Registry; }
             inline PhysicsContext* GetPhysicsContext() { return m_PhysicsContext.get(); }
             inline bool IsSimulating() const { return m_IsSimulating; }
+            inline void SetGameViewActive(bool active) { m_GameViewActive = active; }
+            inline void SetPaused(bool paused) { m_IsPaused = paused; }
             inline entt::entity GetPrimaryCamera() const { return m_PrimaryCamera; }
             inline void SetPrimaryCamera(entt::entity e) { m_PrimaryCamera = e; }
 
@@ -60,7 +65,12 @@ namespace Antelope
             entt::entity m_PrimaryCamera { entt::null };
             bool m_HierarchyDirty { true };
             bool m_IsSimulating { false };
+            bool m_GameViewActive { false };
+            bool m_IsPaused { false };
             float m_Accumulator { 0.0f };
+            struct TransformSnapshot { entt::entity entity; TransformComponent transform; };
+
+            std::vector<TransformSnapshot> m_SimulationSnapshot;
 
             friend class Entity;
     };

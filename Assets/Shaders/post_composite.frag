@@ -47,7 +47,7 @@ void main()
     vec3 bloom = texture(bloomTexture, inUV).rgb;
     vec3 flare = texture(flareTexture, inUV).rgb;
 
-    color += bloom;
+    color += bloom * 0.05;
     color += flare * 0.2;
     color = color * pc.exposure;
 

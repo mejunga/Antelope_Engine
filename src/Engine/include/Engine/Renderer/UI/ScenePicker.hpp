@@ -44,6 +44,7 @@ namespace Antelope
             std::unique_ptr<Pipeline> m_Pipeline;
             std::unique_ptr<Buffer> m_PickingObjectBuffer;
             std::unique_ptr<Buffer> m_PickingIndirectBuffer;
+            std::unique_ptr<Buffer> m_PickingBoneBuffer;
             
             VkRenderPass m_RenderPass { VK_NULL_HANDLE };
             VkFramebuffer m_Framebuffer { VK_NULL_HANDLE };

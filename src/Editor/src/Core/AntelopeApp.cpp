@@ -42,6 +42,7 @@ namespace Antelope::Editor
         FileSystem::Mount("assets", assetsDir);
 
         m_ProjectPanel.SetAssetsRoot(assetsDir);
+        m_ProjectPanel.SetModelCache(&m_ModelCache);
         m_ScenePanel.SetOnMeshDropped([this](UUID uuid, glm::vec3 pos) -> Entity { return SpawnModel(uuid, pos); });
         m_AnimatorPanel.SetModelCache(&m_ModelCache);
         m_ProjectFilePath = Project::FindProjectFile(m_ProjectRoot);
@@ -133,23 +134,13 @@ namespace Antelope::Editor
             }
         }
 
-        if (Input::IsKeyPressed(GLFW_KEY_X) && m_DebounceTimer <= 0.0f)
+        GetWorld()->SetGameViewActive(m_GameViewPanel.IsGameViewActive());
+        GetWorld()->SetPaused(m_GameViewPanel.IsPaused());
+
+        if (GetWorld()->IsSimulating() && !m_GameViewPanel.IsPaused())
         {
-            m_DebounceTimer = DEBOUNCE_DELAY;
-
-            if (GetWorld()->IsSimulating())
-            {
-                GetWorld()->OnSimulationStop();
-                AE_CLIENT_INFO("Physics PAUSED via X key.");
-            }
-            else
-            {
-                GetWorld()->OnSimulationStart();
-                AE_CLIENT_INFO("Physics STARTED via X key.");
-            }
+            GetWorld()->StepSimulation(timeStep);
         }
-
-        if (GetWorld()->IsSimulating()) { GetWorld()->StepSimulation(timeStep); }
 
         {
             auto& registry { GetWorld()->GetRegistry() };
@@ -214,6 +205,79 @@ namespace Antelope::Editor
                     child = cRel ? cRel->NextSibling : entt::null;
                 }
             }
+
+            for (auto [entity, mc, rel] : registry.view<MeshColliderComponent, RelationshipComponent>().each())
+            {
+                if (!mc.Vertices.empty()) { continue; }
+
+                UUID modelUUID { 0 };
+                entt::entity child { rel.FirstChild };
+
+                while (child != entt::null && (uint64_t)modelUUID == 0)
+                {
+                    if (registry.all_of<IDComponent>(child))
+                    {
+                        UUID childUUID { registry.get<IDComponent>(child).ID };
+
+                        for (const auto& binding : m_AssetBindings)
+                        {
+                            if (binding.EntityID == childUUID && binding.ComponentType == "MeshComponent")
+                            {
+                                modelUUID = binding.AssetUUID;
+                                break;
+                            }
+                        }
+                    }
+
+                    auto* cRel { registry.try_get<RelationshipComponent>(child) };
+                    child = cRel ? cRel->NextSibling : entt::null;
+                }
+
+                if ((uint64_t)modelUUID == 0) { continue; }
+
+                auto it { m_ModelCache.find((uint64_t)modelUUID) };
+                if (it == m_ModelCache.end()) { continue; }
+
+                const ModelData& model { it->second };
+
+                struct NodeEntry { const ModelNode* node; glm::mat4 transform; };
+                std::vector<NodeEntry> stack;
+                stack.push_back({ &model.RootNode, glm::mat4(1.0f) });
+
+                while (!stack.empty())
+                {
+                    auto [pNode, parentTransform] { stack.back() };
+                    stack.pop_back();
+
+                    glm::mat4 global { parentTransform * pNode->LocalTransform };
+
+                    for (uint32_t meshIdx : pNode->MeshIndices)
+                    {
+                        if (meshIdx >= model.SubMeshes.size()) { continue; }
+
+                        const SubMeshData& sub { model.SubMeshes[meshIdx] };
+                        uint32_t base { static_cast<uint32_t>(mc.Vertices.size()) };
+
+                        for (const auto& vp : sub.Data.positions)
+                        {
+                            glm::vec4 t { global * glm::vec4(vp.pos, 1.0f) };
+                            mc.Vertices.push_back(glm::vec3(t));
+                        }
+
+                        for (const auto& face : sub.Data.faces)
+                        {
+                            mc.Indices.push_back(base + face.v0);
+                            mc.Indices.push_back(base + face.v1);
+                            mc.Indices.push_back(base + face.v2);
+                        }
+                    }
+
+                    for (const auto& childNode : pNode->Children)
+                    {
+                        stack.push_back({ &childNode, global });
+                    }
+                }
+            }
         }
 
         m_EditorCamera.OnUpdate(timeStep);
@@ -260,19 +324,25 @@ namespace Antelope::Editor
             ImGui::DockBuilderDockWindow("Console", dock_id_bottom);
             ImGui::DockBuilderDockWindow("Project", dock_id_bottom);
             ImGui::DockBuilderDockWindow("Animator", dock_id_main);
+            ImGui::DockBuilderDockWindow("Game", dock_id_main);
             ImGui::DockBuilderDockWindow("Scene", dock_id_main);
-
             ImGui::DockBuilderFinish(dockspace_id);
         }
 
         ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
 
-        m_ScenePanel.OnUIRender(m_EditorCamera);
+        static bool s_FocusScene { true };
+        if (s_FocusScene) { ImGui::SetWindowFocus("Scene"); s_FocusScene = false; }
+
+        m_ScenePanel.OnUIRender(m_EditorCamera, m_GameViewPanel);
         m_AnimatorPanel.OnUIRender(m_ScenePanel.GetSelectedEntity());
         m_HierarchyPanel.OnUIRender(Application::Get().GetWorld().get(), m_ScenePanel.GetSelectedEntity());
-        m_PropertiesPanel.OnUIRender(m_ScenePanel.GetSelectedEntity());
+        m_PropertiesPanel.OnUIRender(m_ScenePanel.GetSelectedEntity(), m_EditorCamera);
         m_ConsolePanel.OnUIRender();
         m_ProjectPanel.OnUIRender();
+        m_GameViewPanel.OnUIRender(GetWorld().get());
+
+        if (s_FocusScene) { ImGui::SetWindowFocus("Scene"); s_FocusScene = false; }
 
         RenderSaveAsPopup();
 

@@ -108,6 +108,22 @@ namespace Antelope
 
         VkCommandBuffer cmd { renderer->BeginAsyncGraphicsCommand() };
 
+        {
+            VkDescriptorBufferInfo boneInfo {};
+            boneInfo.buffer = renderer->m_BoneBuffers[renderer->GetCurrentFrame()]->GetBuffer();
+            boneInfo.offset = 0;
+            boneInfo.range = VK_WHOLE_SIZE;
+
+            VkWriteDescriptorSet boneWrite {};
+            boneWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            boneWrite.dstSet = m_PickingDescriptorSet;
+            boneWrite.dstBinding = 13;
+            boneWrite.descriptorCount = 1;
+            boneWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            boneWrite.pBufferInfo = &boneInfo;
+            vkUpdateDescriptorSets(m_Context->GetDevice(), 1, &boneWrite, 0, nullptr);
+        }
+
         VkRenderPassBeginInfo renderPassInfo {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         renderPassInfo.renderPass = m_RenderPass;
@@ -141,19 +157,35 @@ namespace Antelope
                                 m_PickingPipelineLayout, 0, 1,
                                 &m_PickingDescriptorSet, 0, nullptr);
 
-        ObjectData* objectDataMap { static_cast<ObjectData*>(m_PickingObjectBuffer->GetMappedMemory()) };
-        VkDrawIndirectCommand* indirectMap { static_cast<VkDrawIndirectCommand*>(m_PickingIndirectBuffer->GetMappedMemory()) };
+            ObjectData* objectDataMap { static_cast<ObjectData*>(m_PickingObjectBuffer->GetMappedMemory()) };
+            VkDrawIndirectCommand* indirectMap { static_cast<VkDrawIndirectCommand*>(m_PickingIndirectBuffer->GetMappedMemory()) };
+            glm::mat4* boneDataMap { static_cast<glm::mat4*>(m_PickingBoneBuffer->GetMappedMemory()) };
 
-        uint32_t objectCount { 0 };
+            uint32_t objectCount { 0 };
+            uint32_t boneOffset { 0 };
 
-        for (const auto& command : renderList)
-        {
-            if (renderer->m_PendingMeshIDs.count(command.mesh.MeshID) > 0) { continue; }
+            for (const auto& command : renderList)
+            {
+                if (renderer->m_PendingMeshIDs.count(command.mesh.MeshID) > 0) { continue; }
 
-            objectDataMap[objectCount].model = command.transform;
-            objectDataMap[objectCount].posOffset = command.mesh.posOffset;
-            objectDataMap[objectCount].faceOffset = command.mesh.faceOffset;
-            objectDataMap[objectCount].entityID = command.entityID;
+                objectDataMap[objectCount].model = command.transform;
+                objectDataMap[objectCount].posOffset = command.mesh.posOffset;
+                objectDataMap[objectCount].faceOffset = command.mesh.faceOffset;
+                objectDataMap[objectCount].jointOffset = command.mesh.jointOffset;
+                objectDataMap[objectCount].entityID = command.entityID;
+
+                if (command.isAnimated && command.BoneMatrices && command.BoneCount > 0)
+                {
+                    memcpy(boneDataMap + boneOffset, command.BoneMatrices, command.BoneCount * sizeof(glm::mat4));
+                    objectDataMap[objectCount].boneOffset = boneOffset;
+                    objectDataMap[objectCount].isAnimated = 1;
+                    boneOffset += command.BoneCount;
+                }
+                else
+                {
+                    objectDataMap[objectCount].boneOffset = 0;
+                    objectDataMap[objectCount].isAnimated = 0;
+                }
 
             indirectMap[objectCount].vertexCount = command.mesh.faceCount * 3;
             indirectMap[objectCount].instanceCount = 1;
@@ -467,6 +499,14 @@ namespace Antelope
             VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT
         );
 
+        m_PickingBoneBuffer = std::make_unique<Buffer>(
+            m_Context,
+            sizeof(glm::mat4) * 4096,
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            VMA_MEMORY_USAGE_AUTO,
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT
+        );
+
         m_PickingDescriptorSet = renderer->m_GlobalDescriptorAllocator->Allocate(renderer->m_DescriptorSetLayout);
 
         DescriptorWriter writer;
@@ -477,6 +517,8 @@ namespace Antelope
         writer.WriteBuffer(4, renderer->m_GpuAllocator->GetFaceBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
         writer.WriteBuffer(5, renderer->m_GpuAllocator->GetUvBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
         writer.WriteBuffer(6, m_PickingObjectBuffer->GetBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+        writer.WriteBuffer(12, renderer->m_GpuAllocator->GetJointBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+        writer.WriteBuffer(13, m_PickingBoneBuffer->GetBuffer(), VK_WHOLE_SIZE, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
         writer.UpdateSet(m_Context, m_PickingDescriptorSet);
     }
 }

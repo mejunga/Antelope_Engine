@@ -173,28 +173,33 @@ float ShadowPCF(vec3 worldPos, vec3 normal)
     float blend = clamp((viewDepth - (ubo.cascadeSplits.x - blendRange)) / (2.0 * blendRange), 0.0, 1.0);
 
     float s0 = 1.0;
+    bool valid0 = false;
     {
         vec4 sc = ubo.lightSpaceMatrices[0] * vec4(biasedPos, 1.0);
         sc.xyz /= sc.w;
         sc.xy = sc.xy * 0.5 + 0.5;
-        if (sc.z <= 1.0 && sc.z >= 0.0)
-        {
-            s0 = PCFSample(shadowMap0, sc.xyz, texelSize, spread * 0.6);
-        }
+        valid0 = sc.z <= 1.0 && sc.z >= 0.0
+              && all(greaterThanEqual(sc.xy, vec2(0.0)))
+              && all(lessThanEqual(sc.xy, vec2(1.0)));
+
+        if (valid0) { s0 = PCFSample(shadowMap0, sc.xyz, texelSize, spread * 0.6); }
     }
 
-    if (blend < 0.001) { return s0; }
+    if (blend < 0.001 && valid0) { return s0; }
 
-    float s1 = s0;
+    float s1 = 1.0;
     {
         vec4 sc = ubo.lightSpaceMatrices[1] * vec4(biasedPos, 1.0);
         sc.xyz /= sc.w;
         sc.xy = sc.xy * 0.5 + 0.5;
-        if (sc.z <= 1.0 && sc.z >= 0.0)
-        {
-            s1 = PCFSample(shadowMap1, sc.xyz, texelSize, spread * 1.0);
-        }
+        bool valid1 = sc.z <= 1.0 && sc.z >= 0.0
+                   && all(greaterThanEqual(sc.xy, vec2(0.0)))
+                   && all(lessThanEqual(sc.xy, vec2(1.0)));
+
+        if (valid1) { s1 = PCFSample(shadowMap1, sc.xyz, texelSize, spread * 1.0); }
     }
+
+    if (!valid0) { blend = 1.0; }
 
     return mix(s0, s1, blend);
 }
