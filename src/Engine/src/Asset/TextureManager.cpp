@@ -92,6 +92,33 @@ namespace Antelope
         return newTexture.GlobalIndex;
     }
 
+    void TextureManager::Clear()
+    {
+        vkDeviceWaitIdle(m_Context->GetDevice());
+
+        for (auto& texture : m_Textures)
+        {
+            if (texture.Sampler != VK_NULL_HANDLE)
+            {
+                vkDestroySampler(m_Context->GetDevice(), texture.Sampler, nullptr);
+            }
+
+            if (texture.ImageView != VK_NULL_HANDLE)
+            {
+                vkDestroyImageView(m_Context->GetDevice(), texture.ImageView, nullptr);
+            }
+
+            if (texture.Image != VK_NULL_HANDLE)
+            {
+                vmaDestroyImage(m_Context->GetAllocator(), texture.Image, texture.Allocation);
+            }
+        }
+
+        m_Textures.clear();
+        m_PathToIndex.clear();
+        AE_ENGINE_TRACE("TextureManager: cache cleared.");
+    }
+
     void TextureManager::CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memUsage, VkImage& image, VmaAllocation& allocation)
     {
         VkImageCreateInfo imageInfo {};

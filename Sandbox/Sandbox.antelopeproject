@@ -1,10 +1,18 @@
 ProjectName: Unnamed Project
 LastScene: assets://Scenes/BearScene.antelope
 Camera:
-  Position: [-42.283413, 8.34954, 13.942915]
-  Yaw: -9150.029
-  Pitch: -29.100088
+  Position: [-49.639328, 6.969213, 18.408459]
+  Yaw: -9923.236
+  Pitch: -46.000057
 Assets:
+  - UUID: 2643987133498507292
+    Path: Textures/gorilla.png
+    Type: 2
+    LastModified: 134187342225171046
+  - UUID: 14034907395822295268
+    Path: Audio/bear_snort.mp3
+    Type: 5
+    LastModified: 134233782239521626
   - UUID: 9848119482274293016
     Path: Textures/Kust_1.jpg
     Type: 2
@@ -12,7 +20,7 @@ Assets:
   - UUID: 12928269464334836696
     Path: Scenes/BearScene.antelope
     Type: 1
-    LastModified: 134233725214240716
+    LastModified: 134240469332326933
   - UUID: 1669307296476971368
     Path: Models/Bear_DEMO.fbx
     Type: 3
@@ -33,10 +41,6 @@ Assets:
     Path: Textures/Bear.png
     Type: 2
     LastModified: 134187177365198093
-  - UUID: 2643987133498507292
-    Path: Textures/gorilla.png
-    Type: 2
-    LastModified: 134187342225171046
   - UUID: 16855670048073087857
     Path: Textures/grass3.jpg
     Type: 2

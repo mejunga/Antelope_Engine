@@ -249,6 +249,7 @@ namespace Antelope
         std::vector<bool> TriggerValues;
 
         std::vector<glm::mat4> FinalBoneMatrices;
+        std::vector<std::string> FiredEvents;
 
         AnimatorComponent() = default;
         AnimatorComponent(const AnimatorComponent&) = default;
@@ -271,5 +272,30 @@ namespace Antelope
 
         MeshColliderComponent() = default;
         MeshColliderComponent(const MeshColliderComponent&) = default;
+    };
+
+    struct AudioClip
+    {
+        UUID AudioAssetUUID { 0 };
+        float Volume { 1.0f };
+        bool Loop { false };
+        bool PlayOnStart { false };
+        std::shared_ptr<void> RuntimeSound;
+
+        AudioClip() = default;
+        AudioClip(const AudioClip& o) : AudioAssetUUID(o.AudioAssetUUID), Volume(o.Volume), Loop(o.Loop), PlayOnStart(o.PlayOnStart) {}
+        AudioClip& operator=(const AudioClip& o)
+        {
+            AudioAssetUUID = o.AudioAssetUUID; Volume = o.Volume; Loop = o.Loop; PlayOnStart = o.PlayOnStart;
+            return *this;
+        }
+    };
+
+    struct AudioPlayerComponent
+    {
+        std::vector<AudioClip> Clips;
+
+        AudioPlayerComponent() = default;
+        AudioPlayerComponent(const AudioPlayerComponent&) = default;
     };
 }

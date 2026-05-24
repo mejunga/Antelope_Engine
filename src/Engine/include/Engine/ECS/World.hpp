@@ -17,6 +17,7 @@ namespace Antelope
 {
     class Entity;
     class PhysicsContext;
+    class AudioContext;
 #ifdef ANTELOPE_EDITOR_MODE
     class EditorCamera;
 #endif
@@ -47,6 +48,7 @@ namespace Antelope
             
             inline entt::registry& GetRegistry() { return m_Registry; }
             inline PhysicsContext* GetPhysicsContext() { return m_PhysicsContext.get(); }
+            inline AudioContext* GetAudioContext() { return m_AudioContext.get(); }
             inline bool IsSimulating() const { return m_IsSimulating; }
             inline void SetGameViewActive(bool active) { m_GameViewActive = active; }
             inline void SetPaused(bool paused) { m_IsPaused = paused; }
@@ -60,6 +62,7 @@ namespace Antelope
 
         private:
             std::unique_ptr<PhysicsContext> m_PhysicsContext;
+            std::unique_ptr<AudioContext> m_AudioContext;
 
             entt::registry m_Registry;
             entt::entity m_PrimaryCamera { entt::null };

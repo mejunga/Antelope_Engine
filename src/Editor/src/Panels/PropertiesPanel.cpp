@@ -6,6 +6,7 @@
 #include <Engine/Physics/PhysicsContext.hpp>
 #include <Engine/ECS/AnimatorController.hpp>
 #include <Engine/Renderer/Graphics/EditorCamera.hpp>
+#include <Engine/Asset/AssetManager.hpp>
 
 #include <glm/gtc/type_ptr.hpp>
 
@@ -157,6 +158,53 @@ namespace Antelope::Editor
             {
                 ImGui::TextDisabled("Waiting for wiring — will build on next frame.");
             }
+        });
+
+        DrawComponent<AudioPlayerComponent>("Audio Player", entity, [](auto& component)
+        {
+            for (uint32_t i { 0 }; i < static_cast<uint32_t>(component.Clips.size()); ++i)
+            {
+                auto& clip { component.Clips[i] };
+                ImGui::PushID(static_cast<int>(i));
+
+                ImGui::Text("Clip %u", i);
+                ImGui::SameLine(ImGui::GetContentRegionAvail().x - ImGui::GetFontSize());
+                if (ImGui::SmallButton("x"))
+                {
+                    component.Clips.erase(component.Clips.begin() + i);
+                    ImGui::PopID();
+                    return;
+                }
+
+                std::string label { "None" };
+                if ((uint64_t)clip.AudioAssetUUID != 0)
+                {
+                    const auto& meta { AssetManager::GetMetadata(clip.AudioAssetUUID) };
+                    label = meta.IsValid() ? meta.FilePath.filename().string() : "Missing";
+                }
+
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::Button(label.c_str(), ImVec2(-1.0f, 0.0f));
+
+                if (ImGui::BeginDragDropTarget())
+                {
+                    if (const ImGuiPayload* payload { ImGui::AcceptDragDropPayload("ASSET_AUDIO") })
+                    {
+                        clip.AudioAssetUUID = *static_cast<const UUID*>(payload->Data);
+                    }
+                    ImGui::EndDragDropTarget();
+                }
+
+                ImGui::SliderFloat("Volume", &clip.Volume, 0.0f, 1.0f, "%.2f");
+                ImGui::Checkbox("Loop", &clip.Loop);
+                ImGui::SameLine();
+                ImGui::Checkbox("Play on Start", &clip.PlayOnStart);
+                ImGui::Separator();
+
+                ImGui::PopID();
+            }
+
+            if (ImGui::Button("+ Add Clip")) { component.Clips.emplace_back(); }
         });
 
         DrawComponent<CameraComponent>("Camera", entity, [&camera, entity](auto& component) mutable
@@ -424,6 +472,15 @@ namespace Antelope::Editor
                 if (ImGui::MenuItem("Mesh Collider"))
                 {
                     entity.AddComponent<MeshColliderComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
+            if (!entity.HasComponent<AudioPlayerComponent>())
+            {
+                if (ImGui::MenuItem("Audio Player"))
+                {
+                    entity.AddComponent<AudioPlayerComponent>();
                     ImGui::CloseCurrentPopup();
                 }
             }

@@ -44,7 +44,6 @@ perf.data.old
 !.vscode/tasks.json
 !.vscode/extensions.json
 
-
 # --- Vcpkg ---
 /vcpkg_installed/
 .vcpkg-root
@@ -56,3 +55,6 @@ Thumbs.db
 *.log
 /core
 vgcore.*
+
+!Assets/**/*.*
+!Sandbox/**/*.*

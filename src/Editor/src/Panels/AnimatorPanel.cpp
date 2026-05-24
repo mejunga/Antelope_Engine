@@ -480,7 +480,7 @@ namespace Antelope::Editor
                     ImGui::DragFloat("Blend", &tr.BlendDuration, 0.01f, 0.0f, 2.0f, "%.2fs");
                     ImGui::Checkbox("Exit Time", &tr.HasExitTime);
 
-                    if (tr.HasExitTime) { ImGui::DragFloat("Exit At", &tr.ExitTime, 0.01f, 0.0f, 1.0f, "%.2f"); }
+                    if (tr.HasExitTime) { ImGui::DragFloat("Exit At", &tr.ExitTime, 0.01f, 0.0f, 1.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp); }
                     
                     ImGui::Separator();
 
@@ -586,7 +586,7 @@ namespace Antelope::Editor
             {
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(50.0f);
-                ImGui::DragFloat("##et", &tr.ExitTime, 0.01f, 0.0f, 1.0f, "%.2f");
+                ImGui::DragFloat("##et", &tr.ExitTime, 0.01f, 0.0f, 1.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
             }
 
             ImGui::Separator();
@@ -760,6 +760,33 @@ namespace Antelope::Editor
                 std::snprintf(buf, sizeof(buf), "%.2f / %.2fs", m_PreviewTime, dur);
                 ImGui::TextDisabled("%s", buf);
             }
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::TextDisabled("Events");
+
+            uint32_t evtDelete { UINT32_MAX };
+
+            for (uint32_t ei { 0 }; ei < static_cast<uint32_t>(state.Events.size()); ++ei)
+            {
+                auto& evt { state.Events[ei] };
+                ImGui::PushID(static_cast<int>(ei));
+
+                char nameBuf[64] {};
+                std::strncpy(nameBuf, evt.Name.c_str(), sizeof(nameBuf) - 1);
+                ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 90.0f);
+                if (ImGui::InputText("##en", nameBuf, sizeof(nameBuf))) { evt.Name = nameBuf; }
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(60.0f);
+                ImGui::DragFloat("##et", &evt.NormalizedTime, 0.01f, 0.0f, 1.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                ImGui::SameLine();
+                if (ImGui::SmallButton("x")) { evtDelete = ei; }
+
+                ImGui::PopID();
+            }
+
+            if (evtDelete != UINT32_MAX) { state.Events.erase(state.Events.begin() + evtDelete); }
+            if (ImGui::SmallButton("+ Event")) { state.Events.push_back({ "OnEvent", 0.5f }); }
         }
     }
 }

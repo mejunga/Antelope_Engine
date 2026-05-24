@@ -104,6 +104,24 @@ namespace Antelope
             out << YAML::Key << "MeshColliderComponent" << YAML::Value << true;
         }
 
+        if (entity.HasComponent<AudioPlayerComponent>())
+        {
+            const auto& player { entity.GetComponent<AudioPlayerComponent>() };
+            out << YAML::Key << "AudioPlayerComponent" << YAML::Value << YAML::BeginMap;
+            out << YAML::Key << "Clips" << YAML::Value << YAML::BeginSeq;
+            for (const auto& clip : player.Clips)
+            {
+                out << YAML::BeginMap;
+                out << YAML::Key << "AudioAssetUUID" << YAML::Value << (uint64_t)clip.AudioAssetUUID;
+                out << YAML::Key << "Volume" << YAML::Value << clip.Volume;
+                out << YAML::Key << "Loop" << YAML::Value << clip.Loop;
+                out << YAML::Key << "PlayOnStart" << YAML::Value << clip.PlayOnStart;
+                out << YAML::EndMap;
+            }
+            out << YAML::EndSeq;
+            out << YAML::EndMap;
+        }
+
         if (entity.HasComponent<DirectionalLightComponent>())
         {
             const auto& light { entity.GetComponent<DirectionalLightComponent>() };
@@ -201,6 +219,15 @@ namespace Antelope
                 out << YAML::Key << "Speed" << YAML::Value << state.Speed;
                 out << YAML::Key << "Loop" << YAML::Value << state.Loop;
                 out << YAML::Key << "EditorPos" << YAML::Value << YAML::Flow << YAML::BeginSeq << state.EditorPos.x << state.EditorPos.y << YAML::EndSeq;
+                out << YAML::Key << "Events" << YAML::Value << YAML::BeginSeq;
+                for (const auto& evt : state.Events)
+                {
+                    out << YAML::BeginMap;
+                    out << YAML::Key << "Name" << YAML::Value << evt.Name;
+                    out << YAML::Key << "Time" << YAML::Value << evt.NormalizedTime;
+                    out << YAML::EndMap;
+                }
+                out << YAML::EndSeq;
                 out << YAML::EndMap;
             }
             out << YAML::EndSeq;
@@ -407,6 +434,28 @@ namespace Antelope
                 entity.AddComponent<MeshColliderComponent>();
             }
 
+            if (auto node { entityNode["AudioPlayerComponent"] })
+            {
+                auto& player { entity.AddComponent<AudioPlayerComponent>() };
+                if (auto clips { node["Clips"] })
+                {
+                    for (auto clipNode : clips)
+                    {
+                        AudioClip clip;
+                        
+                        if (clipNode["AudioAssetUUID"])
+                        {
+                            clip.AudioAssetUUID = UUID(clipNode["AudioAssetUUID"].as<uint64_t>());
+                        }
+                        
+                        clip.Volume = clipNode["Volume"].as<float>();
+                        clip.Loop = clipNode["Loop"].as<bool>();
+                        clip.PlayOnStart = clipNode["PlayOnStart"].as<bool>();
+                        player.Clips.push_back(std::move(clip));
+                    }
+                }
+            }
+
             if (auto node { entityNode["DirectionalLightComponent"] })
             {
                 auto& light { entity.AddComponent<DirectionalLightComponent>() };
@@ -507,7 +556,20 @@ namespace Antelope
                         state.ClipIndex = sn["ClipIndex"].as<uint32_t>();
                         state.Speed = sn["Speed"].as<float>();
                         state.Loop = sn["Loop"].as<bool>();
+
                         if (sn["EditorPos"]) { state.EditorPos = { sn["EditorPos"][0].as<float>(), sn["EditorPos"][1].as<float>() }; }
+                        
+                        if (auto evtsNode { sn["Events"] })
+                        {
+                            for (auto en : evtsNode)
+                            {
+                                AnimationEvent evt;
+                                evt.Name = en["Name"].as<std::string>();
+                                evt.NormalizedTime = en["Time"].as<float>();
+                                state.Events.push_back(evt);
+                            }
+                        }
+                        
                         ctrl.States.push_back(std::move(state));
                     }
                 }

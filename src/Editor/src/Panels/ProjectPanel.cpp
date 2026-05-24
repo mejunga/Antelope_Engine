@@ -123,6 +123,7 @@ namespace Antelope::Editor
 
             std::string filename { filePath.filename().string() };
             const bool isMesh { type == AssetType::Mesh };
+            const bool isAudio { type == AssetType::AudioClip };
 
             if (isMesh && uuid != UUID(0) && m_AnimCache.find((uint64_t)uuid) == m_AnimCache.end())
             {
@@ -155,6 +156,7 @@ namespace Antelope::Editor
                 case AssetType::Texture2D: badge = "[T] "; break;
                 case AssetType::Scene: badge = "[S] "; break;
                 case AssetType::Material: badge = "[Mat] "; break;
+                case AssetType::AudioClip: badge = "[A] "; break;
                 default: break;
             }
 
@@ -166,6 +168,13 @@ namespace Antelope::Editor
             if (isMesh && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
             {
                 ImGui::SetDragDropPayload("ASSET_MESH", &uuid, sizeof(UUID));
+                ImGui::Text("%s", filename.c_str());
+                ImGui::EndDragDropSource();
+            }
+
+            if (isAudio && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
+            {
+                ImGui::SetDragDropPayload("ASSET_AUDIO", &uuid, sizeof(UUID));
                 ImGui::Text("%s", filename.c_str());
                 ImGui::EndDragDropSource();
             }

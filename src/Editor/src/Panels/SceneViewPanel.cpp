@@ -328,6 +328,25 @@ namespace Antelope::Editor
         glm::mat4 vp { cameraProjection * cameraView };
         DrawColliderGizmos(vp, ImGui::GetWindowPos(), { (float)newWidth, (float)newHeight });
 
+        {
+            ImVec2 winPos { ImGui::GetWindowPos() };
+            ImVec2 cMax { ImGui::GetWindowContentRegionMax() };
+            char buf[24];
+            std::snprintf(buf, sizeof(buf), "FPS: %d", static_cast<int>(ImGui::GetIO().Framerate));
+            ImVec2 textSize { ImGui::CalcTextSize(buf) };
+            constexpr float k_Pad { 6.0f };
+            constexpr float k_Margin { 8.0f };
+            float rx { winPos.x + cMax.x - textSize.x - k_Pad * 2.0f - k_Margin };
+            float ry { winPos.y + cMax.y - textSize.y - k_Pad * 2.0f - k_Margin };
+            ImDrawList* dl { ImGui::GetWindowDrawList() };
+            dl->AddRectFilled(
+                ImVec2(rx - k_Pad, ry - k_Pad),
+                ImVec2(rx + textSize.x + k_Pad, ry + textSize.y + k_Pad),
+                IM_COL32(20, 20, 20, 180), 4.0f
+            );
+            dl->AddText(ImVec2(rx, ry), IM_COL32(180, 230, 180, 255), buf);
+        }
+
         gamePanel.DrawPlaybackControls(Application::Get().GetWorld().get());
 
         ImGui::End();

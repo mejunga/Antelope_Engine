@@ -11,6 +11,8 @@
 #include <Engine/Asset/AssetManager.hpp>
 #include <Engine/Asset/TextureManager.hpp>
 #include <Engine/ECS/System/AnimationSystem.hpp>
+#include <Engine/ECS/System/AudioSystem.hpp>
+#include <Engine/Audio/AudioContext.hpp>
 #include <Engine/Renderer/Vulkan/RenderTexture.hpp>
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -26,6 +28,7 @@ namespace Antelope
     World::World()
     {
         m_PhysicsContext = std::make_unique<PhysicsContext>(Application::Get().GetAllocator(), Application::Get().GetJobSystem());
+        m_AudioContext = std::make_unique<AudioContext>();
 
         m_Registry.on_construct<TransformComponent>().connect<[](entt::registry& reg, entt::entity e)
         {
@@ -106,9 +109,12 @@ namespace Antelope
 
         for (const auto& [uuid, meta] : AssetManager::GetRegistry())
         {
-            if (meta.Type == AssetType::Texture2D)
+            if (meta.Type != AssetType::Texture2D) { continue; }
+            auto [it, inserted] { texturePaths.emplace(meta.FilePath.filename().string(), meta.FilePath) };
+            if (!inserted)
             {
-                texturePaths.emplace(meta.FilePath.filename().string(), meta.FilePath);
+                AE_ENGINE_WARN("World: Duplicate texture filename '{0}': '{1}' vs '{2}'. Consider renaming one.",
+                    meta.FilePath.filename().string(), it->second.string(), meta.FilePath.string());
             }
         }
 
@@ -242,6 +248,7 @@ namespace Antelope
         if (m_IsSimulating) { return; }
 
         PhysicsSystem::OnRuntimeStart(*this, *m_PhysicsContext);
+        AudioSystem::OnRuntimeStart(*this, *m_AudioContext);
         m_PhysicsContext->OptimizeBroadPhase();
         
         m_IsSimulating = true;
@@ -252,6 +259,7 @@ namespace Antelope
     {
         if (!m_IsSimulating) { return; }
 
+        AudioSystem::OnRuntimeStop(*this, *m_AudioContext);
         PhysicsSystem::OnRuntimeStop(*this, *m_PhysicsContext);
         
         m_IsSimulating = false;
@@ -263,7 +271,6 @@ namespace Antelope
         if (m_IsSimulating)
         {
             PhysicsSystem::OnUpdate(*this, *m_PhysicsContext, timeStep);
-            AnimationSystem::Update(*this, timeStep);
         }
     }
 
@@ -278,7 +285,7 @@ namespace Antelope
 
         float simDelta { (m_IsSimulating && !m_IsPaused) ? timeStep : 0.0f };
         AmbientSystem::OnUpdate(*this, simDelta);
-        AnimationSystem::Update(*this, simDelta);
+        AnimationSystem::OnUpdate(*this, simDelta);
         TransformSystem::OnUpdate(*this);
 
         auto renderer { Application::Get().GetRenderer() };
@@ -327,7 +334,7 @@ namespace Antelope
             m_HierarchyDirty = false;
         }
 
-        AnimationSystem::Update(*this, timeStep);
+        AnimationSystem::OnUpdate(*this, timeStep);
         AmbientSystem::OnUpdate(*this, timeStep);
         TransformSystem::OnUpdate(*this);
 

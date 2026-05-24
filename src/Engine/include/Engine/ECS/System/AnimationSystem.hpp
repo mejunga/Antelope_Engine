@@ -12,7 +12,7 @@ namespace Antelope
     class AnimationSystem
     {
     public:
-        static void Update(World& world, float dt);
+        static void OnUpdate(World& world, float dt);
 
         static void SetFloat(AnimatorComponent& animator, const std::string& name, float value);
         static void SetInt(AnimatorComponent& animator, const std::string& name, int value);

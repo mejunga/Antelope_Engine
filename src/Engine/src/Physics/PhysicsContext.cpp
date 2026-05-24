@@ -200,6 +200,11 @@ namespace Antelope
 
     PhysicsContext::~PhysicsContext()
     {
+        m_PhysicsSystem.reset();
+        m_Filters.reset();
+        m_JobSystem.reset();
+        m_TempAllocator.reset();
+
         JPH::UnregisterTypes();
 
         if (JPH::Factory::sInstance)

@@ -10,7 +10,6 @@
 #include <Engine/Debug/Log.hpp>
 #include <Engine/Core/FileSystem.hpp>
 #include <Engine/Renderer/Graphics/Material.hpp>
-#include <Engine/ECS/BaseComponents.hpp>
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -307,6 +306,7 @@ namespace Antelope::Editor
         ImGuiID dockspace_id { ImGui::GetID("AntelopeDockSpace") };
 
         static bool first_time { true };
+        
         if (first_time)
         {
             first_time = false;
@@ -331,9 +331,6 @@ namespace Antelope::Editor
 
         ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
 
-        static bool s_FocusScene { true };
-        if (s_FocusScene) { ImGui::SetWindowFocus("Scene"); s_FocusScene = false; }
-
         m_ScenePanel.OnUIRender(m_EditorCamera, m_GameViewPanel);
         m_AnimatorPanel.OnUIRender(m_ScenePanel.GetSelectedEntity());
         m_HierarchyPanel.OnUIRender(Application::Get().GetWorld().get(), m_ScenePanel.GetSelectedEntity());
@@ -342,7 +339,13 @@ namespace Antelope::Editor
         m_ProjectPanel.OnUIRender();
         m_GameViewPanel.OnUIRender(GetWorld().get());
 
-        if (s_FocusScene) { ImGui::SetWindowFocus("Scene"); s_FocusScene = false; }
+        static bool s_FocusScene { true };
+        
+        if (s_FocusScene && ImGui::FindWindowByName("Scene"))
+        {
+            ImGui::SetWindowFocus("Scene");
+            s_FocusScene = false;
+        }
 
         RenderSaveAsPopup();
 
@@ -386,6 +389,7 @@ namespace Antelope::Editor
     void AntelopeApp::NewUnnamedScene()
     {
         FreeSceneMeshes();
+        GetTextureManager()->Clear();
         GetWorld()->Clear();
         m_AssetBindings.clear();
         m_ModelCache.clear();   
@@ -406,6 +410,7 @@ namespace Antelope::Editor
     void AntelopeApp::LoadScene(const std::string& virtualPath)
     {
         FreeSceneMeshes();
+        GetTextureManager()->Clear();
         GetWorld()->Clear();
         m_AssetBindings.clear();
 
@@ -421,11 +426,15 @@ namespace Antelope::Editor
         }
 
         std::unordered_map<std::string, std::filesystem::path> texturePaths;
+        
         for (const auto& [assetUUID, meta] : AssetManager::GetRegistry())
         {
-            if (meta.Type == AssetType::Texture2D)
+            if (meta.Type != AssetType::Texture2D) { continue; }
+            auto [it, inserted] { texturePaths.emplace(meta.FilePath.filename().string(), meta.FilePath) };
+            if (!inserted)
             {
-                texturePaths.emplace(meta.FilePath.filename().string(), meta.FilePath);
+                AE_ENGINE_WARN("LoadScene: Duplicate texture filename '{0}': '{1}' vs '{2}'. Consider renaming one.",
+                    meta.FilePath.filename().string(), it->second.string(), meta.FilePath.string());
             }
         }
 

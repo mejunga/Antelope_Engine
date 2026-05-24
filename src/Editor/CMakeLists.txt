@@ -7,6 +7,15 @@ file(GLOB_RECURSE EDITOR_HDR CONFIGURE_DEPENDS "include/*.hpp")
 
 add_executable(AntelopeApp ${EDITOR_SRC} ${EDITOR_HDR})
 
+set_target_properties(AntelopeApp PROPERTIES WIN32_EXECUTABLE "$<CONFIG:Release>")
+if(MSVC)
+    target_link_options(AntelopeApp PRIVATE "$<$<CONFIG:Release>:/ENTRY:mainCRTStartup>")
+endif()
+
+if(WIN32)
+    target_sources(AntelopeApp PRIVATE "${CMAKE_SOURCE_DIR}/Assets/resources.rc")
+endif()
+
 target_include_directories(AntelopeApp PUBLIC include)
 target_include_directories(AntelopeApp PRIVATE src)
 

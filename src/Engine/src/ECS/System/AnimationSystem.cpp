@@ -221,7 +221,7 @@ namespace Antelope
         }
     }
 
-    void AnimationSystem::Update(World& world, float dt)
+    void AnimationSystem::OnUpdate(World& world, float dt)
     {
         auto view { world.GetRegistry().view<AnimatorComponent>() };
 
@@ -252,16 +252,37 @@ namespace Antelope
             const auto& activeClip { anim.Controller.Clips[activeState.ClipIndex] };
             if (activeClip.Channels.empty()) { continue; }
 
+            float prevStateTime { anim.StateTime };
             float effectiveDt { dt * anim.Speed * activeState.Speed };
             anim.StateTime += activeClip.TicksPerSecond * effectiveDt;
 
+            bool wrapped { false };
+            
             if (activeState.Loop)
             {
+                wrapped = (anim.StateTime >= activeClip.Duration);
                 anim.StateTime = std::fmod(anim.StateTime, activeClip.Duration);
             }
             else
             {
                 anim.StateTime = std::min(anim.StateTime, activeClip.Duration);
+            }
+
+            anim.FiredEvents.clear();
+
+            if (activeClip.Duration > 0.0f)
+            {
+                float prevNorm { prevStateTime / activeClip.Duration };
+                float currNorm { anim.StateTime / activeClip.Duration };
+
+                for (const auto& evt : activeState.Events)
+                {
+                    bool fire { !wrapped
+                        ? (evt.NormalizedTime >= prevNorm && evt.NormalizedTime < currNorm)
+                        : (evt.NormalizedTime >= prevNorm || evt.NormalizedTime < currNorm) };
+
+                    if (fire) { anim.FiredEvents.push_back(evt.Name); }
+                }
             }
 
             if (anim.BlendingFrom != UINT32_MAX)

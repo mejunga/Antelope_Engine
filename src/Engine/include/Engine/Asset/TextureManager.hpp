@@ -30,6 +30,7 @@ namespace Antelope
             ~TextureManager();
 
             uint32_t LoadTexture(const std::string& filepath, bool isSRGB = true);
+            void Clear();
 
             inline const std::vector<Texture>& GetGlobalTextures() const { return m_Textures; }
 

@@ -41,6 +41,12 @@ namespace Antelope
         float ExitTime { 1.0f };
     };
 
+    struct AnimationEvent
+    {
+        std::string Name;
+        float NormalizedTime { 0.0f };
+    };
+
     struct AnimationStateNode
     {
         std::string Name;
@@ -48,6 +54,7 @@ namespace Antelope
         float Speed { 1.0f };
         bool Loop { true };
         glm::vec2 EditorPos { 0.0f, 0.0f };
+        std::vector<AnimationEvent> Events;
     };
 
     struct AnimatorController
