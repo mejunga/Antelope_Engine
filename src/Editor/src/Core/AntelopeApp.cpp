@@ -10,18 +10,182 @@
 #include <Engine/Debug/Log.hpp>
 #include <Engine/Core/FileSystem.hpp>
 #include <Engine/Renderer/Graphics/Material.hpp>
+#include <Engine/Renderer/UI/UIContext.hpp>
 
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <GLFW/glfw3.h>
+#include <yaml-cpp/yaml.h>
 
 #include <filesystem>
 #include <unordered_map>
-#include <algorithm> 
+#include <algorithm>
+#include <fstream>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 
 namespace Antelope::Editor
 {
+    static std::filesystem::path FindCompiler()
+    {
+        namespace fs = std::filesystem;
+
+        const char* vcTools { std::getenv("VCToolsInstallDir") };
+        if (vcTools)
+        {
+            fs::path cl { fs::path(vcTools) / "bin" / "HostX64" / "x64" / "cl.exe" };
+            if (fs::exists(cl)) { return cl; }
+        }
+
+        const char* pf86 { std::getenv("ProgramFiles(x86)") };
+        if (pf86)
+        {
+            fs::path vswhere { fs::path(pf86) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe" };
+
+            if (fs::exists(vswhere))
+            {
+                std::string cmd { "\"\"" + vswhere.string()
+                    + "\" -latest -products * -find \"VC\\Tools\\MSVC\\**\\bin\\HostX64\\x64\\cl.exe\"\"" };
+
+                FILE* p { _popen(cmd.c_str(), "r") };
+                if (p)
+                {
+                    char buf[512] {};
+                    if (fgets(buf, sizeof(buf), p))
+                    {
+                        _pclose(p);
+                        std::string path { buf };
+                        path.erase(path.find_last_not_of(" \t\r\n") + 1);
+                        if (!path.empty() && fs::exists(path)) { return path; }
+                    }
+                    else { _pclose(p); }
+                }
+            }
+        }
+
+        FILE* pipe { _popen("where cl.exe", "r") };
+        if (pipe)
+        {
+            char buf[512] {};
+            if (fgets(buf, sizeof(buf), pipe))
+            {
+                _pclose(pipe);
+                std::string path { buf };
+                path.erase(path.find_last_not_of(" \t\r\n") + 1);
+                if (!path.empty() && fs::exists(path)) { return path; }
+            }
+            else { _pclose(pipe); }
+        }
+
+        return {};
+    }
+
+    static std::filesystem::path SetupCompileEnvironment(const std::filesystem::path& projectRoot)
+    {
+        namespace fs = std::filesystem;
+        const char* pf86 { std::getenv("ProgramFiles(x86)") };
+
+        std::error_code ec;
+        fs::create_directories(projectRoot / "Libraries", ec);
+        std::ofstream header(projectRoot / "Libraries" / "AntelopeScript.hpp");
+        header << "#pragma once\n"
+            << "#include <Engine/Scripting/Script.hpp>\n"
+            << "#include <Engine/Scripting/GameSystem.hpp>\n"
+            << "#include <Engine/Scripting/ScriptMacros.hpp>\n"
+            << "#include <Engine/ECS/World.hpp>\n"
+            << "#include <Engine/Platform/Input.hpp>\n";
+
+        wchar_t buf[MAX_PATH] {};
+        GetModuleFileNameW(nullptr, buf, MAX_PATH);
+        fs::path exeDir { fs::path(buf).parent_path() };
+        fs::path engineInclude { exeDir / "Engine" / "include" };
+        fs::path engineLib     { exeDir / "Engine" / "lib" };
+
+        fs::path compilerPath { FindCompiler() };
+
+        if (compilerPath.empty())
+        {
+            AE_CLIENT_ERROR("Script compiler: cl.exe not found. Add it to PATH or install MSVC Build Tools.");
+            return {};
+        }
+
+        auto yp { [](const fs::path& p) {
+            std::string s { p.string() };
+            std::string out;
+            out.reserve(s.size());
+            for (char c : s) { if (c == '\\') { out += '/'; } else { out += c; } }
+            return out;
+        }};
+
+        fs::path msvcRoot { compilerPath.parent_path().parent_path().parent_path().parent_path() };
+        fs::path msvcInclude { msvcRoot / "include" };
+        fs::path msvcLib { msvcRoot / "lib" / "x64" };
+
+        fs::path winKitsInclude;
+        fs::path winKitsUcrtLib;
+        fs::path winKitsUmLib;
+
+        if (pf86)
+        {
+            fs::path kitsBase { fs::path(pf86) / "Windows Kits" / "10" };
+            fs::path kitsInc { kitsBase / "include" };
+            fs::path kitsLib { kitsBase / "lib" };
+
+            std::string latestSdk;
+            std::error_code ec2;
+            for (const auto& entry : fs::directory_iterator(kitsInc, ec2))
+            {
+                std::string name { entry.path().filename().string() };
+                if (entry.is_directory() && name > latestSdk) { latestSdk = name; }
+            }
+
+            if (!latestSdk.empty())
+            {
+                winKitsInclude = kitsInc / latestSdk;
+                winKitsUcrtLib = kitsLib / latestSdk / "ucrt" / "x64";
+                winKitsUmLib = kitsLib / latestSdk / "um" / "x64";
+            }
+        }
+
+        std::ofstream cfg(exeDir / "compile_config.yaml");
+        cfg << "Compiler: \"" << yp(compilerPath) << "\"\n";
+    #ifdef NDEBUG
+        cfg << "Flags: \"/std:c++20 /EHsc /MD /utf-8 /DANTELOPE_EDITOR_MODE\"\n";
+    #else
+        cfg << "Flags: \"/std:c++20 /EHsc /MDd /utf-8 /DANTELOPE_EDITOR_MODE\"\n";
+    #endif
+        cfg << "IncludeDirs:\n";
+        cfg << "- \"" << yp(engineInclude) << "\"\n";
+        cfg << "- \"" << yp(projectRoot / "Libraries") << "\"\n";
+
+        if (fs::exists(msvcInclude)) { cfg << "- \"" << yp(msvcInclude) << "\"\n"; }
+        if (!winKitsInclude.empty())
+        {
+            cfg << "- \"" << yp(winKitsInclude / "ucrt") << "\"\n";
+            cfg << "- \"" << yp(winKitsInclude / "um") << "\"\n";
+            cfg << "- \"" << yp(winKitsInclude / "shared") << "\"\n";
+        }
+
+        cfg << "LibDirs:\n";
+        cfg << "- \"" << yp(engineLib) << "\"\n";
+
+        if (fs::exists(msvcLib)) { cfg << "- \"" << yp(msvcLib) << "\"\n"; }
+        if (!winKitsUcrtLib.empty())
+        {
+            cfg << "- \"" << yp(winKitsUcrtLib) << "\"\n";
+            cfg << "- \"" << yp(winKitsUmLib) << "\"\n";
+        }
+
+        cfg << "Libs:\n";
+        cfg << "- Antelope.lib\n";
+
+        fs::path configPath { exeDir / "compile_config.yaml" };
+        AE_CLIENT_INFO("Compile config written: '{0}'", configPath.string());
+        return configPath;
+    }
+
     AntelopeApp::AntelopeApp(const std::string& projectRoot)
         : m_ProjectRoot(std::filesystem::absolute(projectRoot))
         , m_EditorCamera(glm::vec3(0.0f, 2.0f, 20.0f))
@@ -62,6 +226,31 @@ namespace Antelope::Editor
         AssetManager::LoadAssetRegistry(assetsDir, m_ProjectState.LastKnownAssets);
         GetFileWatcher().BuildFrom(assetsDir, AssetManager::GetRegistry());
 
+        m_CompileConfigPath = SetupCompileEnvironment(m_ProjectRoot);
+    #ifdef NDEBUG
+        std::filesystem::path dllPath { m_ProjectRoot / ".generated" / "Scripts.dll" };
+    #else
+        std::filesystem::path dllPath { m_ProjectRoot / ".generated" / "Scripts_d.dll" };
+    #endif
+
+
+        if (std::filesystem::exists(dllPath))
+        {
+            ScriptSystem::LoadDLL(dllPath.string());
+            AE_CLIENT_INFO("Loaded existing script DLL: '{0}'", dllPath.string());
+        }
+        else
+        {
+            bool hasScripts { false };
+
+            for (auto& [uuid, meta] : AssetManager::GetRegistry())
+            {
+                if (meta.Type == AssetType::Script) { hasScripts = true; break; }
+            }
+            
+            if (hasScripts) { TriggerScriptRecompile(); }
+        }
+
         m_EditorCamera.SetState(
             m_ProjectState.CameraPosition,
             m_ProjectState.CameraYaw,
@@ -101,18 +290,60 @@ namespace Antelope::Editor
     {
         for (auto& change : GetFileWatcher().FlushChanges())
         {
+            AssetType changeAssetType { AssetManager::GetMetadata(change.AssetUUID).Type };
+
             switch (change.Type)
             {
-                case AssetChangeType::Modified: AE_CLIENT_INFO("Asset modified: '{0}'", change.NewPath.filename().string()); break;
-                case AssetChangeType::Moved: AE_CLIENT_INFO("Asset moved: '{0}' -> '{1}'", change.OldPath.filename().string(), change.NewPath.string()); break;
+                case AssetChangeType::Modified:
+                {
+                    AE_CLIENT_INFO("Asset modified: '{0}'", change.NewPath.filename().string());
+                    if (changeAssetType == AssetType::Script)
+                    {
+                        m_ScriptRecompilePending = true;
+                        m_ScriptDebounce = SCRIPT_RECOMPILE_DELAY;
+                    }
+                    break;
+                }
+                case AssetChangeType::Moved:
+                {
+                    AE_CLIENT_INFO("Asset moved: '{0}' -> '{1}'", change.OldPath.filename().string(), change.NewPath.string());
+                    break;
+                }
                 case AssetChangeType::Deleted:
                 {
                     AE_CLIENT_WARN("Asset deleted: '{0}'", change.OldPath.filename().string());
                     std::error_code ec;
                     std::filesystem::remove(change.OldPath.string() + ".meta", ec);
+                    auto deletedType { AssetManager::GetAssetTypeFromFileExtension(change.OldPath.extension()) };
+                    
+                    if (deletedType == AssetType::Script)
+                    {
+                        m_ScriptRecompilePending = true;
+                        m_ScriptDebounce = SCRIPT_RECOMPILE_DELAY;
+                    }
+                    
                     break;
                 }
-                case AssetChangeType::Imported: AE_CLIENT_INFO("Asset imported: '{0}'", change.NewPath.filename().string()); break;
+                case AssetChangeType::Imported:
+                {
+                    AE_CLIENT_INFO("Asset imported: '{0}'", change.NewPath.filename().string());
+                    if (changeAssetType == AssetType::Script)
+                    {
+                        m_ScriptRecompilePending = true;
+                        m_ScriptDebounce = SCRIPT_RECOMPILE_DELAY;
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (m_ScriptRecompilePending)
+        {
+            m_ScriptDebounce -= timeStep;
+            if (m_ScriptDebounce <= 0.0f)
+            {
+                m_ScriptRecompilePending = false;
+                TriggerScriptRecompile();
             }
         }
 
@@ -285,6 +516,7 @@ namespace Antelope::Editor
 
     void AntelopeApp::OnUIRender()
     {
+        ImGui::SetCurrentContext(Application::Get().GetUIContext()->GetContext());
         static ImGuiDockNodeFlags dockspace_flags { ImGuiDockNodeFlags_None };
         ImGuiWindowFlags window_flags { ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking
                                       | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse
@@ -566,6 +798,62 @@ namespace Antelope::Editor
             record.RelativePath = rel;
 
             m_ProjectState.LastKnownAssets.push_back(record);
+        }
+    }
+
+    void AntelopeApp::TriggerScriptRecompile()
+    {
+        namespace fs = std::filesystem;
+
+        bool hasScripts { false };
+
+        for (auto& [uuid, meta] : AssetManager::GetRegistry())
+        {
+            if (meta.Type == AssetType::Script) { hasScripts = true; break; }
+        }
+
+        if (!hasScripts) { return; }
+
+        if (m_CompileConfigPath.empty())
+        {
+            AE_CLIENT_ERROR("Script compiler: compile_config.yaml not found. Rebuild the engine.");
+            return;
+        }
+
+        fs::path assetsDir { m_ProjectRoot / "Assets" };
+        fs::path generatedDir { m_ProjectRoot / ".generated" };
+    #ifdef NDEBUG
+        fs::path dllPath { generatedDir / "Scripts.dll" };
+    #else
+        fs::path dllPath { generatedDir / "Scripts_d.dll" };
+    #endif
+
+
+        std::error_code ec;
+        fs::create_directories(generatedDir, ec);
+
+        AE_CLIENT_INFO("HeaderTool: scanning scripts...");
+        HeaderTool::ScanAndGenerate(assetsDir.string(), generatedDir.string());
+
+        AE_CLIENT_INFO("ScriptCompiler: building Scripts.dll...");
+        std::string libDir { (m_ProjectRoot / "Libraries").string() };
+        auto result { ScriptCompiler::Compile(assetsDir.string(), generatedDir.string(), generatedDir.string(), m_CompileConfigPath.string(), { libDir }) };
+
+        if (!result.Success)
+        {
+            AE_CLIENT_ERROR("Script compilation failed:\n{0}", result.Output);
+            return;
+        }
+
+        AE_CLIENT_INFO("Scripts compiled successfully.");
+
+        if (ScriptLibrary::Get().IsLoaded())
+        {
+            ScriptSystem::HotReload(*GetWorld());
+        }
+        else
+        {
+            ScriptSystem::LoadDLL(dllPath.string());
         }
     }
 

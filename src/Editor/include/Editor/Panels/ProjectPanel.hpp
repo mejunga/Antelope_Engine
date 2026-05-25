@@ -30,12 +30,18 @@ namespace Antelope::Editor
         private:
             void DrawFolderTree(const std::filesystem::path& dir);
             void DrawContentView();
+            void RenderCreateScriptPopup();
+            void CreateScriptFiles(const std::string& name, int scriptType);
 
         private:
             std::filesystem::path m_AssetsRoot;
             std::filesystem::path m_SelectedDir;
             std::unordered_map<uint64_t, std::vector<AnimationClip>> m_AnimCache;
             std::unordered_map<uint64_t, ModelData>* m_ModelCache { nullptr };
+
+            bool m_CreateScriptPopupOpen { false };
+            int m_SelectedScriptType { 0 };
+            char m_ScriptNameBuf[64] {};
     };
 
 }

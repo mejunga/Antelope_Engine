@@ -4,6 +4,7 @@
 #include <Engine/ECS/Entity.hpp>
 #include <Engine/ECS/BaseComponents.hpp>
 #include <Engine/Debug/Log.hpp>
+#include <Engine/Scripting/ComponentRegistry.hpp>
 
 #include <yaml-cpp/yaml.h>
 #include <fstream>
@@ -270,6 +271,16 @@ namespace Antelope
 
             out << YAML::EndMap;
         }
+
+        if (entity.HasComponent<ScriptComponent>())
+        {
+            const auto& sc { entity.GetComponent<ScriptComponent>() };
+            out << YAML::Key << "ScriptComponent" << YAML::Value << YAML::BeginMap;
+            out << YAML::Key << "ClassName" << YAML::Value << sc.ScriptClassName;
+            out << YAML::EndMap;
+        }
+
+        ComponentRegistry::SerializeAll(out, world.GetRegistry(), entity.GetHandle());
 
         out << YAML::EndMap;
 
@@ -615,6 +626,14 @@ namespace Antelope
                     }
                 }
             }
+            
+            if (auto node { entityNode["ScriptComponent"] })
+            {
+                auto& sc { entity.AddComponent<ScriptComponent>() };
+                sc.ScriptClassName = node["ClassName"].as<std::string>();
+            }
+
+            ComponentRegistry::DeserializeAll(entityNode, world.GetRegistry(), entity.GetHandle());
         }
 
         std::vector<AssetBinding> bindings;

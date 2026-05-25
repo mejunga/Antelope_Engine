@@ -16,6 +16,8 @@
 
 namespace Antelope
 {
+    ImGuiContext* UIContext::GetContext() const { return ImGui::GetCurrentContext(); }
+
     UIContext::UIContext(std::shared_ptr<VulkanContext> context, std::shared_ptr<SwapChain> swapChain, std::shared_ptr<Renderer> renderer, Window& window)
         : m_Context(context), m_SwapChain(swapChain), m_Renderer(renderer), m_Window(window)
     {

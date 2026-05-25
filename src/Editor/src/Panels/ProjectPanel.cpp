@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -41,6 +42,132 @@ namespace Antelope::Editor
         ImGui::EndChild();
 
         ImGui::End();
+
+        RenderCreateScriptPopup();
+    }
+
+    void ProjectPanel::RenderCreateScriptPopup()
+    {
+        if (m_CreateScriptPopupOpen)
+        {
+            ImGui::OpenPopup("Create Script");
+            m_CreateScriptPopupOpen = false;
+        }
+
+        ImVec2 center { ImGui::GetMainViewport()->GetCenter() };
+        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+        if (ImGui::BeginPopupModal("Create Script", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::TextDisabled("Script Type");
+            ImGui::Spacing();
+
+            ImGui::RadioButton("Script  (entity behaviour, like MonoBehaviour)", &m_SelectedScriptType, 0);
+            ImGui::RadioButton("Game System  (world behaviour, runs globally)", &m_SelectedScriptType, 1);
+
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            ImGui::SetNextItemWidth(300.0f);
+            ImGui::InputText("Name", m_ScriptNameBuf, sizeof(m_ScriptNameBuf));
+
+            ImGui::Spacing();
+
+            bool nameValid { m_ScriptNameBuf[0] != '\0' };
+            if (!nameValid) { ImGui::BeginDisabled(); }
+
+            if (ImGui::Button("Create", ImVec2(120.0f, 0.0f)))
+            {
+                CreateScriptFiles(m_ScriptNameBuf, m_SelectedScriptType);
+                ImGui::CloseCurrentPopup();
+            }
+
+            if (!nameValid) { ImGui::EndDisabled(); }
+
+            ImGui::SameLine();
+
+            if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f))) { ImGui::CloseCurrentPopup(); }
+
+            ImGui::EndPopup();
+        }
+    }
+
+    void ProjectPanel::CreateScriptFiles(const std::string& name, int scriptType)
+    {
+        namespace fs = std::filesystem;
+
+        fs::path hppPath { m_SelectedDir / (name + ".hpp") };
+        fs::path cppPath { m_SelectedDir / (name + ".cpp") };
+
+        if (scriptType == 0)
+        {
+            {
+                std::ofstream f(hppPath);
+                f << "#pragma once\n"
+                  << "#include <AntelopeScript.hpp>\n"
+                  << "\n"
+                  << "ANTELOPE_SCRIPT()\n"
+                  << "class " << name << " : public Antelope::Script\n"
+                  << "{\n"
+                  << "public:\n"
+                  << "    void OnCreate() override;\n"
+                  << "    void OnUpdate(float dt) override;\n"
+                  << "    void OnDestroy() override;\n"
+                  << "};\n";
+            }
+            {
+                std::ofstream f(cppPath);
+                f << "#include \"" << name << ".hpp\"\n"
+                  << "\n"
+                  << "void " << name << "::OnCreate()\n"
+                  << "{\n"
+                  << "}\n"
+                  << "\n"
+                  << "void " << name << "::OnUpdate(float dt)\n"
+                  << "{\n"
+                  << "}\n"
+                  << "\n"
+                  << "void " << name << "::OnDestroy()\n"
+                  << "{\n"
+                  << "}\n";
+            }
+        }
+        else
+        {
+            {
+                std::ofstream f(hppPath);
+                f << "#pragma once\n"
+                  << "#include <AntelopeScript.hpp>\n"
+                  << "\n"
+                  << "ANTELOPE_SYSTEM()\n"
+                  << "class " << name << " : public Antelope::GameSystem\n"
+                  << "{\n"
+                  << "    public:\n"
+                  << "        void OnStart(Antelope::World& world) override;\n"
+                  << "        void OnUpdate(Antelope::World& world, float dt) override;\n"
+                  << "        void OnStop(Antelope::World& world) override;\n"
+                  << "};\n";
+            }
+            {
+                std::ofstream f(cppPath);
+                f << "#include \"" << name << ".hpp\"\n"
+                  << "\n"
+                  << "void " << name << "::OnStart(Antelope::World& world)\n"
+                  << "{\n"
+                  << "}\n"
+                  << "\n"
+                  << "void " << name << "::OnUpdate(Antelope::World& world, float dt)\n"
+                  << "{\n"
+                  << "}\n"
+                  << "\n"
+                  << "void " << name << "::OnStop(Antelope::World& world)\n"
+                  << "{\n"
+                  << "}\n";
+            }
+        }
+
+        AssetManager::ImportAsset(hppPath);
+        AssetManager::ImportAsset(cppPath);
     }
 
     void ProjectPanel::DrawFolderTree(const std::filesystem::path& dir)
@@ -81,6 +208,17 @@ namespace Antelope::Editor
     void ProjectPanel::DrawContentView()
     {
         if (m_SelectedDir.empty() || !std::filesystem::exists(m_SelectedDir)) { return; }
+
+        if (ImGui::BeginPopupContextWindow("##ContentCtx", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
+        {
+            if (ImGui::MenuItem("Create Script"))
+            {
+                memset(m_ScriptNameBuf, 0, sizeof(m_ScriptNameBuf));
+                m_SelectedScriptType = 0;
+                m_CreateScriptPopupOpen = true;
+            }
+            ImGui::EndPopup();
+        }
 
         std::error_code ec;
         std::vector<std::filesystem::path> dirs, files;
@@ -157,6 +295,7 @@ namespace Antelope::Editor
                 case AssetType::Scene: badge = "[S] "; break;
                 case AssetType::Material: badge = "[Mat] "; break;
                 case AssetType::AudioClip: badge = "[A] "; break;
+                case AssetType::Script: badge = filePath.extension() == ".hpp" ? "[Sc] " : "[Cpp] "; break;
                 default: break;
             }
 
@@ -175,6 +314,14 @@ namespace Antelope::Editor
             if (isAudio && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
             {
                 ImGui::SetDragDropPayload("ASSET_AUDIO", &uuid, sizeof(UUID));
+                ImGui::Text("%s", filename.c_str());
+                ImGui::EndDragDropSource();
+            }
+
+            if (type == AssetType::Script && filePath.extension() == ".hpp"
+                && uuid != UUID(0) && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
+            {
+                ImGui::SetDragDropPayload("ASSET_SCRIPT", &uuid, sizeof(UUID));
                 ImGui::Text("%s", filename.c_str());
                 ImGui::EndDragDropSource();
             }

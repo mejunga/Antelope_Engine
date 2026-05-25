@@ -1,5 +1,14 @@
 #pragma once
 
+#ifndef ANTELOPE_API
+    #ifdef ANTELOPE_BUILD_DLL
+        #define ANTELOPE_API __declspec(dllexport)
+    #else
+        #define ANTELOPE_API __declspec(dllimport)
+    #endif
+#endif
+
+
 #include <spdlog/spdlog.h>
 #include <spdlog/fmt/ostr.h>
 
@@ -17,8 +26,8 @@ namespace Antelope
             inline static std::shared_ptr<spdlog::logger>& GetClientLogger() { return s_ClientLogger; }
 
         private:
-            static std::shared_ptr<spdlog::logger> s_CoreLogger;
-            static std::shared_ptr<spdlog::logger> s_ClientLogger;
+            static ANTELOPE_API std::shared_ptr<spdlog::logger> s_CoreLogger;
+            static ANTELOPE_API std::shared_ptr<spdlog::logger> s_ClientLogger;
     };
 }
 

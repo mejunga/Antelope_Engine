@@ -14,6 +14,9 @@
 #include <Engine/Renderer/Graphics/EditorCamera.hpp>
 #include <Engine/Scene/SceneSerializer.hpp>
 #include <Engine/Renderer/Graphics/Model.hpp>
+#include <Engine/Scripting/HeaderTool.hpp>
+#include <Engine/Scripting/ScriptCompiler.hpp>
+#include <Engine/ECS/System/ScriptSystem.hpp>
 
 #include <unordered_map>
 #include <filesystem>
@@ -42,6 +45,7 @@ namespace Antelope::Editor
             void RenderSaveAsPopup();
             void PopulateAssetRecords();
             Entity SpawnModel(UUID assetUUID, glm::vec3 spawnPos);
+            void TriggerScriptRecompile();
 
         private:
             std::filesystem::path m_ProjectRoot;
@@ -58,6 +62,11 @@ namespace Antelope::Editor
 
             float m_DebounceTimer { 0.0f };
             static constexpr float DEBOUNCE_DELAY { 0.2f };
+
+            bool m_ScriptRecompilePending { false };
+            float m_ScriptDebounce { 0.0f };
+            std::filesystem::path m_CompileConfigPath;
+            static constexpr float SCRIPT_RECOMPILE_DELAY { 1.0f };
 
             EditorCamera m_EditorCamera;
             SceneViewPanel m_ScenePanel;

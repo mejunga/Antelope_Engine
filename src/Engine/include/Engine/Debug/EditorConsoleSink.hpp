@@ -1,5 +1,13 @@
 #pragma once
 
+#ifndef ANTELOPE_API
+    #ifdef ANTELOPE_BUILD_DLL
+        #define ANTELOPE_API __declspec(dllexport)
+    #else
+        #define ANTELOPE_API __declspec(dllimport)
+    #endif
+#endif
+
 #include <spdlog/sinks/base_sink.h>
 
 #include <mutex>
@@ -19,7 +27,7 @@ namespace Antelope
     class EditorConsoleSink : public spdlog::sinks::base_sink<std::mutex>
     {
         public:
-            static std::vector<LogMessage> s_Messages;
+            static ANTELOPE_API std::vector<LogMessage> s_Messages;
             
         protected:
             void sink_it_(const spdlog::details::log_msg& msg) override

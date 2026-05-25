@@ -42,3 +42,36 @@ add_custom_command(TARGET AntelopeApp POST_BUILD
 
     COMMENT "Copying Assets and filtering out raw Shaders..."
 )
+
+add_custom_command(TARGET AntelopeApp POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/src/Engine/include"
+        "$<TARGET_FILE_DIR:AntelopeApp>/Engine/include"
+    COMMENT "Copying engine headers for script compilation"
+)
+
+add_custom_command(TARGET AntelopeApp POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_LINKER_FILE:Antelope>"
+        "$<TARGET_FILE_DIR:AntelopeApp>/Engine/lib/$<TARGET_LINKER_FILE_NAME:Antelope>"
+    COMMENT "Copying Antelope import lib for script compilation"
+)
+
+add_custom_command(TARGET AntelopeApp POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_FILE:Antelope>"
+        "$<TARGET_FILE_DIR:AntelopeApp>/$<TARGET_FILE_NAME:Antelope>"
+    COMMENT "Copying Antelope.dll to output"
+)
+
+if(DEFINED _VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
+    set(_vcpkg_inc "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include")
+    if(EXISTS "${_vcpkg_inc}")
+        add_custom_command(TARGET AntelopeApp POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${_vcpkg_inc}"
+                "$<TARGET_FILE_DIR:AntelopeApp>/Engine/include"
+            COMMENT "Copying vcpkg headers for script compilation"
+        )
+    endif()
+endif()

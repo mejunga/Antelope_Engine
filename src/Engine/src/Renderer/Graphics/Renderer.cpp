@@ -333,7 +333,6 @@ namespace Antelope
     void Renderer::FreeMesh(const MeshHandle& handle)
     {
         m_GpuAllocator->FreeMesh(handle.MeshID);
-        AE_ENGINE_TRACE("Mesh freed from GPU Buffers.");
     }
 
     void Renderer::UpdateTextureDescriptors(const std::vector<Texture>& textures)

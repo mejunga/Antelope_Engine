@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 
+struct ImGuiContext;
 
 namespace Antelope
 {
@@ -30,6 +31,7 @@ namespace Antelope
             void ApplyTheme(const EditorThemeProps& props);
 
             inline void* GetSceneTextureID() const { return m_SceneTexture; }
+            ImGuiContext* GetContext() const;
 
         private:
             void InitImGui();

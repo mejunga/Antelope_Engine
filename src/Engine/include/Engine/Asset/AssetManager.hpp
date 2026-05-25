@@ -1,5 +1,13 @@
 #pragma once
 
+#ifndef ANTELOPE_API
+    #ifdef ANTELOPE_BUILD_DLL
+        #define ANTELOPE_API __declspec(dllexport)
+    #else
+        #define ANTELOPE_API __declspec(dllimport)
+    #endif
+#endif
+
 #include <Engine/Asset/AssetTypes.hpp>
 
 #include <unordered_map>
@@ -31,6 +39,6 @@ namespace Antelope
                                                 const std::vector<AssetRecord>& lastKnownAssets);
 
         private:
-            static std::unordered_map<UUID, AssetMetadata> s_AssetRegistry;
+            static ANTELOPE_API std::unordered_map<UUID, AssetMetadata> s_AssetRegistry;
     };
 }

@@ -2269,6 +2269,1216 @@ AssetBindings:
     AssetUUID: 9057049987548632325
     MeshIndex: 561
 Entities:
+  - Entity: 10249243474405155672
+    TagComponent:
+      Tag: Camera
+    TransformComponent:
+      Translation: [-48.019108, 3.4498968, 5.8835263]
+      Rotation: [-0.28797975, 171.81584, 0]
+      Scale: [1, 1, 1]
+    CameraComponent:
+      FOV: 0.7853982
+      Near: 0.1
+      Far: 1000
+      Prio: 1
+  - Entity: 8990208328687078625
+    TagComponent:
+      Tag: Bear
+    TransformComponent:
+      Translation: [-54.688114, 14.688881, 9.530904]
+      Rotation: [0.0011390122, -0.020203583, 0.032110117]
+      Scale: [0.0012499996, 0.00125, 0.00125]
+    RigidBodyComponent:
+      Type: 2
+      Mass: 1
+      Friction: 0.2
+      Restitution: 0
+    ColliderComponent:
+      Type: 0
+      Size: [2, 1.2, 1.5]
+      Offset: [0.25, 0.6, 0]
+    AudioPlayerComponent:
+      Clips:
+        - AudioAssetUUID: 14034907395822295268
+          Volume: 1
+          Loop: false
+          PlayOnStart: false
+    AnimatorComponent:
+      Speed: 1
+      DefaultState: 0
+      Clips:
+        - Bear|DEMO_Idle
+        - Bear|DEMO_Snorting
+      States:
+        - Name: Bear_Idle
+          ClipIndex: 0
+          Speed: 1
+          Loop: true
+          EditorPos: [124, 204]
+          Events:
+            []
+        - Name: Bear_Snort
+          ClipIndex: 1
+          Speed: 2
+          Loop: false
+          EditorPos: [204, 444]
+          Events:
+            []
+      Transitions:
+        - FromState: 4294967295
+          ToState: 0
+          BlendDuration: 0.15
+          HasExitTime: false
+          ExitTime: 1
+          Conditions:
+            []
+        - FromState: 0
+          ToState: 1
+          BlendDuration: 0.15
+          HasExitTime: false
+          ExitTime: 6.25
+          Conditions:
+            - Param: 0
+              Op: 4
+              Threshold: 0
+        - FromState: 1
+          ToState: 0
+          BlendDuration: 0.15
+          HasExitTime: true
+          ExitTime: 1
+          Conditions:
+            []
+      Parameters:
+        - Name: Snort
+          Type: 3
+          FloatValue: 0
+          IntValue: 0
+          BoolValue: false
+    ScriptComponent:
+      ClassName: Bear
+  - Entity: 12476797892596032151
+    ParentID: 8990208328687078625
+    TagComponent:
+      Tag: Bear
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [0, 0, 0]
+      Scale: [10, 10, 10]
+  - Entity: 4966751551271223424
+    ParentID: 12476797892596032151
+    TagComponent:
+      Tag: Root
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [0, -1.570451, 0]
+      Scale: [1, 1, 1]
+  - Entity: 3320338170704964645
+    ParentID: 4966751551271223424
+    TagComponent:
+      Tag: Pelvis
+    TransformComponent:
+      Translation: [75.53348, -1.0202264, 44.308167]
+      Rotation: [2.703287, -0.15218455, 1.5689185]
+      Scale: [0.99999994, 0.99999994, 0.99999994]
+  - Entity: 9079321988399770626
+    ParentID: 3320338170704964645
+    TagComponent:
+      Tag: Spine1
+    TransformComponent:
+      Translation: [2.0861626e-07, 0.19417088, 13.267769]
+      Rotation: [1.7072041, -0.1592022, -0.042451344]
+      Scale: [1, 1, 0.99999994]
+  - Entity: 14983600887839010156
+    ParentID: 9079321988399770626
+    TagComponent:
+      Tag: Spine2
+    TransformComponent:
+      Translation: [4.693866e-06, 25.405607, 2.9867515e-05]
+      Rotation: [0.24230033, -0.03916882, 0.13299955]
+      Scale: [1, 1, 1]
+  - Entity: 4250003782276588037
+    ParentID: 14983600887839010156
+    TagComponent:
+      Tag: Chest
+    TransformComponent:
+      Translation: [-4.7683716e-07, 26.022617, 8.195639e-08]
+      Rotation: [0.103708416, -0.024095468, -0.10174958]
+      Scale: [1, 0.99999994, 1]
+  - Entity: 17351743546454221820
+    ParentID: 4250003782276588037
+    TagComponent:
+      Tag: Neck1
+    TransformComponent:
+      Translation: [-0.015244186, 25.390062, 0.0431837]
+      Rotation: [-0.14447743, 0.0069346977, -0.023949087]
+      Scale: [1, 1, 1]
+  - Entity: 17046016041758058850
+    ParentID: 17351743546454221820
+    TagComponent:
+      Tag: Neck2
+    TransformComponent:
+      Translation: [-0.116476655, 13.977568, 0.19322851]
+      Rotation: [-0.0019904908, -0.037464805, 0.014994227]
+      Scale: [0.99999994, 1, 1]
+  - Entity: 10748056486674902647
+    ParentID: 17046016041758058850
+    TagComponent:
+      Tag: Head
+    TransformComponent:
+      Translation: [-0.000487566, 16.39013, -0.41658753]
+      Rotation: [0.45015433, 0.024311405, -0.051739797]
+      Scale: [1, 1, 1]
+  - Entity: 17197270077592857845
+    ParentID: 10748056486674902647
+    TagComponent:
+      Tag: EarL1
+    TransformComponent:
+      Translation: [9.152175, -0.11468939, -11.201547]
+      Rotation: [-1.4202933, -0.8208197, -0.52646923]
+      Scale: [1, 1, 1]
+  - Entity: 740290278535761459
+    ParentID: 17197270077592857845
+    TagComponent:
+      Tag: EarL2
+    TransformComponent:
+      Translation: [-1.1444092e-05, 3.5960066, -4.529953e-06]
+      Rotation: [0.0872495, 4.435684e-07, 3.5527137e-15]
+      Scale: [1, 0.99999994, 0.99999994]
+  - Entity: 17000856323333716950
+    ParentID: 740290278535761459
+    TagComponent:
+      Tag: EarL2_end
+    TransformComponent:
+      Translation: [3.5762787e-06, 1.0000043, 4.7683716e-07]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 13435697068036991178
+    ParentID: 17000856323333716950
+    TagComponent:
+      Tag: EarL2_end_end
+    TransformComponent:
+      Translation: [0, 1.0000017, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 373326718017144828
+    ParentID: 10748056486674902647
+    TagComponent:
+      Tag: EarR1
+    TransformComponent:
+      Translation: [-9.152201, -0.11473368, -11.201536]
+      Rotation: [-1.4090246, 0.82389414, 0.54702556]
+      Scale: [1, 1, 1]
+  - Entity: 18406233289610307250
+    ParentID: 373326718017144828
+    TagComponent:
+      Tag: EarR2
+    TransformComponent:
+      Translation: [-9.536743e-07, 3.5959995, 1.4781952e-05]
+      Rotation: [0.08725046, -1.7246945e-06, -5.054459e-07]
+      Scale: [1, 1, 1]
+  - Entity: 14148088220326950109
+    ParentID: 18406233289610307250
+    TagComponent:
+      Tag: EarR2_end
+    TransformComponent:
+      Translation: [8.583069e-06, 1.0000024, -3.33786e-06]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 4890643428510710223
+    ParentID: 14148088220326950109
+    TagComponent:
+      Tag: EarR2_end_end
+    TransformComponent:
+      Translation: [0, 1.0000017, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 17766910751492984404
+    ParentID: 10748056486674902647
+    TagComponent:
+      Tag: EyeR
+    TransformComponent:
+      Translation: [-5.880883, 23.15554, -6.709643]
+      Rotation: [-1.4626503, -1.3294361, 1.5671271]
+      Scale: [1, 0.99999994, 1]
+  - Entity: 12344290058434883962
+    ParentID: 17766910751492984404
+    TagComponent:
+      Tag: EyeR_end
+    TransformComponent:
+      Translation: [-5.207956e-06, 1.0000042, -2.3841858e-07]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 5642741015378305405
+    ParentID: 12344290058434883962
+    TagComponent:
+      Tag: EyeR_end_end
+    TransformComponent:
+      Translation: [0, 1.0000021, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 17462714273720780187
+    ParentID: 10748056486674902647
+    TagComponent:
+      Tag: EyelidRU
+    TransformComponent:
+      Translation: [-5.8883, 23.176981, -6.7096415]
+      Rotation: [-1.5411494, -0.45796928, 1.6594391]
+      Scale: [0.99999994, 0.99999994, 0.99999994]
+  - Entity: 8549568423431836785
+    ParentID: 17462714273720780187
+    TagComponent:
+      Tag: EyelidRU_end
+    TransformComponent:
+      Translation: [-5.9604645e-08, 1.0000068, 1.4305115e-06]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 9554321204135452987
+    ParentID: 8549568423431836785
+    TagComponent:
+      Tag: EyelidRU_end_end
+    TransformComponent:
+      Translation: [0, 1.0000014, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 7107576535356658192
+    ParentID: 10748056486674902647
+    TagComponent:
+      Tag: EyelidRD
+    TransformComponent:
+      Translation: [-5.880889, 23.199081, -6.694493]
+      Rotation: [1.6063021, 0.7633907, 1.6972724]
+      Scale: [1, 1, 1]
+  - Entity: 16118607861951861124
+    ParentID: 7107576535356658192
+    TagComponent:
+      Tag: EyelidRD_end
+    TransformComponent:
+      Translation: [1.1324883e-06, 1.000006, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 9053623075596776149
+    ParentID: 16118607861951861124
+    TagComponent:
+      Tag: EyelidRD_end_end
+    TransformComponent:
+      Translation: [0, 1.0000014, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 98229555090497516
+    ParentID: 10748056486674902647
+    TagComponent:
+      Tag: EyeL
+    TransformComponent:
+      Translation: [5.880919, 23.155554, -6.7096634]
+      Rotation: [-1.4626427, 1.329435, -1.5671192]
+      Scale: [1, 0.99999994, 1]
+  - Entity: 720998762804055042
+    ParentID: 98229555090497516
+    TagComponent:
+      Tag: EyeL_end
+    TransformComponent:
+      Translation: [3.0703377e-06, 0.99999934, -1.6391277e-06]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 4425901593652491375
+    ParentID: 720998762804055042
+    TagComponent:
+      Tag: EyeL_end_end
+    TransformComponent:
+      Translation: [0, 1.0000021, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 16349649786672652557
+    ParentID: 10748056486674902647
+    TagComponent:
+      Tag: EyelidLU
+    TransformComponent:
+      Translation: [5.888385, 23.17701, -6.709679]
+      Rotation: [-1.541149, 0.4579693, -1.6594385]
+      Scale: [1, 1, 0.99999994]
+  - Entity: 17448393024499924250
+    ParentID: 16349649786672652557
+    TagComponent:
+      Tag: EyelidLU_end
+    TransformComponent:
+      Translation: [-8.34465e-06, 1.0000002, 2.9802322e-07]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 1192437217771811392
+    ParentID: 17448393024499924250
+    TagComponent:
+      Tag: EyelidLU_end_end
+    TransformComponent:
+      Translation: [0, 1.0000013, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 8163406658882914425
+    ParentID: 10748056486674902647
+    TagComponent:
+      Tag: Nose
+    TransformComponent:
+      Translation: [-2.9802322e-08, 34.27665, -3.2989597]
+      Rotation: [0.11901157, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 10184336900735374907
+    ParentID: 8163406658882914425
+    TagComponent:
+      Tag: NoseL
+    TransformComponent:
+      Translation: [1.8247433, 3.575831, 0.06852332]
+      Rotation: [1.4249409e-07, 0.0049205967, -1.5707355]
+      Scale: [1, 1, 1]
+  - Entity: 5705546149457396984
+    ParentID: 10184336900735374907
+    TagComponent:
+      Tag: NoseL_end
+    TransformComponent:
+      Translation: [-5.2619725e-06, 1.0000001, 5.1576644e-06]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 3321523811549649746
+    ParentID: 5705546149457396984
+    TagComponent:
+      Tag: NoseL_end_end
+    TransformComponent:
+      Translation: [0, 1, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 15760789506223781585
+    ParentID: 8163406658882914425
+    TagComponent:
+      Tag: NoseR
+    TransformComponent:
+      Translation: [-1.8247788, 3.5758529, 0.06853332]
+      Rotation: [2.3283347e-10, -0.004920606, 1.5707359]
+      Scale: [1, 1, 1]
+  - Entity: 1881171017224095703
+    ParentID: 15760789506223781585
+    TagComponent:
+      Tag: NoseR_end
+    TransformComponent:
+      Translation: [-3.207475e-06, 1, 1.0326505e-05]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 4385131997679983552
+    ParentID: 1881171017224095703
+    TagComponent:
+      Tag: NoseR_end_end
+    TransformComponent:
+      Translation: [0, 1, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 9468356848453837090
+    ParentID: 10748056486674902647
+    TagComponent:
+      Tag: Jaw
+    TransformComponent:
+      Translation: [-5.662441e-07, 4.467751, 2.5724015]
+      Rotation: [0.07136895, -0.0015795131, -0.0019496139]
+      Scale: [1, 1, 1]
+  - Entity: 5352398041584342265
+    ParentID: 9468356848453837090
+    TagComponent:
+      Tag: Tongue1
+    TransformComponent:
+      Translation: [5.066395e-07, 15.5426035, 1.7736715]
+      Rotation: [-0.36501008, -0, -1.3412522e-07]
+      Scale: [1, 1, 1]
+  - Entity: 7534707746140093162
+    ParentID: 5352398041584342265
+    TagComponent:
+      Tag: Tongue2
+    TransformComponent:
+      Translation: [-4.440546e-06, 6.299279, -1.712516e-05]
+      Rotation: [0.3829633, -2.484515e-07, 0]
+      Scale: [1, 1, 1]
+  - Entity: 11111446091457621917
+    ParentID: 7534707746140093162
+    TagComponent:
+      Tag: Tongue3
+    TransformComponent:
+      Translation: [4.887581e-06, 4.0454993, 1.5199184e-05]
+      Rotation: [-0.42227164, -2.2821565e-07, 2.1964064e-07]
+      Scale: [1, 1, 1]
+  - Entity: 3108398871133890690
+    ParentID: 11111446091457621917
+    TagComponent:
+      Tag: Tongue4
+    TransformComponent:
+      Translation: [1.1920929e-07, 2.993665, -6.534159e-06]
+      Rotation: [-0.1689687, 4.7786796e-07, -3.5527137e-15]
+      Scale: [1, 1, 1]
+  - Entity: 10100030170456277468
+    ParentID: 3108398871133890690
+    TagComponent:
+      Tag: Tongue4_end
+    TransformComponent:
+      Translation: [-5.364418e-07, 1.0000067, 2.5574118e-06]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 6674335775041267773
+    ParentID: 10100030170456277468
+    TagComponent:
+      Tag: Tongue4_end_end
+    TransformComponent:
+      Translation: [0, 0.9999997, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 12935924868643731000
+    ParentID: 10748056486674902647
+    TagComponent:
+      Tag: EyelidLD
+    TransformComponent:
+      Translation: [5.880907, 23.199095, -6.694517]
+      Rotation: [1.6063044, -0.76339066, -1.6972972]
+      Scale: [0.99999994, 1, 1]
+  - Entity: 2139363604573984619
+    ParentID: 12935924868643731000
+    TagComponent:
+      Tag: EyelidLD_end
+    TransformComponent:
+      Translation: [1.4068559e-05, 1.0000056, -7.4505806e-08]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 5931288724412981303
+    ParentID: 2139363604573984619
+    TagComponent:
+      Tag: EyelidLD_end_end
+    TransformComponent:
+      Translation: [0, 1.0000013, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 6229313156473453068
+    ParentID: 10748056486674902647
+    TagComponent:
+      Tag: MouthR
+    TransformComponent:
+      Translation: [-5.451671, 32.637978, 2.7466984]
+      Rotation: [0.057557475, 0.16691737, 1.3937095]
+      Scale: [1, 0.99999994, 1]
+  - Entity: 13803481535002088807
+    ParentID: 6229313156473453068
+    TagComponent:
+      Tag: MouthR_end
+    TransformComponent:
+      Translation: [1.4305115e-06, 1.0000019, -2.5629997e-06]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 138898966980088875
+    ParentID: 13803481535002088807
+    TagComponent:
+      Tag: MouthR_end_end
+    TransformComponent:
+      Translation: [0, 1.0000012, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 7903068806123673198
+    ParentID: 10748056486674902647
+    TagComponent:
+      Tag: MouthL
+    TransformComponent:
+      Translation: [5.4517303, 32.637962, 2.7466881]
+      Rotation: [0.05755518, -0.1669291, -1.3937106]
+      Scale: [0.99999994, 0.99999994, 1]
+  - Entity: 13171998890108619528
+    ParentID: 7903068806123673198
+    TagComponent:
+      Tag: MouthL_end
+    TransformComponent:
+      Translation: [1.6391277e-06, 0.9999992, -2.0489097e-06]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 13756671617121665944
+    ParentID: 13171998890108619528
+    TagComponent:
+      Tag: MouthL_end_end
+    TransformComponent:
+      Translation: [0, 0.9999998, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 14065820242826524431
+    ParentID: 10748056486674902647
+    TagComponent:
+      Tag: MouthM
+    TransformComponent:
+      Translation: [-2.9802322e-07, 37.40469, 1.6474764]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 18223332154150545706
+    ParentID: 14065820242826524431
+    TagComponent:
+      Tag: MouthM_end
+    TransformComponent:
+      Translation: [-1.4901161e-07, 0.9999923, 7.450581e-09]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 14173413999379748895
+    ParentID: 18223332154150545706
+    TagComponent:
+      Tag: MouthM_end_end
+    TransformComponent:
+      Translation: [0, 1.0000021, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 2971758442359846285
+    ParentID: 4250003782276588037
+    TagComponent:
+      Tag: NeckFix1
+    TransformComponent:
+      Translation: [-9.23872e-07, 26.583603, -18.141798]
+      Rotation: [-1.5289371, -0.020776544, -0.089138165]
+      Scale: [1, 1, 1]
+  - Entity: 11549120816049577294
+    ParentID: 2971758442359846285
+    TagComponent:
+      Tag: NeckFix1_end
+    TransformComponent:
+      Translation: [5.9604645e-07, 1.0000066, -7.301569e-07]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 89639093618555478
+    ParentID: 11549120816049577294
+    TagComponent:
+      Tag: NeckFix1_end_end
+    TransformComponent:
+      Translation: [0, 1, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 15449568952223779537
+    ParentID: 4250003782276588037
+    TagComponent:
+      Tag: NeckFix2
+    TransformComponent:
+      Translation: [0.2599172, 32.461952, 23.849457]
+      Rotation: [1.0791684, 1.7401885e-07, 2.1875584e-07]
+      Scale: [1, 1, 1]
+  - Entity: 15842608935923812533
+    ParentID: 15449568952223779537
+    TagComponent:
+      Tag: NeckFix2_end
+    TransformComponent:
+      Translation: [-1.0430813e-07, 0.9999992, 7.2419643e-06]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 8592109884910990668
+    ParentID: 15842608935923812533
+    TagComponent:
+      Tag: NeckFix2_end_end
+    TransformComponent:
+      Translation: [0, 1.0000012, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 537217793897677652
+    ParentID: 4250003782276588037
+    TagComponent:
+      Tag: ChestL
+    TransformComponent:
+      Translation: [7.0945735, 26.27079, 29.24261]
+      Rotation: [0.8726022, 7.1054274e-15, 1.698303e-07]
+      Scale: [1, 1, 1]
+  - Entity: 8966553898077996178
+    ParentID: 537217793897677652
+    TagComponent:
+      Tag: ChestL_end
+    TransformComponent:
+      Translation: [-9.23872e-07, 0.9999975, 9.164214e-07]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 3249838155376280600
+    ParentID: 8966553898077996178
+    TagComponent:
+      Tag: ChestL_end_end
+    TransformComponent:
+      Translation: [0, 1.0000004, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 15844890920384504592
+    ParentID: 4250003782276588037
+    TagComponent:
+      Tag: ChestR
+    TransformComponent:
+      Translation: [-7.0945096, 26.270815, 29.242632]
+      Rotation: [0.8726022, 7.1054274e-15, 1.698303e-07]
+      Scale: [1, 1, 1]
+  - Entity: 4222670254918465169
+    ParentID: 15844890920384504592
+    TagComponent:
+      Tag: ChestR_end
+    TransformComponent:
+      Translation: [-1.1175871e-06, 1.0000017, -5.2154064e-06]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 6952623538713108588
+    ParentID: 4222670254918465169
+    TagComponent:
+      Tag: ChestR_end_end
+    TransformComponent:
+      Translation: [0, 1.0000004, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 2357424131773892420
+    ParentID: 4250003782276588037
+    TagComponent:
+      Tag: LegFRCollarbone
+    TransformComponent:
+      Translation: [-8.667149, 15.418503, -12.074771]
+      Rotation: [1.8721907, 0.2533614, 3.0877156]
+      Scale: [1, 1, 1]
+  - Entity: 8228920063084713642
+    ParentID: 2357424131773892420
+    TagComponent:
+      Tag: LegFR1
+    TransformComponent:
+      Translation: [-8.34465e-06, 30.121044, -3.707409e-05]
+      Rotation: [-0.83533835, -0.19330592, 0.39145765]
+      Scale: [1, 1, 0.99999994]
+  - Entity: 18004578293910464972
+    ParentID: 8228920063084713642
+    TagComponent:
+      Tag: LegFR2
+    TransformComponent:
+      Translation: [-6.198883e-06, 30.22807, -8.583069e-06]
+      Rotation: [0.55794466, 0.05403441, 0.069446236]
+      Scale: [1, 1, 0.99999994]
+  - Entity: 8992586008103860453
+    ParentID: 18004578293910464972
+    TagComponent:
+      Tag: LegFR3
+    TransformComponent:
+      Translation: [-0.00044679642, 30.93854, 0.0002487898]
+      Rotation: [0.15531093, -0.007119434, 0.0065474776]
+      Scale: [0.99999994, 0.99999994, 1]
+  - Entity: 8743688346633096578
+    ParentID: 8992586008103860453
+    TagComponent:
+      Tag: LegFRAnkle
+    TransformComponent:
+      Translation: [3.1650066e-05, 9.85886, -3.6120415e-05]
+      Rotation: [0.9473793, -0.07397738, -0.11063217]
+      Scale: [1, 1, 0.99999994]
+  - Entity: 14319388719469994862
+    ParentID: 8743688346633096578
+    TagComponent:
+      Tag: LegFRDigit11
+    TransformComponent:
+      Translation: [-6.43364, 4.502545, -2.9979022]
+      Rotation: [0.51238334, -0.11120308, 0.22350548]
+      Scale: [1, 1, 1]
+  - Entity: 4352360042979325253
+    ParentID: 14319388719469994862
+    TagComponent:
+      Tag: LegFRDigit11_end
+    TransformComponent:
+      Translation: [4.2375177e-07, 0.9999995, -2.9802322e-08]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 2442825167765826278
+    ParentID: 4352360042979325253
+    TagComponent:
+      Tag: LegFRDigit11_end_end
+    TransformComponent:
+      Translation: [0, 0.9999993, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 6507141889115601498
+    ParentID: 8743688346633096578
+    TagComponent:
+      Tag: LegFRDigit21
+    TransformComponent:
+      Translation: [-0.39054814, 6.9602814, -0.8541436]
+      Rotation: [0.5228842, -0.059899073, 0.123650774]
+      Scale: [1, 1, 1]
+  - Entity: 3397968007991830355
+    ParentID: 6507141889115601498
+    TagComponent:
+      Tag: LegFRDigit21_end
+    TransformComponent:
+      Translation: [-5.8766454e-07, 1.000004, -1.1920929e-07]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 15929380244829437878
+    ParentID: 3397968007991830355
+    TagComponent:
+      Tag: LegFRDigit21_end_end
+    TransformComponent:
+      Translation: [0, 1.0000013, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 8631943908632937968
+    ParentID: 8743688346633096578
+    TagComponent:
+      Tag: LegFRDigit31
+    TransformComponent:
+      Translation: [5.7552857, 6.86638, -1.6709585]
+      Rotation: [0.52525675, 0.032016966, -0.05088307]
+      Scale: [1, 1, 1]
+  - Entity: 5080580094122065305
+    ParentID: 8631943908632937968
+    TagComponent:
+      Tag: LegFRDigit31_end
+    TransformComponent:
+      Translation: [-9.21078e-07, 0.99999756, 4.4703484e-07]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 17004865070810394280
+    ParentID: 5080580094122065305
+    TagComponent:
+      Tag: LegFRDigit31_end_end
+    TransformComponent:
+      Translation: [0, 0.9999983, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 10019701670818764456
+    ParentID: 8228920063084713642
+    TagComponent:
+      Tag: ChestFixR
+    TransformComponent:
+      Translation: [-0.55437994, 18.06579, -13.322389]
+      Rotation: [-2.4898183, 0.9840817, -3.059063]
+      Scale: [1, 0.99999994, 1]
+  - Entity: 2431598641647659218
+    ParentID: 10019701670818764456
+    TagComponent:
+      Tag: ChestFixR_end
+    TransformComponent:
+      Translation: [0, 0.9999933, 5.722046e-06]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 7847227470777194874
+    ParentID: 2431598641647659218
+    TagComponent:
+      Tag: ChestFixR_end_end
+    TransformComponent:
+      Translation: [0, 0.99999875, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 10628660895266132711
+    ParentID: 4250003782276588037
+    TagComponent:
+      Tag: LegFLCollarbone
+    TransformComponent:
+      Translation: [9.142556, 15.375398, -13.008445]
+      Rotation: [1.6623025, -0.29679745, 3.110769]
+      Scale: [1, 1, 1]
+  - Entity: 1755233774490723130
+    ParentID: 10628660895266132711
+    TagComponent:
+      Tag: LegFL1
+    TransformComponent:
+      Translation: [5.00679e-06, 30.121054, -7.122755e-05]
+      Rotation: [-0.5078211, 0.2959437, -0.3574361]
+      Scale: [1, 0.99999994, 1]
+  - Entity: 9277706483023947432
+    ParentID: 1755233774490723130
+    TagComponent:
+      Tag: LegFL2
+    TransformComponent:
+      Translation: [-2.3841858e-07, 30.228088, -4.7683716e-06]
+      Rotation: [0.6213058, -0.048790723, -0.07616289]
+      Scale: [1, 0.99999994, 1]
+  - Entity: 13464669919088778054
+    ParentID: 9277706483023947432
+    TagComponent:
+      Tag: LegFL3
+    TransformComponent:
+      Translation: [0.00043010712, 30.93875, 0.00024199486]
+      Rotation: [0.32216683, 0.0077387467, -0.0069049494]
+      Scale: [1, 1, 1]
+  - Entity: 15321512031537234872
+    ParentID: 13464669919088778054
+    TagComponent:
+      Tag: LegFLAnkle
+    TransformComponent:
+      Translation: [2.1338463e-05, 9.858845, -4.053116e-06]
+      Rotation: [0.57872105, 0.1173186, 0.051734176]
+      Scale: [0.99999994, 1, 1]
+  - Entity: 12599196825671350294
+    ParentID: 15321512031537234872
+    TagComponent:
+      Tag: LegFLDigit11
+    TransformComponent:
+      Translation: [6.4344587, 4.5063367, -2.996791]
+      Rotation: [0.49603233, 0.12698624, -0.23804931]
+      Scale: [1, 1, 0.99999994]
+  - Entity: 14094692310216448829
+    ParentID: 12599196825671350294
+    TagComponent:
+      Tag: LegFLDigit11_end
+    TransformComponent:
+      Translation: [1.2787059e-06, 0.9999967, 6.3329935e-08]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 10290601085303295440
+    ParentID: 14094692310216448829
+    TagComponent:
+      Tag: LegFLDigit11_end_end
+    TransformComponent:
+      Translation: [0, 0.9999993, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 4142541975234643114
+    ParentID: 15321512031537234872
+    TagComponent:
+      Tag: LegFLDigit31
+    TransformComponent:
+      Translation: [-5.7559223, 6.864087, -1.6701105]
+      Rotation: [0.51096743, -0.042987913, 0.06741152]
+      Scale: [1, 1, 1]
+  - Entity: 6269913908862936782
+    ParentID: 4142541975234643114
+    TagComponent:
+      Tag: LegFLDigit31_end
+    TransformComponent:
+      Translation: [3.715977e-07, 1.0000026, -1.816079e-07]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 8332654729856371380
+    ParentID: 6269913908862936782
+    TagComponent:
+      Tag: LegFLDigit31_end_end
+    TransformComponent:
+      Translation: [0, 0.9999983, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 308842802695832162
+    ParentID: 15321512031537234872
+    TagComponent:
+      Tag: LegFLDigit21
+    TransformComponent:
+      Translation: [0.3906985, 6.9611936, -0.8543651]
+      Rotation: [0.5090466, 0.06335319, -0.12218773]
+      Scale: [1, 1, 1]
+  - Entity: 5504196166158028868
+    ParentID: 308842802695832162
+    TagComponent:
+      Tag: LegFLDigit21_end
+    TransformComponent:
+      Translation: [1.17346644e-07, 0.9999997, 9.872019e-08]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 1356365075105813926
+    ParentID: 5504196166158028868
+    TagComponent:
+      Tag: LegFLDigit21_end_end
+    TransformComponent:
+      Translation: [0, 1.0000013, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 8825764106578023210
+    ParentID: 1755233774490723130
+    TagComponent:
+      Tag: ChestFixL
+    TransformComponent:
+      Translation: [0.5547774, 18.065605, -13.322508]
+      Rotation: [-2.489821, -0.98408186, 3.0590632]
+      Scale: [1, 1, 1]
+  - Entity: 4875280037141245959
+    ParentID: 8825764106578023210
+    TagComponent:
+      Tag: ChestFixL_end
+    TransformComponent:
+      Translation: [2.861023e-06, 1.000001, -1.1920929e-06]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 856128721041284058
+    ParentID: 4875280037141245959
+    TagComponent:
+      Tag: ChestFixL_end_end
+    TransformComponent:
+      Translation: [0, 0.99999774, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 7857503343021990594
+    ParentID: 4250003782276588037
+    TagComponent:
+      Tag: ChestM
+    TransformComponent:
+      Translation: [-1.4603138e-06, 5.1604457, 36.7548]
+      Rotation: [1.4107912, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 16871951616703101673
+    ParentID: 7857503343021990594
+    TagComponent:
+      Tag: ChestM_end
+    TransformComponent:
+      Translation: [-5.9604645e-08, 1.0000048, -2.9206276e-06]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 438605690484622404
+    ParentID: 16871951616703101673
+    TagComponent:
+      Tag: ChestM_end_end
+    TransformComponent:
+      Translation: [0, 1.0000013, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 14847235553081971520
+    ParentID: 14983600887839010156
+    TagComponent:
+      Tag: SpineFixL
+    TransformComponent:
+      Translation: [24.90001, 0.149364, 9.763741]
+      Rotation: [-0.07209453, -0.0151145365, -1.5707643]
+      Scale: [1, 1, 1]
+  - Entity: 7464342331523054719
+    ParentID: 14847235553081971520
+    TagComponent:
+      Tag: SpineFixL_end
+    TransformComponent:
+      Translation: [2.3841858e-07, 0.9999993, 1.1622906e-06]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 8949556536533205423
+    ParentID: 7464342331523054719
+    TagComponent:
+      Tag: SpineFixL_end_end
+    TransformComponent:
+      Translation: [0, 1.0000002, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 5766381756742364598
+    ParentID: 14983600887839010156
+    TagComponent:
+      Tag: SpineFixR
+    TransformComponent:
+      Translation: [-24.910751, 0.14721823, 9.8037615]
+      Rotation: [-0.07209463, 0.0151136685, 1.5707681]
+      Scale: [1, 1, 1]
+  - Entity: 1600429977725408142
+    ParentID: 5766381756742364598
+    TagComponent:
+      Tag: SpineFixR_end
+    TransformComponent:
+      Translation: [2.3841858e-07, 0.99999857, 8.34465e-06]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 4803573017078513101
+    ParentID: 1600429977725408142
+    TagComponent:
+      Tag: SpineFixR_end_end
+    TransformComponent:
+      Translation: [0, 1.0000002, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 2644873409857346181
+    ParentID: 14983600887839010156
+    TagComponent:
+      Tag: SpineFixM
+    TransformComponent:
+      Translation: [-1.66893e-06, -5.543232e-06, 37.968258]
+      Rotation: [1.5707294, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 11785368533571465352
+    ParentID: 2644873409857346181
+    TagComponent:
+      Tag: SpineFixM_end
+    TransformComponent:
+      Translation: [-2.3841858e-07, 1.0000036, 7.599592e-07]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 14197062120889001468
+    ParentID: 11785368533571465352
+    TagComponent:
+      Tag: SpineFixM_end_end
+    TransformComponent:
+      Translation: [0, 0.99999976, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 6520884020053414643
+    ParentID: 3320338170704964645
+    TagComponent:
+      Tag: Tail1
+    TransformComponent:
+      Translation: [9.23872e-07, 21.795614, -6.802541]
+      Rotation: [-2.057466, -0.025987085, 0.009431473]
+      Scale: [0.99999994, 1, 1]
+  - Entity: 13499914336817635023
+    ParentID: 6520884020053414643
+    TagComponent:
+      Tag: Tail2
+    TransformComponent:
+      Translation: [-2.2649765e-06, 11.143356, -4.7683716e-06]
+      Rotation: [-0.47251147, 0.040118635, -0.11432043]
+      Scale: [0.99999994, 1, 0.99999994]
+  - Entity: 6249371279687420688
+    ParentID: 13499914336817635023
+    TagComponent:
+      Tag: Tail2_end
+    TransformComponent:
+      Translation: [2.3841858e-07, 1.000005, 4.3958426e-06]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 5317967874674187684
+    ParentID: 6249371279687420688
+    TagComponent:
+      Tag: Tail2_end_end
+    TransformComponent:
+      Translation: [0, 1.0000025, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 7423583712535621485
+    ParentID: 3320338170704964645
+    TagComponent:
+      Tag: LegBL1
+    TransformComponent:
+      Translation: [15.628535, 7.71891, -1.3425704]
+      Rotation: [-0.4005275, -0.017553944, -3.1082675]
+      Scale: [0.99999994, 1, 1]
+  - Entity: 8259160848526108492
+    ParentID: 7423583712535621485
+    TagComponent:
+      Tag: LegBL2
+    TransformComponent:
+      Translation: [-6.687641e-05, 43.504745, -5.221367e-05]
+      Rotation: [-0.565659, -0.018243719, -0.0071611153]
+      Scale: [1, 1, 1]
+  - Entity: 3482798475701586557
+    ParentID: 8259160848526108492
+    TagComponent:
+      Tag: LegBLAnkle
+    TransformComponent:
+      Translation: [2.9802322e-08, 31.961645, -3.9815903e-05]
+      Rotation: [1.5041788, 0.028987104, -0.017741336]
+      Scale: [1, 1, 1]
+  - Entity: 3775982855436679956
+    ParentID: 3482798475701586557
+    TagComponent:
+      Tag: LegBLDigit11
+    TransformComponent:
+      Translation: [-0.3337611, 14.1350765, 0.5228511]
+      Rotation: [0.5856175, 0.007308836, 0.012339878]
+      Scale: [1, 1, 1]
+  - Entity: 3921048358485822885
+    ParentID: 3775982855436679956
+    TagComponent:
+      Tag: LegBLDigit11_end
+    TransformComponent:
+      Translation: [-6.369082e-07, 0.9999996, 1.359731e-07]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 2366431137522123735
+    ParentID: 3921048358485822885
+    TagComponent:
+      Tag: LegBLDigit11_end_end
+    TransformComponent:
+      Translation: [0, 1.0000007, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 13427524842301786492
+    ParentID: 3320338170704964645
+    TagComponent:
+      Tag: LegBR1
+    TransformComponent:
+      Translation: [-15.628519, 7.7189255, -1.342572]
+      Rotation: [-0.052229673, 0.30751863, 3.099081]
+      Scale: [1, 1, 1]
+  - Entity: 9613520560929402606
+    ParentID: 13427524842301786492
+    TagComponent:
+      Tag: LegBR2
+    TransformComponent:
+      Translation: [6.4611435e-05, 43.504757, -2.69413e-05]
+      Rotation: [-0.4291264, 0.017394101, 0.005585404]
+      Scale: [0.99999994, 1, 1]
+  - Entity: 13453338078610879010
+    ParentID: 9613520560929402606
+    TagComponent:
+      Tag: LegBRAnkle
+    TransformComponent:
+      Translation: [-2.7179718e-05, 31.961681, -1.41859055e-05]
+      Rotation: [1.1189272, 0.029413799, -0.089579545]
+      Scale: [1, 0.99999994, 1]
+  - Entity: 12430887785749507431
+    ParentID: 13453338078610879010
+    TagComponent:
+      Tag: LegBRDigit11
+    TransformComponent:
+      Translation: [0.33370158, 14.135228, 0.5228257]
+      Rotation: [0.49724844, -0.008365423, -0.011947477]
+      Scale: [1, 1, 1]
+  - Entity: 12375113688573063560
+    ParentID: 12430887785749507431
+    TagComponent:
+      Tag: LegBRDigit11_end
+    TransformComponent:
+      Translation: [8.181669e-07, 1.0000029, 3.3900142e-07]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 18017607960373562019
+    ParentID: 12375113688573063560
+    TagComponent:
+      Tag: LegBRDigit11_end_end
+    TransformComponent:
+      Translation: [0, 1.0000007, 0]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 13901597593048198965
+    ParentID: 8990208328687078625
+    TagComponent:
+      Tag: Bear.001
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [0, 0, 0]
+      Scale: [9.999999, 9.999999, 9.999999]
+    MeshComponent:
+      Offset: [0, 0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 999000000000000001
+    TagComponent:
+      Tag: Ambient System
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    AmbientComponent:
+      SkyColorDay: [0.26, 0.42, 0.77]
+      HorizonColorDay: [0.65, 0.8, 0.98]
+      GroundColor: [0.23, 0.22, 0.23]
+      SkyColorNight: [0.05, 0.06, 0.13]
+      HorizonColorNight: [0.03, 0.04, 0.08]
+      StarIntensity: 1.5
+      SunEntity: 999000000000000003
+      MoonEntity: 999000000000000004
+      SunMaxIntensity: 20
+      MoonMaxIntensity: 0.15
+    TimeCycleComponent:
+      TimeOfDay: 15.62022
+      TimeScale: 60
+      CurrentDay: 2
+  - Entity: 999000000000000003
+    ParentID: 999000000000000001
+    TagComponent:
+      Tag: Sun
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [0.64785504, -1.7511629, 0]
+      Scale: [1, 1, 1]
+    DirectionalLightComponent:
+      Color: [1, 0.98, 0.92]
+      Intensity: 12.06955
+  - Entity: 999000000000000004
+    ParentID: 999000000000000001
+    TagComponent:
+      Tag: Moon
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [1.0457659, -2.3371253, 0]
+      Scale: [1, 1, 1]
+    DirectionalLightComponent:
+      Color: [0.7, 0.8, 1]
+      Intensity: 0.010072057
+  - Entity: 999000000000000002
+    Disabled: true
+    TagComponent:
+      Tag: PointLight
+    TransformComponent:
+      Translation: [-2, 11.5, -1]
+      Rotation: [0, -0, 0]
+      Scale: [1, 1, 1]
+    PointLightComponent:
+      Color: [0.110371605, 0.61846155, 0.14476526]
+      Intensity: 10
+      Radius: 15
   - Entity: 2441765618725681712
     TagComponent:
       Tag: Forest
@@ -7584,1207 +8794,3 @@ Entities:
     MeshComponent:
       Offset: [0, 0, 0]
       Scale: [1, 1, 1]
-  - Entity: 999000000000000002
-    Disabled: true
-    TagComponent:
-      Tag: PointLight
-    TransformComponent:
-      Translation: [-2, 11.5, -1]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-    PointLightComponent:
-      Color: [0.110371605, 0.61846155, 0.14476526]
-      Intensity: 10
-      Radius: 15
-  - Entity: 999000000000000001
-    TagComponent:
-      Tag: Ambient System
-    TransformComponent:
-      Translation: [0, 0, 0]
-      Rotation: [0, 0, 0]
-      Scale: [1, 1, 1]
-    AmbientComponent:
-      SkyColorDay: [0.26, 0.42, 0.77]
-      HorizonColorDay: [0.65, 0.8, 0.98]
-      GroundColor: [0.23, 0.22, 0.23]
-      SkyColorNight: [0.05, 0.06, 0.13]
-      HorizonColorNight: [0.03, 0.04, 0.08]
-      StarIntensity: 1.5
-      SunEntity: 999000000000000003
-      MoonEntity: 999000000000000004
-      SunMaxIntensity: 20
-      MoonMaxIntensity: 0.15
-    TimeCycleComponent:
-      TimeOfDay: 14.807811
-      TimeScale: 60
-      CurrentDay: 2
-  - Entity: 999000000000000003
-    ParentID: 999000000000000001
-    TagComponent:
-      Tag: Sun
-    TransformComponent:
-      Translation: [0, 0, 0]
-      Rotation: [0.8095174, -1.9217558, 0]
-      Scale: [1, 1, 1]
-    DirectionalLightComponent:
-      Color: [1, 0.98, 0.92]
-      Intensity: 14.479086
-  - Entity: 999000000000000004
-    ParentID: 999000000000000001
-    TagComponent:
-      Tag: Moon
-    TransformComponent:
-      Translation: [0, 0, 0]
-      Rotation: [1.139728, -2.7206595, 0]
-      Scale: [1, 1, 1]
-    DirectionalLightComponent:
-      Color: [0.7, 0.8, 1]
-      Intensity: 0.010313663
-  - Entity: 8990208328687078625
-    TagComponent:
-      Tag: Bear
-    TransformComponent:
-      Translation: [-54.235767, 12.902681, 9.559514]
-      Rotation: [0, -0, 0]
-      Scale: [0.00125, 0.00125, 0.00125]
-    RigidBodyComponent:
-      Type: 2
-      Mass: 1
-      Friction: 0.2
-      Restitution: 0
-    ColliderComponent:
-      Type: 0
-      Size: [2, 1.2, 1.5]
-      Offset: [0.25, 0.6, 0]
-    AudioPlayerComponent:
-      Clips:
-        - AudioAssetUUID: 14034907395822295268
-          Volume: 1
-          Loop: false
-          PlayOnStart: false
-    AnimatorComponent:
-      Speed: 1
-      DefaultState: 0
-      Clips:
-        - Bear|DEMO_Idle
-        - Bear|DEMO_Snorting
-      States:
-        - Name: Bear_Idle
-          ClipIndex: 0
-          Speed: 1
-          Loop: true
-          EditorPos: [124, 204]
-        - Name: Bear_Snort
-          ClipIndex: 1
-          Speed: 1
-          Loop: false
-          EditorPos: [204, 444]
-      Transitions:
-        - FromState: 4294967295
-          ToState: 0
-          BlendDuration: 0.15
-          HasExitTime: false
-          ExitTime: 1
-          Conditions:
-            []
-        - FromState: 0
-          ToState: 1
-          BlendDuration: 0.15
-          HasExitTime: false
-          ExitTime: 6.25
-          Conditions:
-            - Param: 0
-              Op: 4
-              Threshold: 0
-        - FromState: 1
-          ToState: 0
-          BlendDuration: 0.15
-          HasExitTime: true
-          ExitTime: 1
-          Conditions:
-            []
-      Parameters:
-        - Name: Snort
-          Type: 3
-          FloatValue: 0
-          IntValue: 0
-          BoolValue: false
-  - Entity: 12476797892596032151
-    ParentID: 8990208328687078625
-    TagComponent:
-      Tag: Bear
-    TransformComponent:
-      Translation: [0, 0, 0]
-      Rotation: [0, 0, 0]
-      Scale: [10, 10, 10]
-  - Entity: 4966751551271223424
-    ParentID: 12476797892596032151
-    TagComponent:
-      Tag: Root
-    TransformComponent:
-      Translation: [0, 0, 0]
-      Rotation: [0, -1.570451, 0]
-      Scale: [1, 1, 1]
-  - Entity: 3320338170704964645
-    ParentID: 4966751551271223424
-    TagComponent:
-      Tag: Pelvis
-    TransformComponent:
-      Translation: [75.53348, -1.0202264, 44.308167]
-      Rotation: [2.703287, -0.15218455, 1.5689185]
-      Scale: [0.99999994, 0.99999994, 0.99999994]
-  - Entity: 9079321988399770626
-    ParentID: 3320338170704964645
-    TagComponent:
-      Tag: Spine1
-    TransformComponent:
-      Translation: [2.0861626e-07, 0.19417088, 13.267769]
-      Rotation: [1.7072041, -0.1592022, -0.042451344]
-      Scale: [1, 1, 0.99999994]
-  - Entity: 14983600887839010156
-    ParentID: 9079321988399770626
-    TagComponent:
-      Tag: Spine2
-    TransformComponent:
-      Translation: [4.693866e-06, 25.405607, 2.9867515e-05]
-      Rotation: [0.24230033, -0.03916882, 0.13299955]
-      Scale: [1, 1, 1]
-  - Entity: 4250003782276588037
-    ParentID: 14983600887839010156
-    TagComponent:
-      Tag: Chest
-    TransformComponent:
-      Translation: [-4.7683716e-07, 26.022617, 8.195639e-08]
-      Rotation: [0.103708416, -0.024095468, -0.10174958]
-      Scale: [1, 0.99999994, 1]
-  - Entity: 17351743546454221820
-    ParentID: 4250003782276588037
-    TagComponent:
-      Tag: Neck1
-    TransformComponent:
-      Translation: [-0.015244186, 25.390062, 0.0431837]
-      Rotation: [-0.14447743, 0.0069346977, -0.023949087]
-      Scale: [1, 1, 1]
-  - Entity: 17046016041758058850
-    ParentID: 17351743546454221820
-    TagComponent:
-      Tag: Neck2
-    TransformComponent:
-      Translation: [-0.116476655, 13.977568, 0.19322851]
-      Rotation: [-0.0019904908, -0.037464805, 0.014994227]
-      Scale: [0.99999994, 1, 1]
-  - Entity: 10748056486674902647
-    ParentID: 17046016041758058850
-    TagComponent:
-      Tag: Head
-    TransformComponent:
-      Translation: [-0.000487566, 16.39013, -0.41658753]
-      Rotation: [0.45015433, 0.024311405, -0.051739797]
-      Scale: [1, 1, 1]
-  - Entity: 17197270077592857845
-    ParentID: 10748056486674902647
-    TagComponent:
-      Tag: EarL1
-    TransformComponent:
-      Translation: [9.152175, -0.11468939, -11.201547]
-      Rotation: [-1.4202933, -0.8208197, -0.52646923]
-      Scale: [1, 1, 1]
-  - Entity: 740290278535761459
-    ParentID: 17197270077592857845
-    TagComponent:
-      Tag: EarL2
-    TransformComponent:
-      Translation: [-1.1444092e-05, 3.5960066, -4.529953e-06]
-      Rotation: [0.0872495, 4.435684e-07, 3.5527137e-15]
-      Scale: [1, 0.99999994, 0.99999994]
-  - Entity: 17000856323333716950
-    ParentID: 740290278535761459
-    TagComponent:
-      Tag: EarL2_end
-    TransformComponent:
-      Translation: [3.5762787e-06, 1.0000043, 4.7683716e-07]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 13435697068036991178
-    ParentID: 17000856323333716950
-    TagComponent:
-      Tag: EarL2_end_end
-    TransformComponent:
-      Translation: [0, 1.0000017, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 373326718017144828
-    ParentID: 10748056486674902647
-    TagComponent:
-      Tag: EarR1
-    TransformComponent:
-      Translation: [-9.152201, -0.11473368, -11.201536]
-      Rotation: [-1.4090246, 0.82389414, 0.54702556]
-      Scale: [1, 1, 1]
-  - Entity: 18406233289610307250
-    ParentID: 373326718017144828
-    TagComponent:
-      Tag: EarR2
-    TransformComponent:
-      Translation: [-9.536743e-07, 3.5959995, 1.4781952e-05]
-      Rotation: [0.08725046, -1.7246945e-06, -5.054459e-07]
-      Scale: [1, 1, 1]
-  - Entity: 14148088220326950109
-    ParentID: 18406233289610307250
-    TagComponent:
-      Tag: EarR2_end
-    TransformComponent:
-      Translation: [8.583069e-06, 1.0000024, -3.33786e-06]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 4890643428510710223
-    ParentID: 14148088220326950109
-    TagComponent:
-      Tag: EarR2_end_end
-    TransformComponent:
-      Translation: [0, 1.0000017, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 17766910751492984404
-    ParentID: 10748056486674902647
-    TagComponent:
-      Tag: EyeR
-    TransformComponent:
-      Translation: [-5.880883, 23.15554, -6.709643]
-      Rotation: [-1.4626503, -1.3294361, 1.5671271]
-      Scale: [1, 0.99999994, 1]
-  - Entity: 12344290058434883962
-    ParentID: 17766910751492984404
-    TagComponent:
-      Tag: EyeR_end
-    TransformComponent:
-      Translation: [-5.207956e-06, 1.0000042, -2.3841858e-07]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 5642741015378305405
-    ParentID: 12344290058434883962
-    TagComponent:
-      Tag: EyeR_end_end
-    TransformComponent:
-      Translation: [0, 1.0000021, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 17462714273720780187
-    ParentID: 10748056486674902647
-    TagComponent:
-      Tag: EyelidRU
-    TransformComponent:
-      Translation: [-5.8883, 23.176981, -6.7096415]
-      Rotation: [-1.5411494, -0.45796928, 1.6594391]
-      Scale: [0.99999994, 0.99999994, 0.99999994]
-  - Entity: 8549568423431836785
-    ParentID: 17462714273720780187
-    TagComponent:
-      Tag: EyelidRU_end
-    TransformComponent:
-      Translation: [-5.9604645e-08, 1.0000068, 1.4305115e-06]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 9554321204135452987
-    ParentID: 8549568423431836785
-    TagComponent:
-      Tag: EyelidRU_end_end
-    TransformComponent:
-      Translation: [0, 1.0000014, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 7107576535356658192
-    ParentID: 10748056486674902647
-    TagComponent:
-      Tag: EyelidRD
-    TransformComponent:
-      Translation: [-5.880889, 23.199081, -6.694493]
-      Rotation: [1.6063021, 0.7633907, 1.6972724]
-      Scale: [1, 1, 1]
-  - Entity: 16118607861951861124
-    ParentID: 7107576535356658192
-    TagComponent:
-      Tag: EyelidRD_end
-    TransformComponent:
-      Translation: [1.1324883e-06, 1.000006, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 9053623075596776149
-    ParentID: 16118607861951861124
-    TagComponent:
-      Tag: EyelidRD_end_end
-    TransformComponent:
-      Translation: [0, 1.0000014, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 98229555090497516
-    ParentID: 10748056486674902647
-    TagComponent:
-      Tag: EyeL
-    TransformComponent:
-      Translation: [5.880919, 23.155554, -6.7096634]
-      Rotation: [-1.4626427, 1.329435, -1.5671192]
-      Scale: [1, 0.99999994, 1]
-  - Entity: 720998762804055042
-    ParentID: 98229555090497516
-    TagComponent:
-      Tag: EyeL_end
-    TransformComponent:
-      Translation: [3.0703377e-06, 0.99999934, -1.6391277e-06]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 4425901593652491375
-    ParentID: 720998762804055042
-    TagComponent:
-      Tag: EyeL_end_end
-    TransformComponent:
-      Translation: [0, 1.0000021, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 16349649786672652557
-    ParentID: 10748056486674902647
-    TagComponent:
-      Tag: EyelidLU
-    TransformComponent:
-      Translation: [5.888385, 23.17701, -6.709679]
-      Rotation: [-1.541149, 0.4579693, -1.6594385]
-      Scale: [1, 1, 0.99999994]
-  - Entity: 17448393024499924250
-    ParentID: 16349649786672652557
-    TagComponent:
-      Tag: EyelidLU_end
-    TransformComponent:
-      Translation: [-8.34465e-06, 1.0000002, 2.9802322e-07]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 1192437217771811392
-    ParentID: 17448393024499924250
-    TagComponent:
-      Tag: EyelidLU_end_end
-    TransformComponent:
-      Translation: [0, 1.0000013, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 8163406658882914425
-    ParentID: 10748056486674902647
-    TagComponent:
-      Tag: Nose
-    TransformComponent:
-      Translation: [-2.9802322e-08, 34.27665, -3.2989597]
-      Rotation: [0.11901157, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 10184336900735374907
-    ParentID: 8163406658882914425
-    TagComponent:
-      Tag: NoseL
-    TransformComponent:
-      Translation: [1.8247433, 3.575831, 0.06852332]
-      Rotation: [1.4249409e-07, 0.0049205967, -1.5707355]
-      Scale: [1, 1, 1]
-  - Entity: 5705546149457396984
-    ParentID: 10184336900735374907
-    TagComponent:
-      Tag: NoseL_end
-    TransformComponent:
-      Translation: [-5.2619725e-06, 1.0000001, 5.1576644e-06]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 3321523811549649746
-    ParentID: 5705546149457396984
-    TagComponent:
-      Tag: NoseL_end_end
-    TransformComponent:
-      Translation: [0, 1, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 15760789506223781585
-    ParentID: 8163406658882914425
-    TagComponent:
-      Tag: NoseR
-    TransformComponent:
-      Translation: [-1.8247788, 3.5758529, 0.06853332]
-      Rotation: [2.3283347e-10, -0.004920606, 1.5707359]
-      Scale: [1, 1, 1]
-  - Entity: 1881171017224095703
-    ParentID: 15760789506223781585
-    TagComponent:
-      Tag: NoseR_end
-    TransformComponent:
-      Translation: [-3.207475e-06, 1, 1.0326505e-05]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 4385131997679983552
-    ParentID: 1881171017224095703
-    TagComponent:
-      Tag: NoseR_end_end
-    TransformComponent:
-      Translation: [0, 1, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 9468356848453837090
-    ParentID: 10748056486674902647
-    TagComponent:
-      Tag: Jaw
-    TransformComponent:
-      Translation: [-5.662441e-07, 4.467751, 2.5724015]
-      Rotation: [0.07136895, -0.0015795131, -0.0019496139]
-      Scale: [1, 1, 1]
-  - Entity: 5352398041584342265
-    ParentID: 9468356848453837090
-    TagComponent:
-      Tag: Tongue1
-    TransformComponent:
-      Translation: [5.066395e-07, 15.5426035, 1.7736715]
-      Rotation: [-0.36501008, -0, -1.3412522e-07]
-      Scale: [1, 1, 1]
-  - Entity: 7534707746140093162
-    ParentID: 5352398041584342265
-    TagComponent:
-      Tag: Tongue2
-    TransformComponent:
-      Translation: [-4.440546e-06, 6.299279, -1.712516e-05]
-      Rotation: [0.3829633, -2.484515e-07, 0]
-      Scale: [1, 1, 1]
-  - Entity: 11111446091457621917
-    ParentID: 7534707746140093162
-    TagComponent:
-      Tag: Tongue3
-    TransformComponent:
-      Translation: [4.887581e-06, 4.0454993, 1.5199184e-05]
-      Rotation: [-0.42227164, -2.2821565e-07, 2.1964064e-07]
-      Scale: [1, 1, 1]
-  - Entity: 3108398871133890690
-    ParentID: 11111446091457621917
-    TagComponent:
-      Tag: Tongue4
-    TransformComponent:
-      Translation: [1.1920929e-07, 2.993665, -6.534159e-06]
-      Rotation: [-0.1689687, 4.7786796e-07, -3.5527137e-15]
-      Scale: [1, 1, 1]
-  - Entity: 10100030170456277468
-    ParentID: 3108398871133890690
-    TagComponent:
-      Tag: Tongue4_end
-    TransformComponent:
-      Translation: [-5.364418e-07, 1.0000067, 2.5574118e-06]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 6674335775041267773
-    ParentID: 10100030170456277468
-    TagComponent:
-      Tag: Tongue4_end_end
-    TransformComponent:
-      Translation: [0, 0.9999997, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 12935924868643731000
-    ParentID: 10748056486674902647
-    TagComponent:
-      Tag: EyelidLD
-    TransformComponent:
-      Translation: [5.880907, 23.199095, -6.694517]
-      Rotation: [1.6063044, -0.76339066, -1.6972972]
-      Scale: [0.99999994, 1, 1]
-  - Entity: 2139363604573984619
-    ParentID: 12935924868643731000
-    TagComponent:
-      Tag: EyelidLD_end
-    TransformComponent:
-      Translation: [1.4068559e-05, 1.0000056, -7.4505806e-08]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 5931288724412981303
-    ParentID: 2139363604573984619
-    TagComponent:
-      Tag: EyelidLD_end_end
-    TransformComponent:
-      Translation: [0, 1.0000013, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 6229313156473453068
-    ParentID: 10748056486674902647
-    TagComponent:
-      Tag: MouthR
-    TransformComponent:
-      Translation: [-5.451671, 32.637978, 2.7466984]
-      Rotation: [0.057557475, 0.16691737, 1.3937095]
-      Scale: [1, 0.99999994, 1]
-  - Entity: 13803481535002088807
-    ParentID: 6229313156473453068
-    TagComponent:
-      Tag: MouthR_end
-    TransformComponent:
-      Translation: [1.4305115e-06, 1.0000019, -2.5629997e-06]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 138898966980088875
-    ParentID: 13803481535002088807
-    TagComponent:
-      Tag: MouthR_end_end
-    TransformComponent:
-      Translation: [0, 1.0000012, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 7903068806123673198
-    ParentID: 10748056486674902647
-    TagComponent:
-      Tag: MouthL
-    TransformComponent:
-      Translation: [5.4517303, 32.637962, 2.7466881]
-      Rotation: [0.05755518, -0.1669291, -1.3937106]
-      Scale: [0.99999994, 0.99999994, 1]
-  - Entity: 13171998890108619528
-    ParentID: 7903068806123673198
-    TagComponent:
-      Tag: MouthL_end
-    TransformComponent:
-      Translation: [1.6391277e-06, 0.9999992, -2.0489097e-06]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 13756671617121665944
-    ParentID: 13171998890108619528
-    TagComponent:
-      Tag: MouthL_end_end
-    TransformComponent:
-      Translation: [0, 0.9999998, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 14065820242826524431
-    ParentID: 10748056486674902647
-    TagComponent:
-      Tag: MouthM
-    TransformComponent:
-      Translation: [-2.9802322e-07, 37.40469, 1.6474764]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 18223332154150545706
-    ParentID: 14065820242826524431
-    TagComponent:
-      Tag: MouthM_end
-    TransformComponent:
-      Translation: [-1.4901161e-07, 0.9999923, 7.450581e-09]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 14173413999379748895
-    ParentID: 18223332154150545706
-    TagComponent:
-      Tag: MouthM_end_end
-    TransformComponent:
-      Translation: [0, 1.0000021, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 2971758442359846285
-    ParentID: 4250003782276588037
-    TagComponent:
-      Tag: NeckFix1
-    TransformComponent:
-      Translation: [-9.23872e-07, 26.583603, -18.141798]
-      Rotation: [-1.5289371, -0.020776544, -0.089138165]
-      Scale: [1, 1, 1]
-  - Entity: 11549120816049577294
-    ParentID: 2971758442359846285
-    TagComponent:
-      Tag: NeckFix1_end
-    TransformComponent:
-      Translation: [5.9604645e-07, 1.0000066, -7.301569e-07]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 89639093618555478
-    ParentID: 11549120816049577294
-    TagComponent:
-      Tag: NeckFix1_end_end
-    TransformComponent:
-      Translation: [0, 1, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 15449568952223779537
-    ParentID: 4250003782276588037
-    TagComponent:
-      Tag: NeckFix2
-    TransformComponent:
-      Translation: [0.2599172, 32.461952, 23.849457]
-      Rotation: [1.0791684, 1.7401885e-07, 2.1875584e-07]
-      Scale: [1, 1, 1]
-  - Entity: 15842608935923812533
-    ParentID: 15449568952223779537
-    TagComponent:
-      Tag: NeckFix2_end
-    TransformComponent:
-      Translation: [-1.0430813e-07, 0.9999992, 7.2419643e-06]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 8592109884910990668
-    ParentID: 15842608935923812533
-    TagComponent:
-      Tag: NeckFix2_end_end
-    TransformComponent:
-      Translation: [0, 1.0000012, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 537217793897677652
-    ParentID: 4250003782276588037
-    TagComponent:
-      Tag: ChestL
-    TransformComponent:
-      Translation: [7.0945735, 26.27079, 29.24261]
-      Rotation: [0.8726022, 7.1054274e-15, 1.698303e-07]
-      Scale: [1, 1, 1]
-  - Entity: 8966553898077996178
-    ParentID: 537217793897677652
-    TagComponent:
-      Tag: ChestL_end
-    TransformComponent:
-      Translation: [-9.23872e-07, 0.9999975, 9.164214e-07]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 3249838155376280600
-    ParentID: 8966553898077996178
-    TagComponent:
-      Tag: ChestL_end_end
-    TransformComponent:
-      Translation: [0, 1.0000004, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 15844890920384504592
-    ParentID: 4250003782276588037
-    TagComponent:
-      Tag: ChestR
-    TransformComponent:
-      Translation: [-7.0945096, 26.270815, 29.242632]
-      Rotation: [0.8726022, 7.1054274e-15, 1.698303e-07]
-      Scale: [1, 1, 1]
-  - Entity: 4222670254918465169
-    ParentID: 15844890920384504592
-    TagComponent:
-      Tag: ChestR_end
-    TransformComponent:
-      Translation: [-1.1175871e-06, 1.0000017, -5.2154064e-06]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 6952623538713108588
-    ParentID: 4222670254918465169
-    TagComponent:
-      Tag: ChestR_end_end
-    TransformComponent:
-      Translation: [0, 1.0000004, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 2357424131773892420
-    ParentID: 4250003782276588037
-    TagComponent:
-      Tag: LegFRCollarbone
-    TransformComponent:
-      Translation: [-8.667149, 15.418503, -12.074771]
-      Rotation: [1.8721907, 0.2533614, 3.0877156]
-      Scale: [1, 1, 1]
-  - Entity: 8228920063084713642
-    ParentID: 2357424131773892420
-    TagComponent:
-      Tag: LegFR1
-    TransformComponent:
-      Translation: [-8.34465e-06, 30.121044, -3.707409e-05]
-      Rotation: [-0.83533835, -0.19330592, 0.39145765]
-      Scale: [1, 1, 0.99999994]
-  - Entity: 18004578293910464972
-    ParentID: 8228920063084713642
-    TagComponent:
-      Tag: LegFR2
-    TransformComponent:
-      Translation: [-6.198883e-06, 30.22807, -8.583069e-06]
-      Rotation: [0.55794466, 0.05403441, 0.069446236]
-      Scale: [1, 1, 0.99999994]
-  - Entity: 8992586008103860453
-    ParentID: 18004578293910464972
-    TagComponent:
-      Tag: LegFR3
-    TransformComponent:
-      Translation: [-0.00044679642, 30.93854, 0.0002487898]
-      Rotation: [0.15531093, -0.007119434, 0.0065474776]
-      Scale: [0.99999994, 0.99999994, 1]
-  - Entity: 8743688346633096578
-    ParentID: 8992586008103860453
-    TagComponent:
-      Tag: LegFRAnkle
-    TransformComponent:
-      Translation: [3.1650066e-05, 9.85886, -3.6120415e-05]
-      Rotation: [0.9473793, -0.07397738, -0.11063217]
-      Scale: [1, 1, 0.99999994]
-  - Entity: 14319388719469994862
-    ParentID: 8743688346633096578
-    TagComponent:
-      Tag: LegFRDigit11
-    TransformComponent:
-      Translation: [-6.43364, 4.502545, -2.9979022]
-      Rotation: [0.51238334, -0.11120308, 0.22350548]
-      Scale: [1, 1, 1]
-  - Entity: 4352360042979325253
-    ParentID: 14319388719469994862
-    TagComponent:
-      Tag: LegFRDigit11_end
-    TransformComponent:
-      Translation: [4.2375177e-07, 0.9999995, -2.9802322e-08]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 2442825167765826278
-    ParentID: 4352360042979325253
-    TagComponent:
-      Tag: LegFRDigit11_end_end
-    TransformComponent:
-      Translation: [0, 0.9999993, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 6507141889115601498
-    ParentID: 8743688346633096578
-    TagComponent:
-      Tag: LegFRDigit21
-    TransformComponent:
-      Translation: [-0.39054814, 6.9602814, -0.8541436]
-      Rotation: [0.5228842, -0.059899073, 0.123650774]
-      Scale: [1, 1, 1]
-  - Entity: 3397968007991830355
-    ParentID: 6507141889115601498
-    TagComponent:
-      Tag: LegFRDigit21_end
-    TransformComponent:
-      Translation: [-5.8766454e-07, 1.000004, -1.1920929e-07]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 15929380244829437878
-    ParentID: 3397968007991830355
-    TagComponent:
-      Tag: LegFRDigit21_end_end
-    TransformComponent:
-      Translation: [0, 1.0000013, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 8631943908632937968
-    ParentID: 8743688346633096578
-    TagComponent:
-      Tag: LegFRDigit31
-    TransformComponent:
-      Translation: [5.7552857, 6.86638, -1.6709585]
-      Rotation: [0.52525675, 0.032016966, -0.05088307]
-      Scale: [1, 1, 1]
-  - Entity: 5080580094122065305
-    ParentID: 8631943908632937968
-    TagComponent:
-      Tag: LegFRDigit31_end
-    TransformComponent:
-      Translation: [-9.21078e-07, 0.99999756, 4.4703484e-07]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 17004865070810394280
-    ParentID: 5080580094122065305
-    TagComponent:
-      Tag: LegFRDigit31_end_end
-    TransformComponent:
-      Translation: [0, 0.9999983, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 10019701670818764456
-    ParentID: 8228920063084713642
-    TagComponent:
-      Tag: ChestFixR
-    TransformComponent:
-      Translation: [-0.55437994, 18.06579, -13.322389]
-      Rotation: [-2.4898183, 0.9840817, -3.059063]
-      Scale: [1, 0.99999994, 1]
-  - Entity: 2431598641647659218
-    ParentID: 10019701670818764456
-    TagComponent:
-      Tag: ChestFixR_end
-    TransformComponent:
-      Translation: [0, 0.9999933, 5.722046e-06]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 7847227470777194874
-    ParentID: 2431598641647659218
-    TagComponent:
-      Tag: ChestFixR_end_end
-    TransformComponent:
-      Translation: [0, 0.99999875, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 10628660895266132711
-    ParentID: 4250003782276588037
-    TagComponent:
-      Tag: LegFLCollarbone
-    TransformComponent:
-      Translation: [9.142556, 15.375398, -13.008445]
-      Rotation: [1.6623025, -0.29679745, 3.110769]
-      Scale: [1, 1, 1]
-  - Entity: 1755233774490723130
-    ParentID: 10628660895266132711
-    TagComponent:
-      Tag: LegFL1
-    TransformComponent:
-      Translation: [5.00679e-06, 30.121054, -7.122755e-05]
-      Rotation: [-0.5078211, 0.2959437, -0.3574361]
-      Scale: [1, 0.99999994, 1]
-  - Entity: 9277706483023947432
-    ParentID: 1755233774490723130
-    TagComponent:
-      Tag: LegFL2
-    TransformComponent:
-      Translation: [-2.3841858e-07, 30.228088, -4.7683716e-06]
-      Rotation: [0.6213058, -0.048790723, -0.07616289]
-      Scale: [1, 0.99999994, 1]
-  - Entity: 13464669919088778054
-    ParentID: 9277706483023947432
-    TagComponent:
-      Tag: LegFL3
-    TransformComponent:
-      Translation: [0.00043010712, 30.93875, 0.00024199486]
-      Rotation: [0.32216683, 0.0077387467, -0.0069049494]
-      Scale: [1, 1, 1]
-  - Entity: 15321512031537234872
-    ParentID: 13464669919088778054
-    TagComponent:
-      Tag: LegFLAnkle
-    TransformComponent:
-      Translation: [2.1338463e-05, 9.858845, -4.053116e-06]
-      Rotation: [0.57872105, 0.1173186, 0.051734176]
-      Scale: [0.99999994, 1, 1]
-  - Entity: 12599196825671350294
-    ParentID: 15321512031537234872
-    TagComponent:
-      Tag: LegFLDigit11
-    TransformComponent:
-      Translation: [6.4344587, 4.5063367, -2.996791]
-      Rotation: [0.49603233, 0.12698624, -0.23804931]
-      Scale: [1, 1, 0.99999994]
-  - Entity: 14094692310216448829
-    ParentID: 12599196825671350294
-    TagComponent:
-      Tag: LegFLDigit11_end
-    TransformComponent:
-      Translation: [1.2787059e-06, 0.9999967, 6.3329935e-08]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 10290601085303295440
-    ParentID: 14094692310216448829
-    TagComponent:
-      Tag: LegFLDigit11_end_end
-    TransformComponent:
-      Translation: [0, 0.9999993, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 4142541975234643114
-    ParentID: 15321512031537234872
-    TagComponent:
-      Tag: LegFLDigit31
-    TransformComponent:
-      Translation: [-5.7559223, 6.864087, -1.6701105]
-      Rotation: [0.51096743, -0.042987913, 0.06741152]
-      Scale: [1, 1, 1]
-  - Entity: 6269913908862936782
-    ParentID: 4142541975234643114
-    TagComponent:
-      Tag: LegFLDigit31_end
-    TransformComponent:
-      Translation: [3.715977e-07, 1.0000026, -1.816079e-07]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 8332654729856371380
-    ParentID: 6269913908862936782
-    TagComponent:
-      Tag: LegFLDigit31_end_end
-    TransformComponent:
-      Translation: [0, 0.9999983, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 308842802695832162
-    ParentID: 15321512031537234872
-    TagComponent:
-      Tag: LegFLDigit21
-    TransformComponent:
-      Translation: [0.3906985, 6.9611936, -0.8543651]
-      Rotation: [0.5090466, 0.06335319, -0.12218773]
-      Scale: [1, 1, 1]
-  - Entity: 5504196166158028868
-    ParentID: 308842802695832162
-    TagComponent:
-      Tag: LegFLDigit21_end
-    TransformComponent:
-      Translation: [1.17346644e-07, 0.9999997, 9.872019e-08]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 1356365075105813926
-    ParentID: 5504196166158028868
-    TagComponent:
-      Tag: LegFLDigit21_end_end
-    TransformComponent:
-      Translation: [0, 1.0000013, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 8825764106578023210
-    ParentID: 1755233774490723130
-    TagComponent:
-      Tag: ChestFixL
-    TransformComponent:
-      Translation: [0.5547774, 18.065605, -13.322508]
-      Rotation: [-2.489821, -0.98408186, 3.0590632]
-      Scale: [1, 1, 1]
-  - Entity: 4875280037141245959
-    ParentID: 8825764106578023210
-    TagComponent:
-      Tag: ChestFixL_end
-    TransformComponent:
-      Translation: [2.861023e-06, 1.000001, -1.1920929e-06]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 856128721041284058
-    ParentID: 4875280037141245959
-    TagComponent:
-      Tag: ChestFixL_end_end
-    TransformComponent:
-      Translation: [0, 0.99999774, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 7857503343021990594
-    ParentID: 4250003782276588037
-    TagComponent:
-      Tag: ChestM
-    TransformComponent:
-      Translation: [-1.4603138e-06, 5.1604457, 36.7548]
-      Rotation: [1.4107912, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 16871951616703101673
-    ParentID: 7857503343021990594
-    TagComponent:
-      Tag: ChestM_end
-    TransformComponent:
-      Translation: [-5.9604645e-08, 1.0000048, -2.9206276e-06]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 438605690484622404
-    ParentID: 16871951616703101673
-    TagComponent:
-      Tag: ChestM_end_end
-    TransformComponent:
-      Translation: [0, 1.0000013, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 14847235553081971520
-    ParentID: 14983600887839010156
-    TagComponent:
-      Tag: SpineFixL
-    TransformComponent:
-      Translation: [24.90001, 0.149364, 9.763741]
-      Rotation: [-0.07209453, -0.0151145365, -1.5707643]
-      Scale: [1, 1, 1]
-  - Entity: 7464342331523054719
-    ParentID: 14847235553081971520
-    TagComponent:
-      Tag: SpineFixL_end
-    TransformComponent:
-      Translation: [2.3841858e-07, 0.9999993, 1.1622906e-06]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 8949556536533205423
-    ParentID: 7464342331523054719
-    TagComponent:
-      Tag: SpineFixL_end_end
-    TransformComponent:
-      Translation: [0, 1.0000002, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 5766381756742364598
-    ParentID: 14983600887839010156
-    TagComponent:
-      Tag: SpineFixR
-    TransformComponent:
-      Translation: [-24.910751, 0.14721823, 9.8037615]
-      Rotation: [-0.07209463, 0.0151136685, 1.5707681]
-      Scale: [1, 1, 1]
-  - Entity: 1600429977725408142
-    ParentID: 5766381756742364598
-    TagComponent:
-      Tag: SpineFixR_end
-    TransformComponent:
-      Translation: [2.3841858e-07, 0.99999857, 8.34465e-06]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 4803573017078513101
-    ParentID: 1600429977725408142
-    TagComponent:
-      Tag: SpineFixR_end_end
-    TransformComponent:
-      Translation: [0, 1.0000002, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 2644873409857346181
-    ParentID: 14983600887839010156
-    TagComponent:
-      Tag: SpineFixM
-    TransformComponent:
-      Translation: [-1.66893e-06, -5.543232e-06, 37.968258]
-      Rotation: [1.5707294, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 11785368533571465352
-    ParentID: 2644873409857346181
-    TagComponent:
-      Tag: SpineFixM_end
-    TransformComponent:
-      Translation: [-2.3841858e-07, 1.0000036, 7.599592e-07]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 14197062120889001468
-    ParentID: 11785368533571465352
-    TagComponent:
-      Tag: SpineFixM_end_end
-    TransformComponent:
-      Translation: [0, 0.99999976, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 6520884020053414643
-    ParentID: 3320338170704964645
-    TagComponent:
-      Tag: Tail1
-    TransformComponent:
-      Translation: [9.23872e-07, 21.795614, -6.802541]
-      Rotation: [-2.057466, -0.025987085, 0.009431473]
-      Scale: [0.99999994, 1, 1]
-  - Entity: 13499914336817635023
-    ParentID: 6520884020053414643
-    TagComponent:
-      Tag: Tail2
-    TransformComponent:
-      Translation: [-2.2649765e-06, 11.143356, -4.7683716e-06]
-      Rotation: [-0.47251147, 0.040118635, -0.11432043]
-      Scale: [0.99999994, 1, 0.99999994]
-  - Entity: 6249371279687420688
-    ParentID: 13499914336817635023
-    TagComponent:
-      Tag: Tail2_end
-    TransformComponent:
-      Translation: [2.3841858e-07, 1.000005, 4.3958426e-06]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 5317967874674187684
-    ParentID: 6249371279687420688
-    TagComponent:
-      Tag: Tail2_end_end
-    TransformComponent:
-      Translation: [0, 1.0000025, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 7423583712535621485
-    ParentID: 3320338170704964645
-    TagComponent:
-      Tag: LegBL1
-    TransformComponent:
-      Translation: [15.628535, 7.71891, -1.3425704]
-      Rotation: [-0.4005275, -0.017553944, -3.1082675]
-      Scale: [0.99999994, 1, 1]
-  - Entity: 8259160848526108492
-    ParentID: 7423583712535621485
-    TagComponent:
-      Tag: LegBL2
-    TransformComponent:
-      Translation: [-6.687641e-05, 43.504745, -5.221367e-05]
-      Rotation: [-0.565659, -0.018243719, -0.0071611153]
-      Scale: [1, 1, 1]
-  - Entity: 3482798475701586557
-    ParentID: 8259160848526108492
-    TagComponent:
-      Tag: LegBLAnkle
-    TransformComponent:
-      Translation: [2.9802322e-08, 31.961645, -3.9815903e-05]
-      Rotation: [1.5041788, 0.028987104, -0.017741336]
-      Scale: [1, 1, 1]
-  - Entity: 3775982855436679956
-    ParentID: 3482798475701586557
-    TagComponent:
-      Tag: LegBLDigit11
-    TransformComponent:
-      Translation: [-0.3337611, 14.1350765, 0.5228511]
-      Rotation: [0.5856175, 0.007308836, 0.012339878]
-      Scale: [1, 1, 1]
-  - Entity: 3921048358485822885
-    ParentID: 3775982855436679956
-    TagComponent:
-      Tag: LegBLDigit11_end
-    TransformComponent:
-      Translation: [-6.369082e-07, 0.9999996, 1.359731e-07]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 2366431137522123735
-    ParentID: 3921048358485822885
-    TagComponent:
-      Tag: LegBLDigit11_end_end
-    TransformComponent:
-      Translation: [0, 1.0000007, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 13427524842301786492
-    ParentID: 3320338170704964645
-    TagComponent:
-      Tag: LegBR1
-    TransformComponent:
-      Translation: [-15.628519, 7.7189255, -1.342572]
-      Rotation: [-0.052229673, 0.30751863, 3.099081]
-      Scale: [1, 1, 1]
-  - Entity: 9613520560929402606
-    ParentID: 13427524842301786492
-    TagComponent:
-      Tag: LegBR2
-    TransformComponent:
-      Translation: [6.4611435e-05, 43.504757, -2.69413e-05]
-      Rotation: [-0.4291264, 0.017394101, 0.005585404]
-      Scale: [0.99999994, 1, 1]
-  - Entity: 13453338078610879010
-    ParentID: 9613520560929402606
-    TagComponent:
-      Tag: LegBRAnkle
-    TransformComponent:
-      Translation: [-2.7179718e-05, 31.961681, -1.41859055e-05]
-      Rotation: [1.1189272, 0.029413799, -0.089579545]
-      Scale: [1, 0.99999994, 1]
-  - Entity: 12430887785749507431
-    ParentID: 13453338078610879010
-    TagComponent:
-      Tag: LegBRDigit11
-    TransformComponent:
-      Translation: [0.33370158, 14.135228, 0.5228257]
-      Rotation: [0.49724844, -0.008365423, -0.011947477]
-      Scale: [1, 1, 1]
-  - Entity: 12375113688573063560
-    ParentID: 12430887785749507431
-    TagComponent:
-      Tag: LegBRDigit11_end
-    TransformComponent:
-      Translation: [8.181669e-07, 1.0000029, 3.3900142e-07]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 18017607960373562019
-    ParentID: 12375113688573063560
-    TagComponent:
-      Tag: LegBRDigit11_end_end
-    TransformComponent:
-      Translation: [0, 1.0000007, 0]
-      Rotation: [0, -0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 13901597593048198965
-    ParentID: 8990208328687078625
-    TagComponent:
-      Tag: Bear.001
-    TransformComponent:
-      Translation: [0, 0, 0]
-      Rotation: [0, 0, 0]
-      Scale: [9.999999, 9.999999, 9.999999]
-    MeshComponent:
-      Offset: [0, 0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 10249243474405155672
-    TagComponent:
-      Tag: Camera
-    TransformComponent:
-      Translation: [-48.019108, 3.4498968, 5.8835263]
-      Rotation: [-0.28797975, 171.81584, 0]
-      Scale: [1, 1, 1]
-    CameraComponent:
-      FOV: 0.7853982
-      Near: 0.1
-      Far: 1000
-      Prio: 1

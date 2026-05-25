@@ -16,6 +16,8 @@
 
 namespace Antelope
 {
+    class Script;
+
     struct DisabledComponent {};
     
     struct TagComponent
@@ -297,5 +299,25 @@ namespace Antelope
 
         AudioPlayerComponent() = default;
         AudioPlayerComponent(const AudioPlayerComponent&) = default;
+    };
+
+    struct ScriptComponent
+    {
+        Script* Instance { nullptr };
+        std::string ScriptClassName;
+
+        using CreateFn  = Script*(*)();
+        using DestroyFn = void(*)(Script*);
+
+        CreateFn  InstantiateScript { nullptr };
+        DestroyFn DestroyScript     { nullptr };
+
+        template<typename T>
+        void Bind(const char* name)
+        {
+            ScriptClassName = name;
+            InstantiateScript = []() -> Script* { return new T(); };
+            DestroyScript     = [](Script* s) { delete static_cast<T*>(s); };
+        }
     };
 }

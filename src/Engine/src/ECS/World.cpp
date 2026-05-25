@@ -13,6 +13,7 @@
 #include <Engine/ECS/System/AnimationSystem.hpp>
 #include <Engine/ECS/System/AudioSystem.hpp>
 #include <Engine/Audio/AudioContext.hpp>
+#include <Engine/ECS/System/ScriptSystem.hpp>
 #include <Engine/Renderer/Vulkan/RenderTexture.hpp>
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -222,10 +223,17 @@ namespace Antelope
     void World::TakeSnapshot()
     {
         m_SimulationSnapshot.clear();
-        auto view { m_Registry.view<TransformComponent>() };
-        for (auto [entity, transform] : view.each())
+
+        for (auto [entity, transform] : m_Registry.view<TransformComponent>().each())
         {
             m_SimulationSnapshot.push_back({ entity, transform });
+        }
+
+        m_AnimatorSnapshot.clear();
+        
+        for (auto [entity, anim] : m_Registry.view<AnimatorComponent>().each())
+        {
+            m_AnimatorSnapshot.push_back({ entity, anim });
         }
     }
 
@@ -239,7 +247,22 @@ namespace Antelope
                 m_Registry.emplace_or_replace<DirtyTransform>(entity);
             }
         }
+
         m_SimulationSnapshot.clear();
+
+        for (auto& [entity, anim] : m_AnimatorSnapshot)
+        {
+            if (m_Registry.valid(entity) && m_Registry.all_of<AnimatorComponent>(entity))
+            {
+                auto& current { m_Registry.get<AnimatorComponent>(entity) };
+                ModelData* model { current.Model };
+                current = anim;
+                current.Model = model;
+            }
+        }
+
+        m_AnimatorSnapshot.clear();
+
         TransformSystem::OnUpdate(*this);
     }
 
@@ -249,6 +272,7 @@ namespace Antelope
 
         PhysicsSystem::OnRuntimeStart(*this, *m_PhysicsContext);
         AudioSystem::OnRuntimeStart(*this, *m_AudioContext);
+        ScriptSystem::OnRuntimeStart(*this);
         m_PhysicsContext->OptimizeBroadPhase();
         
         m_IsSimulating = true;
@@ -259,6 +283,7 @@ namespace Antelope
     {
         if (!m_IsSimulating) { return; }
 
+        ScriptSystem::OnRuntimeStop(*this);
         AudioSystem::OnRuntimeStop(*this, *m_AudioContext);
         PhysicsSystem::OnRuntimeStop(*this, *m_PhysicsContext);
         
@@ -286,6 +311,9 @@ namespace Antelope
         float simDelta { (m_IsSimulating && !m_IsPaused) ? timeStep : 0.0f };
         AmbientSystem::OnUpdate(*this, simDelta);
         AnimationSystem::OnUpdate(*this, simDelta);
+
+        if (m_IsSimulating && !m_IsPaused) { ScriptSystem::OnUpdate(*this, timeStep); }
+        
         TransformSystem::OnUpdate(*this);
 
         auto renderer { Application::Get().GetRenderer() };
@@ -335,6 +363,7 @@ namespace Antelope
         }
 
         AnimationSystem::OnUpdate(*this, timeStep);
+        ScriptSystem::OnUpdate(*this, timeStep);
         AmbientSystem::OnUpdate(*this, timeStep);
         TransformSystem::OnUpdate(*this);
 

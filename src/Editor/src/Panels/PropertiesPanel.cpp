@@ -381,6 +381,30 @@ namespace Antelope::Editor
             }
         });
 
+        DrawComponent<ScriptComponent>("Script", entity, [entity](auto& sc)
+        {
+            ImGui::LabelText("Class", "%s", sc.ScriptClassName.empty() ? "None" : sc.ScriptClassName.c_str());
+
+            std::string dragLabel { sc.ScriptClassName.empty() ? "Drop .hpp to attach" : sc.ScriptClassName };
+            ImGui::Button(dragLabel.c_str(), ImVec2(-1.0f, 0.0f));
+
+            if (ImGui::BeginDragDropTarget())
+            {
+                if (const ImGuiPayload* payload { ImGui::AcceptDragDropPayload("ASSET_SCRIPT") })
+                {
+                    UUID uuid { *static_cast<const UUID*>(payload->Data) };
+                    const auto& meta { AssetManager::GetMetadata(uuid) };
+                    if (meta.IsValid() && meta.FilePath.extension() == ".hpp")
+                    {
+                        sc.ScriptClassName = meta.FilePath.stem().string();
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+        });
+
+        DrawCustomComponents(entity);
+
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
@@ -485,8 +509,127 @@ namespace Antelope::Editor
                 }
             }
 
+            ImGui::Separator();
+
+            if (!entity.HasComponent<ScriptComponent>())
+            {
+                if (ImGui::MenuItem("Script"))
+                {
+                    entity.AddComponent<ScriptComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
+            for (const auto& name : ComponentRegistry::GetRegisteredNames())
+            {
+                if (ComponentRegistry::Has(entity.GetWorld()->GetRegistry(), entity.GetHandle(), name)) { continue; }
+                if (ImGui::MenuItem(name.c_str()))
+                {
+                    ComponentRegistry::Add(entity.GetWorld()->GetRegistry(), entity.GetHandle(), name);
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
             ImGui::EndPopup();
         }
+    }
+
+    void PropertiesPanel::DrawCustomComponents(Entity entity)
+    {
+        const ImGuiTreeNodeFlags treeNodeFlags {
+            ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed |
+            ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap |
+            ImGuiTreeNodeFlags_FramePadding };
+
+        auto& registry { entity.GetWorld()->GetRegistry() };
+        entt::entity handle { entity.GetHandle() };
+
+        for (const auto& name : ComponentRegistry::GetRegisteredNames())
+        {
+            if (!ComponentRegistry::Has(registry, handle, name)) { continue; }
+
+            const ComponentDescriptor* desc { ComponentRegistry::GetDescriptor(name) };
+            if (!desc) { continue; }
+
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{ 4, 4 });
+            ImGui::Separator();
+
+            float lineHeight { ImGui::GetFontSize() + ImGui::GetStyle().FramePadding.y * 2.0f };
+            bool open { ImGui::TreeNodeEx((void*)std::hash<std::string>{}(name), treeNodeFlags, "%s", name.c_str()) };
+            ImGui::PopStyleVar();
+            ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - lineHeight);
+
+            ImGui::PushID(name.c_str());
+
+            if (ImGui::Button("x", ImVec2{ lineHeight, lineHeight }))
+            {
+                ComponentRegistry::Remove(registry, handle, name);
+                if (open) { ImGui::TreePop(); }
+                ImGui::PopID();
+                continue;
+            }
+
+            if (open)
+            {
+                void* ptr { ComponentRegistry::Get(registry, handle, name) };
+                if (ptr)
+                {
+                    for (const auto& field : desc->Fields)
+                    {
+                        DrawScriptField(ptr, field);
+                    }
+                }
+                ImGui::TreePop();
+            }
+
+            ImGui::PopID();
+        }
+    }
+
+    void PropertiesPanel::DrawScriptField(void* componentPtr, const ScriptFieldDescriptor& field)
+    {
+        char* base { static_cast<char*>(componentPtr) };
+
+        ImGui::PushID(field.Name.c_str());
+
+        switch (field.Type)
+        {
+            case ScriptFieldType::Float:
+            {
+                float* v { reinterpret_cast<float*>(base + field.Offset) };
+                ImGui::DragFloat(field.Name.c_str(), v, 0.1f, 0.0f, 0.0f, "%.3f");
+                break;
+            }
+            case ScriptFieldType::Int:
+            {
+                int* v { reinterpret_cast<int*>(base + field.Offset) };
+                ImGui::DragInt(field.Name.c_str(), v);
+                break;
+            }
+            case ScriptFieldType::Bool:
+            {
+                bool* v { reinterpret_cast<bool*>(base + field.Offset) };
+                ImGui::Checkbox(field.Name.c_str(), v);
+                break;
+            }
+            case ScriptFieldType::Vec3:
+            {
+                glm::vec3* v { reinterpret_cast<glm::vec3*>(base + field.Offset) };
+                DrawVec3Control(field.Name, *v);
+                break;
+            }
+            case ScriptFieldType::String:
+            {
+                std::string* v { reinterpret_cast<std::string*>(base + field.Offset) };
+                char buf[256] {};
+                std::strncpy(buf, v->c_str(), sizeof(buf) - 1);
+                if (ImGui::InputText(field.Name.c_str(), buf, sizeof(buf))) { *v = buf; }
+                break;
+            }
+            default: break;
+        }
+
+        ImGui::PopID();
     }
 
     bool PropertiesPanel::DrawVec3Control(const std::string& label, glm::vec3& values, float resetValue, float columnWidth)

@@ -2,6 +2,7 @@
 
 #include <Engine/ECS/Entity.hpp>
 #include <Engine/ECS/BaseComponents.hpp>
+#include <Engine/Scripting/ComponentRegistry.hpp>
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -27,6 +28,8 @@ namespace Antelope::Editor
         private:
             void DrawComponents(Entity entity, const EditorCamera& camera);
             bool DrawVec3Control(const std::string& label, glm::vec3& values, float resetValue = 0.0f, float columnWidth = 100.0f);
+            void DrawCustomComponents(Entity entity);
+            void DrawScriptField(void* componentPtr, const ScriptFieldDescriptor& field);
 
             template<typename T, typename UIFunction>
             void DrawComponent(const std::string& name, Entity entity, UIFunction uiFunction)

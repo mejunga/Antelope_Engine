@@ -15,7 +15,8 @@ namespace Antelope
         Texture2D,
         Mesh,
         Material,
-        AudioClip
+        AudioClip,
+        Script
     };
 
     struct AssetRecord

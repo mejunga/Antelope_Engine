@@ -1,5 +1,13 @@
 #pragma once
 
+#ifndef ANTELOPE_API
+    #ifdef ANTELOPE_BUILD_DLL
+        #define ANTELOPE_API __declspec(dllexport)
+    #else
+        #define ANTELOPE_API __declspec(dllimport)
+    #endif
+#endif
+
 #include <Engine/Core/Allocator.hpp>
 #ifdef ANTELOPE_EDITOR_MODE
 #include <Engine/Asset/FileWatcher.hpp>
@@ -76,7 +84,7 @@ namespace Antelope
             bool m_Running { true };
 
         private:
-            static Application *s_Instance;
+            static ANTELOPE_API Application *s_Instance;
         #ifdef ANTELOPE_EDITOR_MODE
             FileWatcher m_FileWatcher;
         #endif

@@ -71,9 +71,12 @@ namespace Antelope
             bool m_GameViewActive { false };
             bool m_IsPaused { false };
             float m_Accumulator { 0.0f };
+
             struct TransformSnapshot { entt::entity entity; TransformComponent transform; };
+            struct AnimatorSnapshot { entt::entity entity; AnimatorComponent  animator; };
 
             std::vector<TransformSnapshot> m_SimulationSnapshot;
+            std::vector<AnimatorSnapshot> m_AnimatorSnapshot;
 
             friend class Entity;
     };

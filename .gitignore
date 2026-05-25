@@ -58,3 +58,5 @@ vgcore.*
 
 !Assets/**/*.*
 !Sandbox/**/*.*
+.generated
+Libraries
